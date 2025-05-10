@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - StratoSys Report</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="admin-dashboard.css">
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <div class="dashboard-container">
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>StratoSys Report</h2>
+      </div>
+      <div class="sidebar-menu">
+        <div class="menu-item">
+          <div class="menu-icon"><i class="fas fa-chart-line"></i></div>
+          <div class="menu-text">Admin Dashboard</div>
+        </div>
+        <div class="menu-item">
+          <div class="menu-icon"><i class="fas fa-file-download"></i></div>
+          <div class="menu-text">Submission</div>
+        </div>
+        <div class="menu-item">
+          <div class="menu-icon"><i class="fas fa-list-alt"></i></div>
+          <div class="menu-text">Form</div>
+        </div>
+        <div class="menu-item">
+          <div class="menu-icon"><i class="fas fa-file-export"></i></div>
+          <div class="menu-text">Generate Report</div>
+        </div>
+        <div class="menu-item active">
+          <div class="menu-icon"><i class="fas fa-cog"></i></div>
+          <div class="menu-text">Setting</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="main-content">
+      <div class="header">
+        <h1>Settings</h1>
+      </div>
+
+      <!-- Settings Sections -->
+      <div class="settings-container">
+        <!-- Account Settings -->
+        <div class="settings-section">
+          <h2 class="section-title"><i class="fas fa-user-circle"></i> Account Settings</h2>
+          <div class="settings-card">
+            <div class="settings-item">
+              <div class="settings-label">Full Name</div>
+              <div class="settings-value">
+                <input type="text" value="Administrator" class="settings-input">
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-label">Email Address</div>
+              <div class="settings-value">
+                <input type="email" value="admin@stratosys.com" class="settings-input">
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-label">Position</div>
+              <div class="settings-value">
+                <input type="text" value="System Administrator" class="settings-input">
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-label">Department</div>
+              <div class="settings-value">
+                <select class="settings-input">
+                  <option>IT Department</option>
+                  <option>Human Resources</option>
+                  <option>Finance</option>
+                  <option>Operations</option>
+                </select>
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button class="save-btn">Save Changes</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Security Settings -->
+        <div class="settings-section">
+          <h2 class="section-title"><i class="fas fa-shield-alt"></i> Security</h2>
+          <div class="settings-card">
+            <div class="settings-item">
+              <div class="settings-label">Current Password</div>
+              <div class="settings-value">
+                <input type="password" placeholder="••••••••" class="settings-input">
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-label">New Password</div>
+              <div class="settings-value">
+                <input type="password" placeholder="Enter new password" class="settings-input">
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-label">Confirm Password</div>
+              <div class="settings-value">
+                <input type="password" placeholder="Confirm new password" class="settings-input">
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-label">Two-Factor Authentication</div>
+              <div class="settings-value">
+                <div class="toggle-container">
+                  <label class="switch">
+                    <input type="checkbox">
+                    <span class="slider round"></span>
+                  </label>
+                  <span class="toggle-label">Enable</span>
+                </div>
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button class="save-btn">Update Password</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notification Settings -->
+        <div class="settings-section">
+          <h2 class="section-title"><i class="fas fa-bell"></i> Notifications</h2>
+          <div class="settings-card">
+            <div class="settings-item">
+              <div class="settings-label">Email Notifications</div>
+              <div class="settings-value">
+                <div class="toggle-container">
+                  <label class="switch">
+                    <input type="checkbox" checked>
+                    <span class="slider round"></span>
+                  </label>
+                  <span class="toggle-label">Enable</span>
+                </div>
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-label">Form Submissions</div>
+              <div class="settings-value">
+                <div class="toggle-container">
+                  <label class="switch">
+                    <input type="checkbox" checked>
+                    <span class="slider round"></span>
+                  </label>
+                  <span class="toggle-label">Enable</span>
+                </div>
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-label">Report Generation</div>
+              <div class="settings-value">
+                <div class="toggle-container">
+                  <label class="switch">
+                    <input type="checkbox" checked>
+                    <span class="slider round"></span>
+                  </label>
+                  <span class="toggle-label">Enable</span>
+                </div>
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button class="save-btn">Save Preferences</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- System Settings -->
+        <div class="settings-section">
+          <h2 class="section-title"><i class="fas fa-sliders-h"></i> System Settings</h2>
+          <div class="settings-card">
+            <div class="settings-item">
+              <div class="settings-label">Language</div>
+              <div class="settings-value">
+                <select class="settings-input">
+                  <option selected>English</option>
+                  <option>Bahasa Malaysia</option>
+                  <option>Chinese</option>
+                </select>
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-label">Date Format</div>
+              <div class="settings-value">
+                <select class="settings-input">
+                  <option selected>DD/MM/YYYY</option>
+                  <option>MM/DD/YYYY</option>
+                  <option>YYYY/MM/DD</option>
+                </select>
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="settings-label">Time Zone</div>
+              <div class="settings-value">
+                <select class="settings-input">
+                  <option selected>UTC+8:00 (Kuala Lumpur)</option>
+                  <option>UTC+0:00 (London)</option>
+                  <option>UTC-5:00 (New York)</option>
+                  <option>UTC+9:00 (Tokyo)</option>
+                </select>
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button class="save-btn">Apply Settings</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Logout Section -->
+        <div class="settings-section">
+          <h2 class="section-title"><i class="fas fa-sign-out-alt"></i> Session Management</h2>
+          <div class="settings-card logout-card">
+            <div class="logout-content">
+              <div class="logout-text">
+                <h3>End your current session</h3>
+                <p>You will be redirected to the login page after logging out.</p>
+              </div>
+              <button class="logout-btn" onclick="window.location.href='login.html'">Log Out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Add click event listeners for menu items
+    document.querySelectorAll('.menu-item').forEach(item => {
+      item.addEventListener('click', function() {
+        // Skip if current item is already active
+        if (this.classList.contains('active')) return;
+        
+        // Get the text content (menu name)
+        const menuName = this.querySelector('.menu-text').textContent.trim();
+        
+        // Navigate based on menu name
+        switch(menuName) {
+          case 'Admin Dashboard':
+            window.location.href = 'admin-dashboard.html';
+            break;
+          case 'Submission':
+            // Navigate to submission page when created
+            break;
+          case 'Form':
+            window.location.href = 'form.html';
+            break;
+          case 'Generate Report':
+            // Navigate to generate report page when created
+            break;
+          case 'Setting':
+            window.location.href = 'settings.html';
+            break;
+        }
+      });
+    });
+
+    // Add Save button functionality
+    document.querySelectorAll('.save-btn').forEach(button => {
+      button.addEventListener('click', function() {
+        // Show save notification
+        showNotification('Changes saved successfully!');
+      });
+    });
+
+    // Notification function
+    function showNotification(message) {
+      // Create notification element
+      const notification = document.createElement('div');
+      notification.className = 'notification';
+      notification.innerHTML = `
+        <div class="notification-content">
+          <i class="fas fa-check-circle"></i>
+          <span>${message}</span>
+        </div>
+      `;
+      
+      // Add to document
+      document.body.appendChild(notification);
+      
+      // Show notification
+      setTimeout(() => {
+        notification.classList.add('show');
+      }, 10);
+      
+      // Remove notification after delay
+      setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+          notification.remove();
+        }, 300);
+      }, 3000);
+    }
+  </script>
+</body>
+</html>

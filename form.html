@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Form Builder - StratoSys Report</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="admin-dashboard.css">
+  <link rel="stylesheet" href="form-builder.css">
+</head>
+<body>
+  <div class="dashboard-container">
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>StratoSys Report</h2>
+      </div>
+      <div class="sidebar-menu">
+        <div class="menu-item">
+          <div class="menu-icon"><i class="fas fa-chart-line"></i></div>
+          <div class="menu-text">Admin Dashboard</div>
+        </div>
+        <div class="menu-item">
+          <div class="menu-icon"><i class="fas fa-file-download"></i></div>
+          <div class="menu-text">Submission</div>
+        </div>
+        <div class="menu-item active">
+          <div class="menu-icon"><i class="fas fa-list-alt"></i></div>
+          <div class="menu-text">Form</div>
+        </div>
+        <div class="menu-item">
+          <div class="menu-icon"><i class="fas fa-file-export"></i></div>
+          <div class="menu-text">Generate Report</div>
+        </div>
+        <div class="menu-item">
+          <div class="menu-icon"><i class="fas fa-cog"></i></div>
+          <div class="menu-text">Setting</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="main-content">
+      <div class="header">
+        <h1>Form</h1>
+        
+        <!-- Search and Filter Section -->
+        <div class="search-area">
+          <div class="search-bar">
+            <input type="text" placeholder="Search submissions...">
+            <button type="submit"><i class="fas fa-search"></i></button>
+          </div>
+          <p class="filter-text">Filter by date, category, etc.</p>
+        </div>
+      </div>
+
+      <!-- Filter Chips -->
+      <div class="filter-chips">
+        <div class="filter-chip">
+          <span>Total Report</span>
+          <span class="chip-value">8</span>
+        </div>
+        <div class="filter-chip">
+          <span>Last Generated</span>
+          <span class="chip-value">24/11/2025</span>
+        </div>
+        <div class="filter-chip">
+          <span>Automation Status</span>
+          <span class="chip-value">Active</span>
+        </div>
+      </div>
+
+      <!-- Form Build Section -->
+      <div class="form-actions">
+        <button class="create-form-btn">Create Form</button>
+      </div>
+
+      <div class="form-builder-container">
+        <div class="form-builder-card">
+          <div class="form-builder-header">
+            <div class="header-left">
+              <button id="add-element-btn" class="add-element-btn">Add element</button>
+              <button id="select-all-btn" class="select-btn">Select All</button>
+              <button id="deselect-all-btn" class="select-btn">Deselect All</button>
+            </div>
+            <div class="header-right">
+              <button id="delete-selected-btn" class="delete-selected-btn" disabled>
+                <i class="fas fa-trash"></i> Delete Selected
+              </button>
+            </div>
+          </div>
+          
+          <div class="form-builder-area">
+            <div class="empty-form-message">
+              <p>Click "Add element" to start building your form</p>
+            </div>
+            
+            <!-- Form elements will be added here dynamically -->
+            <div id="form-elements-container">
+              <!-- Example element (will be dynamically created) -->
+              <!-- <div class="form-element">
+                <div class="element-number">1)</div>
+                <div class="element-content">
+                  <input type="text" class="element-name" value="Name" readonly>
+                  <input type="text" class="element-type" value="Text Field" readonly>
+                </div>
+                <div class="element-toggle">
+                  <button class="toggle-btn active">ON</button>
+                </div>
+              </div> -->
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Element Modal -->
+      <div id="element-modal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Add Form Element</h3>
+            <button class="close-modal">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="element-form">
+              <div class="element-row">
+                <div class="element-number">1)</div>
+                <div class="element-field">
+                  <input type="text" id="element-name" placeholder="Rename">
+                </div>
+              </div>
+              <div class="element-row">
+                <div class="element-field">
+                  <input type="text" id="element-type" placeholder="Link">
+                </div>
+                <div class="element-toggle">
+                  <button id="toggle-state" class="toggle-btn active">ON</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button id="save-element" class="save-btn">Save</button>
+            <button class="cancel-btn close-modal">Cancel</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Logout button has been moved to Settings page -->
+    </div>
+  </div>
+
+  <script>
+    // Wait for the document to be fully loaded before running any JavaScript
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add click event listeners for menu items
+        document.querySelectorAll('.menu-item').forEach(item => {
+          item.addEventListener('click', function() {
+            // Get the text content (menu name)
+            const menuName = this.querySelector('.menu-text').textContent.trim();
+            
+            // Navigate based on menu name
+            switch(menuName) {
+              case 'Admin Dashboard':
+                window.location.href = 'admin-dashboard.html';
+                break;
+              case 'Submission':
+                // Navigate to submission page when created
+                break;
+              case 'Form':
+                window.location.href = 'form.html';
+                break;
+              case 'Generate Report':
+                window.location.href = 'admin-dashboard.html'; // For now, link to dashboard
+                break;
+              case 'Setting':
+                window.location.href = 'settings.html';
+                break;
+            }
+          });
+        });
+
+        // Modal functionality
+        const modal = document.getElementById('element-modal');
+        const addElementBtn = document.getElementById('add-element-btn');
+        const closeButtons = document.querySelectorAll('.close-modal');
+        const saveElementBtn = document.getElementById('save-element');
+        const toggleStateBtn = document.getElementById('toggle-state');
+        const formElementsContainer = document.getElementById('form-elements-container');
+        const clearFormBtn = document.getElementById('clear-form-btn');
+        
+        // Counter for form elements
+        let elementCounter = 1;
+
+        // Open modal
+        addElementBtn.addEventListener('click', function() {
+          modal.style.display = 'flex';
+        });
+
+        // Close modal
+        closeButtons.forEach(button => {
+          button.addEventListener('click', function() {
+            modal.style.display = 'none';
+          });
+        });
+
+        // Close modal when clicking outside
+        window.addEventListener('click', function(event) {
+          if (event.target === modal) {
+            modal.style.display = 'none';
+          }
+        });
+
+        // Toggle ON/OFF button
+        toggleStateBtn.addEventListener('click', function() {
+          this.classList.toggle('active');
+          this.textContent = this.classList.contains('active') ? 'ON' : 'OFF';
+        });
+
+        // Function to reorder element numbers
+        function reorderElements() {
+          const elements = document.querySelectorAll('.form-element');
+          elements.forEach((element, index) => {
+            element.querySelector('.element-number').textContent = `${index + 1})`;
+          });
+          // Update counter
+          elementCounter = elements.length + 1;
+        }
+        
+        // Track selected elements count
+        let selectedElementsCount = 0;
+        const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+        const selectAllBtn = document.getElementById('select-all-btn');
+        const deselectAllBtn = document.getElementById('deselect-all-btn');
+        
+        // Function to update the delete selected button state
+        function updateDeleteSelectedButton() {
+          if (selectedElementsCount > 0) {
+            deleteSelectedBtn.removeAttribute('disabled');
+            deleteSelectedBtn.innerHTML = `<i class="fas fa-trash-alt"></i> Delete Selected (${selectedElementsCount})`;
+          } else {
+            deleteSelectedBtn.setAttribute('disabled', 'disabled');
+            deleteSelectedBtn.innerHTML = `<i class="fas fa-trash-alt"></i> Delete Selected`;
+          }
+        }
+        
+        // No longer needed - removed checkbox handling
+        
+        // Select all elements
+        selectAllBtn.addEventListener('click', function() {
+          const elements = document.querySelectorAll('.form-element');
+          elements.forEach(element => {
+            element.classList.add('selected');
+          });
+          selectedElementsCount = elements.length;
+          updateDeleteSelectedButton();
+        });
+        
+        // Deselect all elements
+        deselectAllBtn.addEventListener('click', function() {
+          const elements = document.querySelectorAll('.form-element');
+          elements.forEach(element => {
+            element.classList.remove('selected');
+          });
+          selectedElementsCount = 0;
+          updateDeleteSelectedButton();
+        });
+        
+        // Delete selected elements
+        deleteSelectedBtn.addEventListener('click', function() {
+          if (selectedElementsCount === 0) return;
+          
+          if (confirm(`Are you sure you want to delete ${selectedElementsCount} selected element${selectedElementsCount > 1 ? 's' : ''}?`)) {
+            const selectedElements = document.querySelectorAll('.form-element.selected');
+            selectedElements.forEach(element => element.remove());
+            
+            // Reset selection count
+            selectedElementsCount = 0;
+            updateDeleteSelectedButton();
+            
+            // Reorder remaining elements
+            reorderElements();
+            
+            // Show empty message if no elements remain
+            if (formElementsContainer.children.length === 0) {
+              document.querySelector('.empty-form-message').style.display = 'flex';
+            }
+          }
+        });
+        
+        // Removed clear form functionality in favor of just using Delete Selected
+        
+        // Save form element
+        saveElementBtn.addEventListener('click', function() {
+          const elementName = document.getElementById('element-name').value || 'Unnamed Element';
+          const elementType = document.getElementById('element-type').value || 'Text Field';
+          const isActive = toggleStateBtn.classList.contains('active');
+          
+          // Create new form element
+          const newElement = document.createElement('div');
+          newElement.className = 'form-element';
+          newElement.innerHTML = `
+            <div class="element-number">${elementCounter})</div>
+            <div class="element-content">
+              <div class="element-name">${elementName}</div>
+              <div class="element-type">${elementType}</div>
+            </div>
+            <div class="element-toggle">
+              <button class="toggle-btn ${isActive ? 'active' : ''}">${isActive ? 'ON' : 'OFF'}</button>
+            </div>
+          `;
+          
+          // Make the entire element clickable for selection
+          newElement.addEventListener('click', function(e) {
+            // Don't select if clicking on buttons
+            if (e.target.closest('.toggle-btn') || e.target.closest('.element-delete-btn')) {
+              return;
+            }
+            
+            this.classList.toggle('selected');
+            if (this.classList.contains('selected')) {
+              selectedElementsCount++;
+            } else {
+              selectedElementsCount--;
+            }
+            updateDeleteSelectedButton();
+          });
+          
+          // Add to form
+          formElementsContainer.appendChild(newElement);
+          
+          // Add toggle functionality to the new element's button
+          const toggleBtn = newElement.querySelector('.toggle-btn');
+          toggleBtn.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent triggering row selection
+            this.classList.toggle('active');
+            this.textContent = this.classList.contains('active') ? 'ON' : 'OFF';
+          });
+          
+          // Individual delete button has been removed
+          
+          // Hide empty form message if it exists
+          const emptyMessage = document.querySelector('.empty-form-message');
+          if (emptyMessage) {
+            emptyMessage.style.display = 'none';
+          }
+          
+          // Increment counter after adding the element
+          elementCounter++;
+          
+          // Reset form and close modal
+          document.getElementById('element-name').value = '';
+          document.getElementById('element-type').value = '';
+          toggleStateBtn.classList.add('active');
+          toggleStateBtn.textContent = 'ON';
+          modal.style.display = 'none';
+        });
+    });
+  </script>
+</body>
+</html>

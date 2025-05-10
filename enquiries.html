@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Enquiries - StratoSys Report</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- Navigation Section -->
+    <nav class="page-navigation">
+      <div class="container">
+        <a href="index.html" class="nav-logo">StratoSys</a>
+        <div class="top-navigation">
+          <a href="about.html" class="nav-button">About us</a>
+          <a href="projects.html" class="nav-button">Projects</a>
+          <a href="enquiries.html" class="nav-button active">Enquiries</a>
+          <div class="dropdown">
+            <a href="#" class="nav-button dropdown-toggle">Service</a>
+            <div class="dropdown-content">
+              <a href="login.html">StratoSys Report</a>
+            </div>
+          </div>
+          <a href="register.html" class="nav-button register-btn">Register</a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Enquiries Content -->
+    <section class="enquiries-section">
+      <div class="container">
+        <h1>Contact Us</h1>
+        
+        <div class="enquiry-content">
+          <div class="enquiry-form-container">
+            <h2>Send us an enquiry</h2>
+            <form class="enquiry-form">
+              <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" placeholder="Your name" required />
+              </div>
+              
+              <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" placeholder="Your email" required />
+              </div>
+              
+              <div class="form-group">
+                <label for="subject">Subject</label>
+                <input type="text" id="subject" placeholder="Enquiry subject" required />
+              </div>
+              
+              <div class="form-group">
+                <label for="message">Message</label>
+                <textarea id="message" placeholder="Your message" rows="5" required></textarea>
+              </div>
+              
+              <button type="submit" class="submit-btn">Send Enquiry</button>
+            </form>
+          </div>
+          
+          <div class="contact-info">
+            <h2>Contact Information</h2>
+            <div class="info-item">
+              <div class="info-icon">📍</div>
+              <div>
+                <h3>Address</h3>
+                <p>German Malaysian Institute, Kajang, Selangor, Malaysia</p>
+              </div>
+            </div>
+            
+            <div class="info-item">
+              <div class="info-icon">📧</div>
+              <div>
+                <h3>Email</h3>
+                <p>info@stratosys.edu.my</p>
+              </div>
+            </div>
+            
+            <div class="info-item">
+              <div class="info-icon">☎️</div>
+              <div>
+                <h3>Phone</h3>
+                <p>+60 3 8921 9000</p>
+              </div>
+            </div>
+            
+            <div class="info-item">
+              <div class="info-icon">⏰</div>
+              <div>
+                <h3>Working Hours</h3>
+                <p>Monday to Friday: 9:00 AM - 5:00 PM</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <div class="container">
+        <p>&copy; 2025 StratoSys Report. Built by Semester 4 Software Engineering students at GMI.</p>
+        <div class="social-links">
+          <a href="#" class="social-link">GitHub</a>
+          <a href="#" class="social-link">Notion</a>
+          <a href="#" class="social-link">LinkedIn</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
