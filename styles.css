@@ -1,0 +1,248 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  background: linear-gradient(180deg, #26e7c1 0%, #26d8e7 50%, #2a75d8 100%);
+  min-height: 100vh;
+  padding: 20px;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.back-button {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  z-index: 10;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+}
+
+.logo-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.logo-icon {
+  width: 50px;
+  height: 50px;
+  margin-right: 10px;
+}
+
+.logo-text {
+  color: white;
+}
+
+.logo-text h1 {
+  font-size: 48px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.logo-text p {
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+nav {
+  display: flex;
+  gap: 15px;
+}
+
+.nav-button {
+  background-color: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 30px;
+  padding: 12px 25px;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.nav-button:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.main-heading {
+  color: white;
+  font-size: 36px;
+  margin-bottom: 60px;
+  max-width: 400px;
+}
+
+.features-container {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 30px;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  margin-top: 100px;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.feature {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 30%;
+}
+
+.feature-icon {
+  width: 60px;
+  height: 60px;
+  margin-bottom: 15px;
+}
+
+.feature-text {
+  color: white;
+  font-weight: 500;
+  font-size: 14px;
+  text-align: center;
+}
+
+.google-icon {
+  width: 60px;
+  height: 60px;
+  position: relative;
+}
+
+.google-icon .circle {
+  position: absolute;
+  border-radius: 50%;
+}
+
+.google-icon .red {
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 40px;
+  background-color: #ea4335;
+}
+
+.google-icon .yellow {
+  top: 0;
+  right: 0;
+  width: 40px;
+  height: 40px;
+  background-color: #fbbc05;
+}
+
+.google-icon .green {
+  bottom: 0;
+  left: 0;
+  width: 40px;
+  height: 40px;
+  background-color: #34a853;
+}
+
+.google-icon .blue {
+  bottom: 0;
+  right: 0;
+  width: 40px;
+  height: 40px;
+  background-color: #4285f4;
+}
+
+.g-letter {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 40px;
+  font-weight: bold;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  header {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  nav {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .nav-button {
+    flex: 1 0 40%;
+    margin-bottom: 10px;
+  }
+
+  .main-heading {
+    font-size: 28px;
+    text-align: center;
+    max-width: 100%;
+  }
+
+  .features-container {
+    flex-direction: column;
+    gap: 30px;
+    padding: 20px;
+    margin-top: 50px;
+  }
+
+  .feature {
+    width: 100%;
+  }
+
+  .feature-icon {
+    width: 50px;
+    height: 50px;
+  }
+
+  .google-icon {
+    width: 50px;
+    height: 50px;
+  }
+
+  .google-icon .circle {
+    width: 30px;
+    height: 30px;
+  }
+
+  .g-letter {
+    font-size: 30px;
+  }
+}
+
+@media (max-width: 480px) {
+  .logo-text h1 {
+    font-size: 36px;
+  }
+
+  .logo-text p {
+    font-size: 12px;
+  }
+
+  .nav-button {
+    padding: 10px 15px;
+    font-size: 14px;
+  }
+}
