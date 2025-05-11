@@ -30,7 +30,7 @@
           <div class="menu-icon"><i class="fas fa-list-alt"></i></div>
           <div class="menu-text">Form</div>
         </div>
-        <div class="menu-item">
+        <div class="menu-item" id="generate-report-menu">
           <div class="menu-icon"><i class="fas fa-file-export"></i></div>
           <div class="menu-text">Generate Report</div>
         </div>
@@ -42,7 +42,7 @@
     </div>
 
     <!-- Main Content Area -->
-    <div class="main-content">
+    <div class="main-content" id="main-content-form">
       <div class="header">
         <h1>Form</h1>
         
@@ -149,11 +149,144 @@
       
       <!-- Logout button has been moved to Settings page -->
     </div>
+
+    <!-- Generate Report Section (hidden by default) -->
+    <div class="main-content" id="main-content-report" style="display:none;">
+      <div class="header">
+        <h1>Generate Report & Analytics</h1>
+      </div>
+      <div class="report-actions">
+        <button id="fetch-data-btn" class="report-btn">Fetch Data</button>
+        <button id="analyze-data-btn" class="report-btn">Analyze Data</button>
+        <button id="export-report-btn" class="report-btn">Export Report</button>
+        <button id="choose-template-btn" class="report-btn">Choose Template (AI)</button>
+      </div>
+      <div id="analytics-container">
+        <!-- Charts/tables will be rendered here -->
+      </div>
+      <div id="report-preview">
+        <!-- Report preview will be rendered here -->
+      </div>
+    </div>
+
+    <!-- AI Template Modal -->
+    <div id="template-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Choose Report Template (AI)</h3>
+        </div>
+        <div class="modal-body">
+          <input type="text" id="template-prompt" placeholder="Describe your report style..." style="width:100%;margin-bottom:10px;">
+          <button id="suggest-template-btn" class="report-btn">Suggest Templates</button>
+          <div id="template-suggestions" style="margin-top:15px;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="close-modal report-btn">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
     // Wait for the document to be fully loaded before running any JavaScript
     document.addEventListener('DOMContentLoaded', function() {
+      // --- Report Section Navigation ---
+      const formMenu = document.querySelector('.menu-item.active');
+      const reportMenu = document.getElementById('generate-report-menu');
+      const formContent = document.getElementById('main-content-form');
+      const reportContent = document.getElementById('main-content-report');
+      reportMenu.addEventListener('click', function() {
+        formMenu.classList.remove('active');
+        reportMenu.classList.add('active');
+        formContent.style.display = 'none';
+        reportContent.style.display = 'block';
+      });
+      formMenu.addEventListener('click', function() {
+        reportMenu.classList.remove('active');
+        formMenu.classList.add('active');
+        formContent.style.display = 'block';
+        reportContent.style.display = 'none';
+      });
+
+      // --- Report Analytics & Export Logic (Mock Data) ---
+      const fetchDataBtn = document.getElementById('fetch-data-btn');
+      const analyzeDataBtn = document.getElementById('analyze-data-btn');
+      const exportReportBtn = document.getElementById('export-report-btn');
+      const chooseTemplateBtn = document.getElementById('choose-template-btn');
+      const analyticsContainer = document.getElementById('analytics-container');
+      const reportPreview = document.getElementById('report-preview');
+
+      let reportData = [
+        {Name: 'Alice', Score: 90, Date: '2025-05-10'},
+        {Name: 'Bob', Score: 85, Date: '2025-05-09'},
+        {Name: 'Charlie', Score: 78, Date: '2025-05-08'}
+      ];
+
+      fetchDataBtn.addEventListener('click', function() {
+        // Simulate fetching data (replace with backend call later)
+        analyticsContainer.innerHTML = '<pre>' + JSON.stringify(reportData, null, 2) + '</pre>';
+        reportPreview.innerHTML = '';
+      });
+
+      analyzeDataBtn.addEventListener('click', function() {
+        // Simple analytics: average score
+        const avg = reportData.reduce((sum, r) => sum + r.Score, 0) / reportData.length;
+        analyticsContainer.innerHTML = `<h3>Average Score: ${avg.toFixed(2)}</h3>`;
+        reportPreview.innerHTML = '';
+      });
+
+      exportReportBtn.addEventListener('click', function() {
+        // Export to CSV (mock)
+        let csv = 'Name,Score,Date\n' + reportData.map(r => `${r.Name},${r.Score},${r.Date}`).join('\n');
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'report.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      // --- AI Template Modal Logic ---
+      const templateModal = document.getElementById('template-modal');
+      const chooseTemplateBtnEl = document.getElementById('choose-template-btn');
+      const closeTemplateModal = templateModal.querySelector('.close-modal');
+      const suggestTemplateBtn = document.getElementById('suggest-template-btn');
+      const templatePrompt = document.getElementById('template-prompt');
+      const templateSuggestions = document.getElementById('template-suggestions');
+
+      chooseTemplateBtnEl.addEventListener('click', function() {
+        templateModal.style.display = 'block';
+        templateSuggestions.innerHTML = '';
+        templatePrompt.value = '';
+      });
+      closeTemplateModal.addEventListener('click', function() {
+        templateModal.style.display = 'none';
+      });
+      suggestTemplateBtn.addEventListener('click', function() {
+        // Simulate AI template suggestion (replace with backend call)
+        const prompt = templatePrompt.value.trim();
+        let suggestions = [
+          'Summary Report Template',
+          'Detailed Analysis Template',
+          prompt ? `Custom Template: ${prompt}` : 'Custom Template: ...'
+        ];
+        templateSuggestions.innerHTML = suggestions.map(t => `<div class='template-suggestion'>${t}</div>`).join('');
+        // Allow user to select a template
+        document.querySelectorAll('.template-suggestion').forEach(el => {
+          el.addEventListener('click', function() {
+            reportPreview.innerHTML = `<h3>Preview: ${el.textContent}</h3><p>This is a mock preview for the selected template.</p>`;
+            templateModal.style.display = 'none';
+          });
+        });
+      });
+      // Close modal when clicking outside
+      window.onclick = function(event) {
+        if (event.target == templateModal) {
+          templateModal.style.display = 'none';
+        }
+      }
+
         // Add click event listeners for menu items
         document.querySelectorAll('.menu-item').forEach(item => {
           item.addEventListener('click', function() {
