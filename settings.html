@@ -18,26 +18,26 @@
         <h2>StratoSys Report</h2>
       </div>
       <div class="sidebar-menu">
-        <div class="menu-item">
-          <div class="menu-icon"><i class="fas fa-chart-line"></i></div>
+        <a href="admin-dashboard.html" class="menu-item">
+          <div class="menu-icon"><i class="fas fa-tachometer-alt"></i></div>
           <div class="menu-text">Admin Dashboard</div>
-        </div>
-        <div class="menu-item">
-          <div class="menu-icon"><i class="fas fa-file-download"></i></div>
+        </a>
+        <a href="submission.html" class="menu-item">
+          <div class="menu-icon"><i class="fas fa-list"></i></div>
           <div class="menu-text">Submission</div>
-        </div>
-        <div class="menu-item">
+        </a>
+        <a href="form.html" class="menu-item">
           <div class="menu-icon"><i class="fas fa-list-alt"></i></div>
           <div class="menu-text">Form</div>
-        </div>
-        <div class="menu-item">
+        </a>
+        <a href="generate-report.html" class="menu-item">
           <div class="menu-icon"><i class="fas fa-file-export"></i></div>
           <div class="menu-text">Generate Report</div>
-        </div>
-        <div class="menu-item active">
+        </a>
+        <a href="settings.html" class="menu-item active">
           <div class="menu-icon"><i class="fas fa-cog"></i></div>
           <div class="menu-text">Setting</div>
-        </div>
+        </a>
       </div>
     </div>
 
@@ -233,34 +233,8 @@
   </div>
 
   <script>
-    // Add click event listeners for menu items
-    document.querySelectorAll('.menu-item').forEach(item => {
-      item.addEventListener('click', function() {
-        // Skip if current item is already active
-        if (this.classList.contains('active')) return;
-        
-        // Get the text content (menu name)
-        const menuName = this.querySelector('.menu-text').textContent.trim();
-        
-        // Navigate based on menu name
-        switch(menuName) {
-          case 'Admin Dashboard':
-            window.location.href = 'admin-dashboard.html';
-            break;
-          case 'Submission':
-            // Navigate to submission page when created
-            break;
-          case 'Form':
-            window.location.href = 'form.html';
-            break;
-          case 'Generate Report':
-            // Navigate to generate report page when created
-            break;
-          case 'Setting':
-            window.location.href = 'settings.html';
-            break;
-        }
-      });
+    document.addEventListener('DOMContentLoaded', function() {
+      // All theme toggle and navigation JS has been removed
     });
 
     // Add Save button functionality
