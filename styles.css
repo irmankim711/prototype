@@ -270,6 +270,23 @@ body {
   }
 }
 
+/* Sidebar Menu Link Fixes */
+.sidebar-menu a.menu-item {
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+}
+
+.sidebar-menu a.menu-item:hover {
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.sidebar-menu a.menu-item.active {
+  color: #ffffff;
+}
+
 /* Hero Section */
 .hero {
   background: linear-gradient(

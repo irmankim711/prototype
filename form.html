@@ -18,33 +18,40 @@
         <h2>StratoSys Report</h2>
       </div>
       <div class="sidebar-menu">
-        <div class="menu-item">
-          <div class="menu-icon"><i class="fas fa-chart-line"></i></div>
+        <a href="admin-dashboard.html" class="menu-item">
+          <div class="menu-icon"><i class="fas fa-tachometer-alt"></i></div>
           <div class="menu-text">Admin Dashboard</div>
-        </div>
-        <div class="menu-item">
-          <div class="menu-icon"><i class="fas fa-file-download"></i></div>
+        </a>
+        <a href="submission.html" class="menu-item">
+          <div class="menu-icon"><i class="fas fa-list"></i></div>
           <div class="menu-text">Submission</div>
-        </div>
-        <div class="menu-item active">
+        </a>
+        <a href="form.html" class="menu-item active">
           <div class="menu-icon"><i class="fas fa-list-alt"></i></div>
           <div class="menu-text">Form</div>
-        </div>
-        <div class="menu-item" id="generate-report-menu">
+        </a>
+        <a href="generate-report.html" class="menu-item">
           <div class="menu-icon"><i class="fas fa-file-export"></i></div>
           <div class="menu-text">Generate Report</div>
-        </div>
-        <div class="menu-item">
+        </a>
+        <a href="settings.html" class="menu-item">
           <div class="menu-icon"><i class="fas fa-cog"></i></div>
           <div class="menu-text">Setting</div>
-        </div>
+        </a>
       </div>
     </div>
 
     <!-- Main Content Area -->
     <div class="main-content" id="main-content-form">
-      <div class="header">
+      <div class="header" style="align-items:center;">
         <h1>Form</h1>
+        <div class="theme-toggle" style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+          <span id="theme-label" style="font-size:1em;">Light Mode</span>
+          <label class="switch">
+            <input type="checkbox" id="theme-switch">
+            <span class="slider round"></span>
+          </label>
+        </div>
         
         <!-- Search and Filter Section -->
         <div class="search-area">
@@ -82,13 +89,6 @@
           <div class="form-builder-header">
             <div class="header-left">
               <button id="add-element-btn" class="add-element-btn">Add element</button>
-              <button id="select-all-btn" class="select-btn">Select All</button>
-              <button id="deselect-all-btn" class="select-btn">Deselect All</button>
-            </div>
-            <div class="header-right">
-              <button id="delete-selected-btn" class="delete-selected-btn" disabled>
-                <i class="fas fa-trash"></i> Delete Selected
-              </button>
             </div>
           </div>
           
@@ -98,56 +98,10 @@
             </div>
             
             <!-- Form elements will be added here dynamically -->
-            <div id="form-elements-container">
-              <!-- Example element (will be dynamically created) -->
-              <!-- <div class="form-element">
-                <div class="element-number">1)</div>
-                <div class="element-content">
-                  <input type="text" class="element-name" value="Name" readonly>
-                  <input type="text" class="element-type" value="Text Field" readonly>
-                </div>
-                <div class="element-toggle">
-                  <button class="toggle-btn active">ON</button>
-                </div>
-              </div> -->
-            </div>
+            <div id="form-elements-container" class="form-elements-container"></div>
           </div>
         </div>
       </div>
-      
-      <!-- Element Modal -->
-      <div id="element-modal" class="modal">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3>Add Form Element</h3>
-            <button class="close-modal">&times;</button>
-          </div>
-          <div class="modal-body">
-            <div class="element-form">
-              <div class="element-row">
-                <div class="element-number">1)</div>
-                <div class="element-field">
-                  <input type="text" id="element-name" placeholder="Rename">
-                </div>
-              </div>
-              <div class="element-row">
-                <div class="element-field">
-                  <input type="text" id="element-type" placeholder="Link">
-                </div>
-                <div class="element-toggle">
-                  <button id="toggle-state" class="toggle-btn active">ON</button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button id="save-element" class="save-btn">Save</button>
-            <button class="cancel-btn close-modal">Cancel</button>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Logout button has been moved to Settings page -->
     </div>
 
     <!-- Generate Report Section (hidden by default) -->
@@ -156,10 +110,7 @@
         <h1>Generate Report & Analytics</h1>
       </div>
       <div class="report-actions">
-        <button id="fetch-data-btn" class="report-btn">Fetch Data</button>
-        <button id="analyze-data-btn" class="report-btn">Analyze Data</button>
-        <button id="export-report-btn" class="report-btn">Export Report</button>
-        <button id="choose-template-btn" class="report-btn">Choose Template (AI)</button>
+        <button id="choose-template-btn" class="report-btn">Choose Template</button>
       </div>
       <div id="analytics-container">
         <!-- Charts/tables will be rendered here -->
@@ -176,8 +127,9 @@
           <h3>Choose Report Template (AI)</h3>
         </div>
         <div class="modal-body">
-          <input type="text" id="template-prompt" placeholder="Describe your report style..." style="width:100%;margin-bottom:10px;">
-          <button id="suggest-template-btn" class="report-btn">Suggest Templates</button>
+          <div class="template-search">
+            <input type="text" placeholder="Describe your report needs...">
+          </div>
           <div id="template-suggestions" style="margin-top:15px;"></div>
         </div>
         <div class="modal-footer">
@@ -188,19 +140,93 @@
   </div>
 
   <script>
-    // Wait for the document to be fully loaded before running any JavaScript
     document.addEventListener('DOMContentLoaded', function() {
-      // --- Report Section Navigation ---
+      // Theme toggle logic
+      const themeSwitch = document.getElementById('theme-switch');
+      const themeLabel = document.getElementById('theme-label');
+      
+      // Check for saved theme preference
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme === 'dark') {
+        document.body.classList.add('dark-theme');
+        themeSwitch.checked = true;
+        themeLabel.textContent = 'Dark Mode';
+      }
+      
+      // Theme switch event listener
+      themeSwitch.addEventListener('change', function() {
+        if (this.checked) {
+          document.body.classList.add('dark-theme');
+          localStorage.setItem('theme', 'dark');
+          themeLabel.textContent = 'Dark Mode';
+        } else {
+          document.body.classList.remove('dark-theme');
+          localStorage.setItem('theme', 'light');
+          themeLabel.textContent = 'Light Mode';
+        }
+      });
+
+      // Close modals when clicking outside
+      window.addEventListener('click', function(e) {
+        if (e.target.classList.contains('modal')) {
+          e.target.style.display = 'none';
+        }
+      });
+
+      // Close modal buttons
+      document.querySelectorAll('.close-modal').forEach(button => {
+        button.addEventListener('click', function() {
+          this.closest('.modal').style.display = 'none';
+        });
+      });
+
+      // Form Builder Logic
+      let elementCounter = 1;
+      const formElementsContainer = document.getElementById('form-elements-container');
+
+      // Add element button click handler
+      const addElementBtn = document.getElementById('add-element-btn');
+      addElementBtn.addEventListener('click', function() {
+        // Create new form element
+        const newElement = document.createElement('div');
+        newElement.className = 'form-element';
+        newElement.innerHTML = `
+          <div class="element-number">${elementCounter})</div>
+          <div class="element-content">
+            <input type="text" class="element-input" value="Link" />
+          </div>
+          <div class="element-toggle">
+            <button class="toggle-btn active">ON</button>
+          </div>
+        `;
+        
+        // Add toggle button functionality
+        const toggleBtn = newElement.querySelector('.toggle-btn');
+        toggleBtn.addEventListener('click', function() {
+          this.classList.toggle('active');
+          this.textContent = this.classList.contains('active') ? 'ON' : 'OFF';
+        });
+        
+        // Add to form and update counter
+        formElementsContainer.appendChild(newElement);
+        document.querySelector('.empty-form-message').style.display = 'none';
+        elementCounter++;
+      });
+
+      // Report Section Navigation
       const formMenu = document.querySelector('.menu-item.active');
-      const reportMenu = document.getElementById('generate-report-menu');
+      const reportMenu = document.querySelector('a[href="generate-report.html"]');
       const formContent = document.getElementById('main-content-form');
       const reportContent = document.getElementById('main-content-report');
-      reportMenu.addEventListener('click', function() {
-        formMenu.classList.remove('active');
-        reportMenu.classList.add('active');
+      
+      reportMenu.addEventListener('click', function(e) {
+        e.preventDefault();
         formContent.style.display = 'none';
         reportContent.style.display = 'block';
+        formMenu.classList.remove('active');
+        reportMenu.classList.add('active');
       });
+
       formMenu.addEventListener('click', function() {
         reportMenu.classList.remove('active');
         formMenu.classList.add('active');
@@ -208,288 +234,158 @@
         reportContent.style.display = 'none';
       });
 
-      // --- Report Analytics & Export Logic (Mock Data) ---
-      const fetchDataBtn = document.getElementById('fetch-data-btn');
-      const analyzeDataBtn = document.getElementById('analyze-data-btn');
-      const exportReportBtn = document.getElementById('export-report-btn');
+      // Report Analytics & Export Logic
       const chooseTemplateBtn = document.getElementById('choose-template-btn');
-      const analyticsContainer = document.getElementById('analytics-container');
-      const reportPreview = document.getElementById('report-preview');
-
-      let reportData = [
-        {Name: 'Alice', Score: 90, Date: '2025-05-10'},
-        {Name: 'Bob', Score: 85, Date: '2025-05-09'},
-        {Name: 'Charlie', Score: 78, Date: '2025-05-08'}
-      ];
-
-      fetchDataBtn.addEventListener('click', function() {
-        // Simulate fetching data (replace with backend call later)
-        analyticsContainer.innerHTML = '<pre>' + JSON.stringify(reportData, null, 2) + '</pre>';
-        reportPreview.innerHTML = '';
-      });
-
-      analyzeDataBtn.addEventListener('click', function() {
-        // Simple analytics: average score
-        const avg = reportData.reduce((sum, r) => sum + r.Score, 0) / reportData.length;
-        analyticsContainer.innerHTML = `<h3>Average Score: ${avg.toFixed(2)}</h3>`;
-        reportPreview.innerHTML = '';
-      });
-
-      exportReportBtn.addEventListener('click', function() {
-        // Export to CSV (mock)
-        let csv = 'Name,Score,Date\n' + reportData.map(r => `${r.Name},${r.Score},${r.Date}`).join('\n');
-        const blob = new Blob([csv], {type: 'text/csv'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'report.csv';
-        a.click();
-        URL.revokeObjectURL(url);
-      });
-
-      // --- AI Template Modal Logic ---
       const templateModal = document.getElementById('template-modal');
-      const chooseTemplateBtnEl = document.getElementById('choose-template-btn');
-      const closeTemplateModal = templateModal.querySelector('.close-modal');
-      const suggestTemplateBtn = document.getElementById('suggest-template-btn');
-      const templatePrompt = document.getElementById('template-prompt');
-      const templateSuggestions = document.getElementById('template-suggestions');
+      
+      if (chooseTemplateBtn) {
+      }
+    });
 
-      chooseTemplateBtnEl.addEventListener('click', function() {
-        templateModal.style.display = 'block';
-        templateSuggestions.innerHTML = '';
-        templatePrompt.value = '';
+    // Close modal buttons
+    document.querySelectorAll('.close-modal').forEach(button => {
+      button.addEventListener('click', function() {
+        this.closest('.modal').style.display = 'none';
       });
-      closeTemplateModal.addEventListener('click', function() {
-        templateModal.style.display = 'none';
+    });
+
+    // Form Builder Logic
+    let elementCounter = 1;
+    const formElementsContainer = document.getElementById('form-elements-container');
+
+    // Add element button click handler
+    const addElementBtn = document.getElementById('add-element-btn');
+    addElementBtn.addEventListener('click', function() {
+      // Create new form element
+      const newElement = document.createElement('div');
+      newElement.className = 'form-element';
+      newElement.innerHTML = `
+        <div class="element-number">${elementCounter})</div>
+        <div class="element-content">
+          <input type="text" class="element-input" value="Link" />
+        </div>
+        <div class="element-toggle">
+          <button class="toggle-btn active">ON</button>
+        </div>
+      `;
+      
+      // Add toggle button functionality
+      const toggleBtn = newElement.querySelector('.toggle-btn');
+      toggleBtn.addEventListener('click', function() {
+        this.classList.toggle('active');
+        this.textContent = this.classList.contains('active') ? 'ON' : 'OFF';
       });
-      suggestTemplateBtn.addEventListener('click', function() {
-        // Simulate AI template suggestion (replace with backend call)
-        const prompt = templatePrompt.value.trim();
-        let suggestions = [
-          'Summary Report Template',
-          'Detailed Analysis Template',
-          prompt ? `Custom Template: ${prompt}` : 'Custom Template: ...'
-        ];
-        templateSuggestions.innerHTML = suggestions.map(t => `<div class='template-suggestion'>${t}</div>`).join('');
-        // Allow user to select a template
-        document.querySelectorAll('.template-suggestion').forEach(el => {
-          el.addEventListener('click', function() {
-            reportPreview.innerHTML = `<h3>Preview: ${el.textContent}</h3><p>This is a mock preview for the selected template.</p>`;
-            templateModal.style.display = 'none';
-          });
-        });
+      
+      // Add to form and update counter
+      formElementsContainer.appendChild(newElement);
+      document.querySelector('.empty-form-message').style.display = 'none';
+      elementCounter++;
+    });
+
+    // Report Section Navigation
+    const formMenu = document.querySelector('.menu-item.active');
+    const reportMenu = document.querySelector('a[href="generate-report.html"]');
+    const formContent = document.getElementById('main-content-form');
+    const reportContent = document.getElementById('main-content-report');
+    
+    reportMenu.addEventListener('click', function(e) {
+      e.preventDefault();
+      formContent.style.display = 'none';
+      reportContent.style.display = 'block';
+      formMenu.classList.remove('active');
+      reportMenu.classList.add('active');
+    });
+
+    formMenu.addEventListener('click', function() {
+      reportMenu.classList.remove('active');
+      formMenu.classList.add('active');
+      formContent.style.display = 'block';
+      reportContent.style.display = 'none';
+    });
+
+    // Report Analytics & Export Logic
+    const chooseTemplateBtn = document.getElementById('choose-template-btn');
+    const templateModal = document.getElementById('template-modal');
+    
+    if (chooseTemplateBtn) {
+      chooseTemplateBtn.addEventListener('click', function() {
+        templateModal.style.display = 'flex';
       });
-      // Close modal when clicking outside
-      window.onclick = function(event) {
-        if (event.target == templateModal) {
-          templateModal.style.display = 'none';
+    }
+
+    // Track selected elements count
+    let selectedElementsCount = 0;
+    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+    const selectAllBtn = document.getElementById('select-all-btn');
+    const deselectAllBtn = document.getElementById('deselect-all-btn');
+    
+    // Function to update the delete selected button state
+    function updateDeleteSelectedButton() {
+      if (selectedElementsCount > 0) {
+        deleteSelectedBtn.removeAttribute('disabled');
+        deleteSelectedBtn.innerHTML = `<i class="fas fa-trash-alt"></i> Delete Selected (${selectedElementsCount})`;
+      } else {
+        deleteSelectedBtn.setAttribute('disabled', 'disabled');
+        deleteSelectedBtn.innerHTML = `<i class="fas fa-trash-alt"></i> Delete Selected`;
+      }
+    }
+    
+    // Select all elements
+    selectAllBtn.addEventListener('click', function() {
+      const elements = document.querySelectorAll('.form-element');
+      elements.forEach(element => {
+        element.classList.add('selected');
+      });
+      selectedElementsCount = elements.length;
+      updateDeleteSelectedButton();
+    });
+    
+    // Deselect all elements
+    deselectAllBtn.addEventListener('click', function() {
+      const elements = document.querySelectorAll('.form-element');
+      elements.forEach(element => {
+        element.classList.remove('selected');
+      });
+      selectedElementsCount = 0;
+      updateDeleteSelectedButton();
+    });
+    
+    // Delete selected elements
+    deleteSelectedBtn.addEventListener('click', function() {
+      if (selectedElementsCount === 0) return;
+      
+      if (confirm(`Are you sure you want to delete ${selectedElementsCount} selected element${selectedElementsCount > 1 ? 's' : ''}?`)) {
+        const selectedElements = document.querySelectorAll('.form-element.selected');
+        selectedElements.forEach(element => element.remove());
+        
+        // Reset selection count
+        selectedElementsCount = 0;
+        updateDeleteSelectedButton();
+        
+        // Reorder remaining elements
+        reorderElements();
+        
+        // Show empty message if no elements remain
+        if (formElementsContainer.children.length === 0) {
+          document.querySelector('.empty-form-message').style.display = 'flex';
         }
       }
-
-        // Add click event listeners for menu items
-        document.querySelectorAll('.menu-item').forEach(item => {
-          item.addEventListener('click', function() {
-            // Get the text content (menu name)
-            const menuName = this.querySelector('.menu-text').textContent.trim();
-            
-            // Navigate based on menu name
-            switch(menuName) {
-              case 'Admin Dashboard':
-                window.location.href = 'admin-dashboard.html';
-                break;
-              case 'Submission':
-                // Navigate to submission page when created
-                break;
-              case 'Form':
-                window.location.href = 'form.html';
-                break;
-              case 'Generate Report':
-                window.location.href = 'admin-dashboard.html'; // For now, link to dashboard
-                break;
-              case 'Setting':
-                window.location.href = 'settings.html';
-                break;
-            }
-          });
-        });
-
-        // Modal functionality
-        const modal = document.getElementById('element-modal');
-        const addElementBtn = document.getElementById('add-element-btn');
-        const closeButtons = document.querySelectorAll('.close-modal');
-        const saveElementBtn = document.getElementById('save-element');
-        const toggleStateBtn = document.getElementById('toggle-state');
-        const formElementsContainer = document.getElementById('form-elements-container');
-        const clearFormBtn = document.getElementById('clear-form-btn');
-        
-        // Counter for form elements
-        let elementCounter = 1;
-
-        // Open modal
-        addElementBtn.addEventListener('click', function() {
-          modal.style.display = 'flex';
-        });
-
-        // Close modal
-        closeButtons.forEach(button => {
-          button.addEventListener('click', function() {
-            modal.style.display = 'none';
-          });
-        });
-
-        // Close modal when clicking outside
-        window.addEventListener('click', function(event) {
-          if (event.target === modal) {
-            modal.style.display = 'none';
-          }
-        });
-
-        // Toggle ON/OFF button
-        toggleStateBtn.addEventListener('click', function() {
-          this.classList.toggle('active');
-          this.textContent = this.classList.contains('active') ? 'ON' : 'OFF';
-        });
-
-        // Function to reorder element numbers
-        function reorderElements() {
-          const elements = document.querySelectorAll('.form-element');
-          elements.forEach((element, index) => {
-            element.querySelector('.element-number').textContent = `${index + 1})`;
-          });
-          // Update counter
-          elementCounter = elements.length + 1;
-        }
-        
-        // Track selected elements count
-        let selectedElementsCount = 0;
-        const deleteSelectedBtn = document.getElementById('delete-selected-btn');
-        const selectAllBtn = document.getElementById('select-all-btn');
-        const deselectAllBtn = document.getElementById('deselect-all-btn');
-        
-        // Function to update the delete selected button state
-        function updateDeleteSelectedButton() {
-          if (selectedElementsCount > 0) {
-            deleteSelectedBtn.removeAttribute('disabled');
-            deleteSelectedBtn.innerHTML = `<i class="fas fa-trash-alt"></i> Delete Selected (${selectedElementsCount})`;
-          } else {
-            deleteSelectedBtn.setAttribute('disabled', 'disabled');
-            deleteSelectedBtn.innerHTML = `<i class="fas fa-trash-alt"></i> Delete Selected`;
-          }
-        }
-        
-        // No longer needed - removed checkbox handling
-        
-        // Select all elements
-        selectAllBtn.addEventListener('click', function() {
-          const elements = document.querySelectorAll('.form-element');
-          elements.forEach(element => {
-            element.classList.add('selected');
-          });
-          selectedElementsCount = elements.length;
-          updateDeleteSelectedButton();
-        });
-        
-        // Deselect all elements
-        deselectAllBtn.addEventListener('click', function() {
-          const elements = document.querySelectorAll('.form-element');
-          elements.forEach(element => {
-            element.classList.remove('selected');
-          });
-          selectedElementsCount = 0;
-          updateDeleteSelectedButton();
-        });
-        
-        // Delete selected elements
-        deleteSelectedBtn.addEventListener('click', function() {
-          if (selectedElementsCount === 0) return;
-          
-          if (confirm(`Are you sure you want to delete ${selectedElementsCount} selected element${selectedElementsCount > 1 ? 's' : ''}?`)) {
-            const selectedElements = document.querySelectorAll('.form-element.selected');
-            selectedElements.forEach(element => element.remove());
-            
-            // Reset selection count
-            selectedElementsCount = 0;
-            updateDeleteSelectedButton();
-            
-            // Reorder remaining elements
-            reorderElements();
-            
-            // Show empty message if no elements remain
-            if (formElementsContainer.children.length === 0) {
-              document.querySelector('.empty-form-message').style.display = 'flex';
-            }
-          }
-        });
-        
-        // Removed clear form functionality in favor of just using Delete Selected
-        
-        // Save form element
-        saveElementBtn.addEventListener('click', function() {
-          const elementName = document.getElementById('element-name').value || 'Unnamed Element';
-          const elementType = document.getElementById('element-type').value || 'Text Field';
-          const isActive = toggleStateBtn.classList.contains('active');
-          
-          // Create new form element
-          const newElement = document.createElement('div');
-          newElement.className = 'form-element';
-          newElement.innerHTML = `
-            <div class="element-number">${elementCounter})</div>
-            <div class="element-content">
-              <div class="element-name">${elementName}</div>
-              <div class="element-type">${elementType}</div>
-            </div>
-            <div class="element-toggle">
-              <button class="toggle-btn ${isActive ? 'active' : ''}">${isActive ? 'ON' : 'OFF'}</button>
-            </div>
-          `;
-          
-          // Make the entire element clickable for selection
-          newElement.addEventListener('click', function(e) {
-            // Don't select if clicking on buttons
-            if (e.target.closest('.toggle-btn') || e.target.closest('.element-delete-btn')) {
-              return;
-            }
-            
-            this.classList.toggle('selected');
-            if (this.classList.contains('selected')) {
-              selectedElementsCount++;
-            } else {
-              selectedElementsCount--;
-            }
-            updateDeleteSelectedButton();
-          });
-          
-          // Add to form
-          formElementsContainer.appendChild(newElement);
-          
-          // Add toggle functionality to the new element's button
-          const toggleBtn = newElement.querySelector('.toggle-btn');
-          toggleBtn.addEventListener('click', function(e) {
-            e.stopPropagation(); // Prevent triggering row selection
-            this.classList.toggle('active');
-            this.textContent = this.classList.contains('active') ? 'ON' : 'OFF';
-          });
-          
-          // Individual delete button has been removed
-          
-          // Hide empty form message if it exists
-          const emptyMessage = document.querySelector('.empty-form-message');
-          if (emptyMessage) {
-            emptyMessage.style.display = 'none';
-          }
-          
-          // Increment counter after adding the element
-          elementCounter++;
-          
-          // Reset form and close modal
-          document.getElementById('element-name').value = '';
-          document.getElementById('element-type').value = '';
-          toggleStateBtn.classList.add('active');
-          toggleStateBtn.textContent = 'ON';
-          modal.style.display = 'none';
-        });
     });
-  </script>
+
+    // Close modals when clicking outside
+    window.addEventListener('click', function(e) {
+      if (e.target.classList.contains('modal')) {
+        e.target.style.display = 'none';
+      }
+    });
+
+    // Close modal buttons
+    document.querySelectorAll('.close-modal').forEach(button => {
+      button.addEventListener('click', function() {
+        this.closest('.modal').style.display = 'none';
+      });
+    });
+  });
+</script>
 </body>
 </html>

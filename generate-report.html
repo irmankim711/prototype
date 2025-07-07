@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generate Report - StratoSys Report</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="admin-dashboard.css">
+</head>
+<body>
+  <div class="dashboard-container">
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>StratoSys Report</h2>
+      </div>
+      <div class="sidebar-menu">
+        <a href="admin-dashboard.html" class="menu-item">
+          <div class="menu-icon"><i class="fas fa-tachometer-alt"></i></div>
+          <div class="menu-text">Admin Dashboard</div>
+        </a>
+        <a href="submission.html" class="menu-item">
+          <div class="menu-icon"><i class="fas fa-list"></i></div>
+          <div class="menu-text">Submission</div>
+        </a>
+        <a href="form.html" class="menu-item">
+          <div class="menu-icon"><i class="fas fa-list-alt"></i></div>
+          <div class="menu-text">Form</div>
+        </a>
+        <a href="generate-report.html" class="menu-item active">
+          <div class="menu-icon"><i class="fas fa-file-export"></i></div>
+          <div class="menu-text">Generate Report</div>
+        </a>
+        <a href="settings.html" class="menu-item">
+          <div class="menu-icon"><i class="fas fa-cog"></i></div>
+          <div class="menu-text">Setting</div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="main-content">
+      <div class="header" style="align-items:center;">
+        <h1>Generate Report</h1>
+      </div>
+
+      <!-- Report Generator Form -->
+      <div class="report-generator" style="background:#fff;border-radius:10px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,0.08);margin-bottom:30px;">
+        <h2 style="margin-top:0;">Report Options</h2>
+        
+        <div class="report-form" style="display:grid;grid-template-columns:repeat(2, 1fr);gap:20px;">
+          <div class="form-group">
+            <label for="report-type">Report Type</label>
+            <select id="report-type" class="form-control">
+              <option value="summary">Summary Report</option>
+              <option value="detailed">Detailed Report</option>
+              <option value="analytics">Analytics Report</option>
+              <option value="custom">Custom Report</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="report-format">Format</label>
+            <select id="report-format" class="form-control">
+              <option value="pdf">PDF</option>
+              <option value="excel">Excel</option>
+              <option value="csv">CSV</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="date-from">Date From</label>
+            <input type="date" id="date-from" class="form-control" value="2025-05-01">
+          </div>
+          
+          <div class="form-group">
+            <label for="date-to">Date To</label>
+            <input type="date" id="date-to" class="form-control" value="2025-05-11">
+          </div>
+          
+          <div class="form-group" style="grid-column: span 2;">
+            <label>Data to Include</label>
+            <div class="checkbox-group" style="display:flex;flex-wrap:wrap;gap:15px;margin-top:10px;">
+              <label class="checkbox-container">
+                <input type="checkbox" checked> Submission Data
+                <span class="checkmark"></span>
+              </label>
+              <label class="checkbox-container">
+                <input type="checkbox" checked> User Information
+                <span class="checkmark"></span>
+              </label>
+              <label class="checkbox-container">
+                <input type="checkbox" checked> Scores
+                <span class="checkmark"></span>
+              </label>
+              <label class="checkbox-container">
+                <input type="checkbox"> Analytics
+                <span class="checkmark"></span>
+              </label>
+              <label class="checkbox-container">
+                <input type="checkbox"> Charts and Graphs
+                <span class="checkmark"></span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="form-group" style="grid-column: span 2;">
+            <button id="generate-report-btn" class="primary-button" style="padding:10px 20px;margin-top:15px;">
+              <i class="fas fa-file-export"></i> Generate Report
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Previous Reports Section -->
+      <div class="previous-reports" style="background:#fff;border-radius:10px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <h2 style="margin-top:0;">Previous Reports</h2>
+        <table class="reports-table" style="width:100%;border-collapse:collapse;margin-top:15px;">
+          <thead>
+            <tr style="background:#f5f7fa;">
+              <th>Report Name</th>
+              <th>Type</th>
+              <th>Generated On</th>
+              <th>Format</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="reports-tbody">
+            <!-- Will be populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Theme toggle has been removed
+
+      // Mock previous reports data
+      const reports = [
+        { name: 'Monthly Summary Report', type: 'Summary', date: '2025-05-10', format: 'PDF' },
+        { name: 'User Engagement Analysis', type: 'Analytics', date: '2025-05-05', format: 'Excel' },
+        { name: 'Detailed Submissions Q1', type: 'Detailed', date: '2025-04-15', format: 'PDF' },
+        { name: 'Custom User Report', type: 'Custom', date: '2025-04-01', format: 'CSV' }
+      ];
+      
+      // Populate previous reports table
+      const tbody = document.getElementById('reports-tbody');
+      tbody.innerHTML = reports.map(report => `
+        <tr>
+          <td>${report.name}</td>
+          <td>${report.type}</td>
+          <td>${report.date}</td>
+          <td>${report.format}</td>
+          <td>
+            <button class="download-btn"><i class="fas fa-download"></i> Download</button>
+          </td>
+        </tr>
+      `).join('');
+      
+      // Generate report button click handler
+      document.getElementById('generate-report-btn').addEventListener('click', function() {
+        const form = document.querySelector('.report-form');
+        const reportType = document.getElementById('report-type').value;
+        const reportFormat = document.getElementById('report-format').value;
+        
+        if (!reportType || !reportFormat) {
+          alert('Please select a report type and format');
+          return;
+        }
+        
+        // Show loading state
+        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+        this.disabled = true;
+        
+        // Simulate API call with timeout
+        setTimeout(() => {
+          // Reset button
+          this.innerHTML = '<i class="fas fa-file-export"></i> Generate';
+          this.disabled = false;
+          
+          // Create and add a new row to previous reports table
+          const reportsTable = document.querySelector('.reports-table tbody');
+          const newRow = document.createElement('tr');
+          const currentDate = new Date().toISOString().split('T')[0];
+          
+          newRow.innerHTML = `
+            <td>${reportType} Report</td>
+            <td>${currentDate}</td>
+            <td>${reportFormat.toUpperCase()}</td>
+            <td><a href="#" class="download-link"><i class="fas fa-download"></i> Download</a></td>
+          `;
+          
+          reportsTable.prepend(newRow);
+          
+          // Show success message
+          const successMessage = document.createElement('div');
+          successMessage.className = 'success-message';
+          successMessage.style.backgroundColor = '#d1fae5';
+          successMessage.style.color = '#047857';
+          successMessage.style.padding = '12px';
+          successMessage.style.borderRadius = '6px';
+          successMessage.style.marginTop = '16px';
+          successMessage.style.display = 'flex';
+          successMessage.style.alignItems = 'center';
+          successMessage.style.gap = '8px';
+          
+          successMessage.innerHTML = `
+            <i class="fas fa-check-circle"></i>
+            Report generated successfully! <a href="#" style="color:#047857;font-weight:500;">Download now</a>
+          `;
+          
+          document.querySelector('.report-form').appendChild(successMessage);
+          
+          // Remove success message after 5 seconds
+          setTimeout(() => {
+            successMessage.remove();
+          }, 5000);
+        }, 2000);
+      });
+
+      // We've removed the JavaScript navigation since we're now using direct HTML links
+    });
+  </script>
+  
+  <style>
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      font-size: 14px;
+      color: #4a5568;
+    }
+    
+    .form-control {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 14px;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    
+    .form-control:focus {
+      border-color: #4e73df;
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(78,115,223,0.1);
+    }
+    
+    .primary-button {
+      background: linear-gradient(90deg, #4e73df 0%, #1cc88a 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 24px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: background 0.3s, transform 0.3s;
+    }
+    
+    .primary-button:hover {
+      background: linear-gradient(90deg, #3a5fc8 0%, #15a876 100%);
+      transform: translateY(-2px);
+    }
+    
+    .checkbox-container {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      font-size: 14px;
+      user-select: none;
+      color: #4a5568;
+    }
+    
+    .checkbox-container input {
+      margin-right: 8px;
+    }
+    
+    .reports-table th, .reports-table td {
+      padding: 12px 10px;
+      text-align: left;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .reports-table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .download-btn {
+      background: #4e73df;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 5px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.3s;
+    }
+    
+    .download-btn:hover {
+      background: #375ac9;
+    }
+    
+    .success-message {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #e6fffa;
+      border-left: 4px solid #1cc88a;
+      padding: 12px 15px;
+      border-radius: 4px;
+      margin-top: 15px;
+      color: #285e61;
+    }
+    
+    .success-message a {
+      color: #1cc88a;
+      font-weight: 500;
+      text-decoration: none;
+    }
+    
+    .success-message a:hover {
+      text-decoration: underline;
+    }
+    
+    /* Dark Theme Styles */
+    body.dark-theme .report-generator,
+    body.dark-theme .previous-reports {
+      background: #23272f !important;
+      color: #f3f6fb !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+    
+    body.dark-theme label {
+      color: #e2e8f0;
+    }
+    
+    body.dark-theme .form-control {
+      background-color: #2d3748;
+      border-color: #4a5568;
+      color: #f3f6fb;
+    }
+    
+    body.dark-theme .form-control:focus {
+      border-color: #4e73df;
+      box-shadow: 0 0 0 3px rgba(78,115,223,0.2);
+    }
+    
+    body.dark-theme .checkbox-container {
+      color: #e2e8f0;
+    }
+    
+    body.dark-theme .reports-table th, 
+    body.dark-theme .reports-table td {
+      border-bottom: 1px solid #4a5568;
+      color: #f3f6fb;
+    }
+    
+    body.dark-theme .reports-table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    body.dark-theme .success-message {
+      background: rgba(28, 200, 138, 0.1);
+      border-color: #1cc88a;
+      color: #9fefe0;
+    }
+  </style>
+</body>
+</html>
