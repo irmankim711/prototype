@@ -1,116 +1,63 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, CssBaseline } from '@mui/material';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { theme } from './theme';
-import Layout from './components/Layout/Layout';
-import Dashboard from './pages/Dashboard/Dashboard';
-import ReportBuilder from './pages/ReportBuilder/ReportBuilder';
-import ReportTemplates from './pages/ReportTemplates/ReportTemplates';
-import ReportHistory from './pages/ReportHistory/ReportHistory';
-import Settings from './pages/Settings/Settings';
-import Submission from './pages/Submission';
-import Form from './pages/Form';
-import LandingPage from './pages/LandingPage';
-import UserProfile from './pages/UserProfile';
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { ThemeProvider } from "@mui/material/styles";
+import { CssBaseline } from "@mui/material";
+import { theme } from "./theme";
+import { AuthProvider } from "./context/AuthContext";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
-
-// Simple authentication setup
-
-// Protected route component
-interface ProtectedRouteProps {
-  children: React.ReactNode;
-}
-
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  // In a real app, this would check for a token or session
-  // For demo purposes, we'll use localStorage
-  const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/landing" replace />;
-  }
-  
-  return <>{children}</>;
-};
+// Import pages
+import LandingPage from "./pages/LandingPage/LandingPage";
+import Dashboard from "./pages/Dashboard/Dashboard";
+import Form from "./pages/Form/Form";
+import Submission from "./pages/Submission/Submission";
+import ReportBuilder from "./pages/ReportBuilder/ReportBuilder";
+import ReportHistory from "./pages/ReportHistory/ReportHistory";
+import ReportTemplates from "./pages/ReportTemplates/ReportTemplates";
+import RealtimeDashboard from "./pages/RealtimeDashboard";
+import FormBuilderAdmin from "./pages/FormBuilderAdmin/FormBuilderAdmin";
+import UserProfile from "./pages/UserProfile/UserProfile";
+import Settings from "./pages/Settings/Settings";
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AuthProvider>
         <Router>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/landing" element={<LandingPage />} />
-            <Route path="/dashboard" element={
-              <ProtectedRoute>
-                <Layout>
-                  <Dashboard />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/submission" element={
-              <ProtectedRoute>
-                <Layout>
-                  <Submission />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/form" element={
-              <ProtectedRoute>
-                <Layout>
-                  <Form />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/reports/new" element={
-              <ProtectedRoute>
-                <Layout>
-                  <ReportBuilder />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/reports/templates" element={
-              <ProtectedRoute>
-                <Layout>
-                  <ReportTemplates />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/reports/history" element={
-              <ProtectedRoute>
-                <Layout>
-                  <ReportHistory />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/settings" element={
-              <ProtectedRoute>
-                <Layout>
-                  <Settings />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/profile" element={
-              <ProtectedRoute>
-                <Layout>
-                  <UserProfile />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="*" element={<Navigate to="/landing" replace />} />
-          </Routes>
+          <div className="App">
+            <Routes>
+              {/* Public routes */}
+              <Route path="/" element={<LandingPage />} />
+
+              {/* Protected routes */}
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/form" element={<Form />} />
+              <Route path="/submission" element={<Submission />} />
+              <Route path="/report-builder" element={<ReportBuilder />} />
+              <Route path="/report-history" element={<ReportHistory />} />
+              <Route path="/report-templates" element={<ReportTemplates />} />
+              <Route
+                path="/realtime-dashboard"
+                element={<RealtimeDashboard />}
+              />
+              <Route
+                path="/form-builder-admin"
+                element={<FormBuilderAdmin />}
+              />
+              <Route path="/profile" element={<UserProfile />} />
+              <Route path="/settings" element={<Settings />} />
+
+              {/* Redirect any unknown routes to landing page */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </div>
         </Router>
-      </ThemeProvider>
-    </QueryClientProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 
