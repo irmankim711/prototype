@@ -1,10 +1,110 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from .models import db
+from datetime import datetime, timedelta
+from sqlalchemy import desc, func
+from .models import db, Report, ReportTemplate, User
 from .services import report_service, ai_service
 from .tasks import generate_report_task
 
 api = Blueprint('api', __name__)
+
+@api.route('/reports', methods=['GET'])
+@jwt_required()
+def get_reports():
+    """Get all reports for the current user with pagination"""
+    user_id = get_jwt_identity()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    status = request.args.get('status')
+    
+    query = Report.query.filter_by(user_id=user_id)
+    
+    if status:
+        query = query.filter_by(status=status)
+    
+    reports = query.order_by(desc(Report.created_at)).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    return jsonify({
+        'reports': [{
+            'id': report.id,
+            'title': report.title,
+            'description': report.description,
+            'status': report.status,
+            'createdAt': report.created_at.isoformat(),
+            'updatedAt': report.updated_at.isoformat(),
+            'templateId': report.template_id,
+            'outputUrl': report.output_url
+        } for report in reports.items],
+        'pagination': {
+            'page': reports.page,
+            'pages': reports.pages,
+            'per_page': reports.per_page,
+            'total': reports.total
+        }
+    }), 200
+
+@api.route('/reports/<int:report_id>', methods=['GET'])
+@jwt_required()
+def get_report(report_id):
+    """Get a specific report"""
+    user_id = get_jwt_identity()
+    report = Report.query.filter_by(id=report_id, user_id=user_id).first()
+    
+    if not report:
+        return jsonify({'error': 'Report not found'}), 404
+    
+    return jsonify({
+        'id': report.id,
+        'title': report.title,
+        'description': report.description,
+        'status': report.status,
+        'createdAt': report.created_at.isoformat(),
+        'updatedAt': report.updated_at.isoformat(),
+        'templateId': report.template_id,
+        'data': report.data,
+        'outputUrl': report.output_url
+    }), 200
+
+@api.route('/reports/<int:report_id>', methods=['PUT'])
+@jwt_required()
+def update_report(report_id):
+    """Update a specific report"""
+    user_id = get_jwt_identity()
+    report = Report.query.filter_by(id=report_id, user_id=user_id).first()
+    
+    if not report:
+        return jsonify({'error': 'Report not found'}), 404
+    
+    data = request.get_json()
+    
+    if 'title' in data:
+        report.title = data['title']
+    if 'description' in data:
+        report.description = data['description']
+    if 'data' in data:
+        report.data = data['data']
+    
+    report.updated_at = datetime.utcnow()
+    db.session.commit()
+    
+    return jsonify({'message': 'Report updated successfully'}), 200
+
+@api.route('/reports/<int:report_id>', methods=['DELETE'])
+@jwt_required()
+def delete_report(report_id):
+    """Delete a specific report"""
+    user_id = get_jwt_identity()
+    report = Report.query.filter_by(id=report_id, user_id=user_id).first()
+    
+    if not report:
+        return jsonify({'error': 'Report not found'}), 404
+    
+    db.session.delete(report)
+    db.session.commit()
+    
+    return jsonify({'message': 'Report deleted successfully'}), 200
 
 @api.route('/reports', methods=['POST'])
 @jwt_required()
@@ -12,13 +112,78 @@ def create_report():
     user_id = get_jwt_identity()
     data = request.get_json()
     
+    # Create report record first
+    report = Report(
+        title=data.get('title', 'New Report'),
+        description=data.get('description', ''),
+        user_id=user_id,
+        template_id=data.get('template_id'),
+        data=data.get('data', {}),
+        status='processing'
+    )
+    db.session.add(report)
+    db.session.commit()
+    
+    # Add report_id to task data
+    task_data = {**data, 'report_id': report.id}
+    
     # Queue report generation task
-    task = generate_report_task.delay(user_id, data)
+    task = generate_report_task.delay(user_id, task_data)
     
     return jsonify({
+        'report_id': report.id,
         'task_id': task.id,
         'status': 'processing'
     }), 202
+
+@api.route('/reports/recent', methods=['GET'])
+@jwt_required()
+def get_recent_reports():
+    """Get recent reports for the current user"""
+    user_id = get_jwt_identity()
+    limit = request.args.get('limit', 5, type=int)
+    
+    reports = Report.query.filter_by(user_id=user_id)\
+        .order_by(desc(Report.created_at))\
+        .limit(limit)\
+        .all()
+    
+    return jsonify([{
+        'id': report.id,
+        'title': report.title,
+        'status': report.status,
+        'createdAt': report.created_at.isoformat(),
+        'updatedAt': report.updated_at.isoformat(),
+        'templateId': report.template_id,
+        'outputUrl': report.output_url
+    } for report in reports]), 200
+
+@api.route('/reports/stats', methods=['GET'])
+@jwt_required()
+def get_report_stats():
+    """Get report statistics for the current user"""
+    user_id = get_jwt_identity()
+    
+    total = Report.query.filter_by(user_id=user_id).count()
+    completed = Report.query.filter_by(user_id=user_id, status='completed').count()
+    processing = Report.query.filter_by(user_id=user_id, status='processing').count()
+    failed = Report.query.filter_by(user_id=user_id, status='failed').count()
+    
+    # Reports created this week
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    this_week = Report.query.filter(
+        Report.user_id == user_id,
+        Report.created_at >= week_ago
+    ).count()
+    
+    return jsonify({
+        'totalReports': total,
+        'completedReports': completed,
+        'processingReports': processing,
+        'failedReports': failed,
+        'reportsThisWeek': this_week,
+        'successRate': round((completed / total * 100) if total > 0 else 0, 1)
+    }), 200
 
 @api.route('/reports/<task_id>', methods=['GET'])
 @jwt_required()

@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@supabase/supabase-js": "^2.50.5",
     "@types/jwt-decode": "^2.2.1",
     "jwt-decode": "^4.0.0"
   }
