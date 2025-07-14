@@ -247,6 +247,14 @@ export const fetchReportTemplates = async (): Promise<ReportTemplate[]> => {
   return data;
 };
 
+export const updateReportTemplate = async (
+  id: string,
+  templateData: Partial<ReportTemplate>
+): Promise<ReportTemplate> => {
+  const { data } = await api.put(`/api/reports/templates/${id}`, templateData);
+  return data;
+};
+
 export const createReport = async (
   reportData: Partial<Report>
 ): Promise<Report> => {
