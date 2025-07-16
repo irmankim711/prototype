@@ -25,6 +25,7 @@ import RealtimeDashboard from "./pages/RealtimeDashboard";
 import FormBuilderAdmin from "./pages/FormBuilderAdmin/FormBuilderAdmin";
 import UserProfile from "./pages/UserProfile/UserProfile";
 import Settings from "./pages/Settings/Settings";
+import AboutUs from './pages/AboutUs/AboutUs';
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,7 @@ function AppLayout() {
       <Box component="main" sx={{ flexGrow: 1, p: 3, ml: showSidebar ? "240px" : 0 }}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/about" element={<AboutUs />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/form" element={<Form />} />
           <Route path="/submission" element={<Submission />} />

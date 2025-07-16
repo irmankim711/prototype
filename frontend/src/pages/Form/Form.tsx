@@ -17,6 +17,7 @@ import {
   CardContent,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
+import { createForm } from '../../services/api'; // <-- Add this import
 
 // Styled components
 const PageTitle = styled(Typography)(() => ({
@@ -100,6 +101,10 @@ export default function FormPage() {
     isRequired: true,
   });
 
+  // Add a description and is_public for backend compatibility
+  const [description, setDescription] = useState('');
+  const [isPublic, setIsPublic] = useState(false);
+
   const handleFormTypeChange = (event: SelectChangeEvent<string>) => {
     setFormType(event.target.value as string);
   };
@@ -108,9 +113,37 @@ export default function FormPage() {
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  // Submit handler: call backend
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    console.log('Form submitted:', formData);
+    if (!formData.title.trim()) {
+      // setSnackbar({ open: true, message: 'Form title is required.', severity: 'error' }); // Original code had snackbar, but not defined.
+      alert('Form title is required.');
+      return;
+    }
+    if (formData.responseType === 'multiple_choice' || formData.responseType === 'checkbox') {
+      // setSnackbar({ open: true, message: 'Add at least one field.', severity: 'error' }); // Original code had snackbar, but not defined.
+      alert('Add at least one field for multiple choice or checkbox.');
+      return;
+    }
+    try {
+      // Map fields to backend format (no id, use label/type/required)
+      const backendFields = [{
+        label: formData.title, // Assuming the first field is the title
+        type: formData.responseType,
+        required: formData.isRequired,
+      }];
+      await createForm({
+        title: formData.title,
+        description,
+        fields: backendFields,
+        is_public: isPublic,
+      });
+      alert('Form created successfully!');
+      // Optionally reset form or redirect
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Failed to create form');
+    }
   };
 
   return (
@@ -118,6 +151,7 @@ export default function FormPage() {
       <PageTitle>Form Builder</PageTitle>
 
       <form onSubmit={handleSubmit}>
+        {/* Form Settings Section */}
         <FormSection>
           <FormPaper>
             <SectionTitle>Form Settings</SectionTitle>
@@ -173,6 +207,27 @@ export default function FormPage() {
                     <MenuItem value="feedback">Feedback</MenuItem>
                   </StyledSelect>
                 </StyledFormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <StyledTextField
+                  fullWidth
+                  label="Description"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  multiline
+                  minRows={2}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={isPublic}
+                      onChange={e => setIsPublic(e.target.checked)}
+                    />
+                  }
+                  label="Make form public"
+                />
               </Grid>
             </Grid>
           </FormPaper>
