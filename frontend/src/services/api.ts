@@ -416,6 +416,38 @@ export const searchFiles = async (
   return data;
 };
 
+// Fetch placeholders for a given template (Word docx)
+export const fetchTemplatePlaceholders = async (templateName: string): Promise<string[]> => {
+  const { data } = await api.get(`/mvp/templates/${encodeURIComponent(templateName)}/placeholders`);
+  return data.placeholders;
+};
+
+// Fetch list of available Word templates
+export const fetchWordTemplates = async (): Promise<Array<{id: string, name: string, description: string, filename: string}>> => {
+  const { data } = await api.get('/mvp/templates/list');
+  return data;
+};
+
+// Extract template content for frontend editing
+export const fetchTemplateContent = async (templateName: string): Promise<{
+  content: Array<{type: string, text: string, style: string}>;
+  placeholders: string[];
+}> => {
+  const { data } = await api.get(`/mvp/templates/${encodeURIComponent(templateName)}/content`);
+  return data;
+};
+
+// Generate live preview of filled template
+export const generateLivePreview = async (templateName: string, data: Record<string, string>): Promise<{
+  preview: string;
+  filename: string;
+}> => {
+  const { data: result } = await api.post(`/mvp/templates/${encodeURIComponent(templateName)}/preview`, {
+    data
+  });
+  return result;
+};
+
 // Database test
 export const testDatabaseConnection = async (): Promise<{
   status: string;

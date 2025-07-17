@@ -215,24 +215,3 @@ def analyze_data():
     data = request.get_json()
     analysis = ai_service.analyze_data(data)
     return jsonify(analysis)
-
-@api.route('/api/templates/<template_name>/placeholders', methods=['GET'])
-def extract_placeholders_from_stored(template_name):
-    """
-    Returns a JSON list of unique placeholders found in the .docx template stored on the server.
-    Example: GET /api/templates/04-%20LAPORAN%20FU%20_%20PUNCAK%20ALAM.docx/placeholders
-    """
-    # Sanitize filename to prevent directory traversal
-    safe_name = os.path.basename(template_name)
-    template_path = os.path.join(TEMPLATE_DIR, safe_name)
-
-    if not os.path.isfile(template_path):
-        return jsonify({'error': 'Template not found'}), 404
-
-    try:
-        doc = DocxTemplate(template_path)
-        placeholders = list(doc.undeclared_template_variables)
-    except Exception as e:
-        return jsonify({'error': f'Failed to process template: {str(e)}'}), 500
-
-    return jsonify({'placeholders': placeholders})

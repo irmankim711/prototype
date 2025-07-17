@@ -39,6 +39,7 @@ def create_app():
     # Register blueprints
     from .routes import api, dashboard_bp, users_bp, forms_bp, files_bp
     from .auth import auth_bp
+    from .routes.mvp import mvp
     
     app.register_blueprint(api, url_prefix='/api')
     app.register_blueprint(dashboard_bp)  # Dashboard already has /api/dashboard prefix
@@ -46,6 +47,7 @@ def create_app():
     app.register_blueprint(forms_bp, url_prefix='/api/forms')
     app.register_blueprint(files_bp, url_prefix='/api/files')
     app.register_blueprint(auth_bp)
+    app.register_blueprint(mvp, url_prefix='/mvp')
     
     # Improved test database endpoint
     @app.route('/test-db')

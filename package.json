@@ -1,7 +1,11 @@
 {
   "dependencies": {
+    "@ckeditor/ckeditor5-build-classic": "^41.4.2",
+    "@ckeditor/ckeditor5-react": "^11.0.0",
     "@supabase/supabase-js": "^2.50.5",
+    "@types/dompurify": "^3.0.5",
     "@types/jwt-decode": "^2.2.1",
+    "dompurify": "^3.2.6",
     "jwt-decode": "^4.0.0",
     "react-google-picker": "^0.1.0",
     "xlsx": "^0.18.5"
