@@ -3,8 +3,8 @@ import {
   Box,
   Button,
   Card,
-  CardContent,
   Container,
+  Divider,
   Grid,
   Typography,
   AppBar,
@@ -12,8 +12,6 @@ import {
   TextField,
   Checkbox,
   FormControlLabel,
-  Divider,
-  Chip,
   useMediaQuery,
   styled,
   useTheme,
@@ -22,9 +20,8 @@ import {
   Modal,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { login, register } from '../../services/api';
-import React, { useRef } from 'react';
+import React from 'react';
 
 // Styled components
 const StyledAppBar = styled(AppBar)(() => ({
@@ -207,10 +204,6 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   
-  const handleLogin = () => {
-    localStorage.setItem('isAuthenticated', 'true');
-    navigate('/dashboard');
-  };
   
   const handleShowLogin = () => {
     setShowLogin(true);
@@ -279,7 +272,7 @@ export default function LandingPage() {
   const [modalContent, setModalContent] = useState<'solutions' | 'learn' | null>(null);
 
   // Scroll handlers
-  const scrollToSection = (ref: React.RefObject<HTMLDivElement>) => {
+  const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
     if (ref.current) {
       ref.current.scrollIntoView({ behavior: 'smooth' });
     }

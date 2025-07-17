@@ -15,6 +15,25 @@ mvp = Blueprint('mvp', __name__)
 
 TEMPLATE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../templates'))
 
+@mvp.route('/ai/analyze', methods=['POST'])
+def ai_analyze():
+    """
+    Mock AI analysis endpoint to prevent frontend errors while testing.
+    """
+    try:
+        data = request.get_json()
+        return jsonify({
+            'summary': 'Data analysis completed successfully.',
+            'insights': ['Analysis placeholder'],
+            'suggestions': 'Consider reviewing your data.'
+        })
+    except Exception as e:
+        return jsonify({
+            'summary': 'Analysis completed with warnings.',
+            'insights': ['Mock analysis result'],
+            'suggestions': 'Data appears to be valid.'
+        })
+
 @mvp.route('/templates/<template_name>/placeholders', methods=['GET'])
 def extract_placeholders_from_stored(template_name):
     """
@@ -29,12 +48,32 @@ def extract_placeholders_from_stored(template_name):
         return jsonify({'error': 'Template not found'}), 404
 
     try:
-        doc = DocxTemplate(template_path)
-        placeholders = list(doc.undeclared_template_variables)
+        # First try to open with python-docx to check if it's a valid Word document
+        doc = Document(template_path)
+        
+        # Extract placeholders manually from the document content
+        import re
+        placeholder_pattern = r'\{\{([^}]+)\}\}'
+        all_placeholders = set()
+        
+        for paragraph in doc.paragraphs:
+            if paragraph.text:
+                placeholders = re.findall(placeholder_pattern, paragraph.text)
+                all_placeholders.update(placeholders)
+        
+        # Also check table cells
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        if paragraph.text:
+                            placeholders = re.findall(placeholder_pattern, paragraph.text)
+                            all_placeholders.update(placeholders)
+        
+        return jsonify({'placeholders': list(all_placeholders)})
+        
     except Exception as e:
         return jsonify({'error': f'Failed to process template: {str(e)}'}), 500
-
-    return jsonify({'placeholders': placeholders})
 
 @mvp.route('/templates/<template_name>/content', methods=['GET'])
 def extract_template_content(template_name):
@@ -53,23 +92,44 @@ def extract_template_content(template_name):
         doc = Document(template_path)
         content = []
         
+        import re
+        placeholder_pattern = r'\{\{([^}]+)\}\}'
+        all_placeholders = set()
+        
         for paragraph in doc.paragraphs:
             if paragraph.text.strip():
                 # Convert paragraph to HTML-like structure
                 text = paragraph.text
                 # Replace placeholders with editable spans
-                import re
-                placeholder_pattern = r'\{\{([^}]+)\}\}'
                 text = re.sub(placeholder_pattern, r'<span class="placeholder" data-placeholder="\1">{{{\1}}}</span>', text)
                 content.append({
                     'type': 'paragraph',
                     'text': text,
                     'style': paragraph.style.name if paragraph.style else 'Normal'
                 })
+                # Extract placeholders
+                placeholders = re.findall(placeholder_pattern, paragraph.text)
+                all_placeholders.update(placeholders)
+        
+        # Also process table content
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        if paragraph.text.strip():
+                            text = paragraph.text
+                            text = re.sub(placeholder_pattern, r'<span class="placeholder" data-placeholder="\1">{{{\1}}}</span>', text)
+                            content.append({
+                                'type': 'table_cell',
+                                'text': text,
+                                'style': paragraph.style.name if paragraph.style else 'Normal'
+                            })
+                            placeholders = re.findall(placeholder_pattern, paragraph.text)
+                            all_placeholders.update(placeholders)
         
         return jsonify({
             'content': content,
-            'placeholders': list(set(re.findall(placeholder_pattern, ' '.join([p.text for p in doc.paragraphs]))))
+            'placeholders': list(all_placeholders)
         })
     except Exception as e:
         return jsonify({'error': f'Failed to extract template content: {str(e)}'}), 500
@@ -94,12 +154,7 @@ def generate_live_preview(template_name):
         return jsonify({'error': 'No data provided for preview'}), 400
 
     try:
-        # Fill the template
-        doc = DocxTemplate(template_path)
-        doc.render(context)
-        
-        # Convert to PDF-like preview (simplified for now)
-        # In a real implementation, you'd use a proper DOCX to PDF converter
+        # Create a simple PDF preview without using docxtpl
         buffer = io.BytesIO()
         
         # Create a simple PDF preview
@@ -107,8 +162,11 @@ def generate_live_preview(template_name):
         story = []
         styles = getSampleStyleSheet()
         
-        # Extract text from filled template
-        for paragraph in doc.docx.paragraphs:
+        # Read the Word document and extract text
+        doc = Document(template_path)
+        
+        # Extract text from document
+        for paragraph in doc.paragraphs:
             if paragraph.text.strip():
                 # Replace placeholders with actual values
                 text = paragraph.text
@@ -119,6 +177,21 @@ def generate_live_preview(template_name):
                     p = Paragraph(text, styles['Normal'])
                     story.append(p)
                     story.append(Spacer(1, 12))
+        
+        # Also process table content
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        if paragraph.text.strip():
+                            text = paragraph.text
+                            for key, value in context.items():
+                                text = text.replace(f'{{{{{key}}}}}', str(value))
+                            
+                            if text.strip():
+                                p = Paragraph(text, styles['Normal'])
+                                story.append(p)
+                                story.append(Spacer(1, 6))
         
         pdf_doc.build(story)
         buffer.seek(0)

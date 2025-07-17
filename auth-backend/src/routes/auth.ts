@@ -12,6 +12,7 @@ router.post('/verify-email', controller.verifyEmail);
 router.post('/forgot-password', controller.forgotPassword);
 router.post('/reset-password', controller.resetPassword);
 
-// Protected endpointouter.post('/logout', authenticateJWT, controller.logout);
+// Protected endpoints
+router.post('/logout', authenticateJWT, controller.logout);
 
 export default router;
