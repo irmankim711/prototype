@@ -2,7 +2,7 @@ import React, { useState, useContext } from "react";
 import { Drawer, List, ListItemButton, ListItemIcon, ListItemText, Collapse, Toolbar, Divider, Box, Avatar, Typography, Button } from "@mui/material";
 import { NavLink, useLocation } from "react-router-dom";
 import DashboardIcon from "@mui/icons-material/Dashboard";
-import AssignmentIcon from "@mui/icons-material/Assignment";
+
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import HistoryIcon from "@mui/icons-material/History";
@@ -20,7 +20,7 @@ const drawerWidth = 240;
 const navItems = [
   { label: "Home", icon: <HomeIcon />, path: "/" },
   { label: "Dashboard", icon: <DashboardIcon />, path: "/dashboard" },
-  { label: "Form", icon: <AssignmentIcon />, path: "/form" },
+
   { label: "Submissions", icon: <ListAltIcon />, path: "/submission" },
   {
     label: "Reports",

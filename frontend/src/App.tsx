@@ -16,7 +16,7 @@ import Sidebar from "./components/Layout/Sidebar";
 // Import pages
 import LandingPage from "./pages/LandingPage/LandingPage";
 import Dashboard from "./pages/Dashboard/Dashboard";
-import Form from "./pages/Form/Form";
+
 import Submission from "./pages/Submission/Submission";
 import ReportBuilder from "./pages/ReportBuilder/ReportBuilder";
 import ReportHistory from "./pages/ReportHistory/ReportHistory";
@@ -43,7 +43,7 @@ function AppLayout() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/about" element={<AboutUs />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/form" element={<Form />} />
+
           <Route path="/submission" element={<Submission />} />
           <Route path="/report-builder" element={<ReportBuilder />} />
           <Route path="/report-history" element={<ReportHistory />} />

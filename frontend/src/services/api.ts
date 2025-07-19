@@ -61,7 +61,10 @@ export interface Report {
   createdAt: string;
   updatedAt: string;
   templateId: string;
+  templateFilename?: string;
   outputUrl?: string;
+  data?: Record<string, unknown>;
+  analysis?: any;
 }
 
 export interface ReportTemplate {
@@ -125,6 +128,7 @@ export interface Form {
   fields: FormField[];
   created_at: string;
   is_active: boolean;
+  is_public?: boolean;
 }
 
 export interface FormField {
@@ -423,7 +427,7 @@ export const fetchTemplatePlaceholders = async (templateName: string): Promise<s
 };
 
 // Fetch list of available Word templates
-export const fetchWordTemplates = async (): Promise<Array<{id: string, name: string, description: string, filename: string}>> => {
+export const fetchWordTemplates = async (): Promise<Array<{id: string, name: string, description: string, filename: string, previewUrl?: string}>> => {
   const { data } = await api.get('/mvp/templates/list');
   return data;
 };

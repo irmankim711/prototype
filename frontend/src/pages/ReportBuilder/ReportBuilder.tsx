@@ -3,17 +3,10 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   Box,
-  Stepper,
-  Step,
-  StepLabel,
   Button,
   Typography,
   Paper,
   CircularProgress,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Alert,
   useTheme,
   useMediaQuery,
@@ -24,13 +17,8 @@ import {
   Card,
   CardMedia,
   CardContent,
-  TextField,
-  Modal,
-  IconButton,
-  Chip,
-  InputAdornment,
 } from '@mui/material';
-import { useForm, Controller } from 'react-hook-form';
+// Removed unused react-hook-form imports
 import {
   fetchReportTemplates,
   createReport,
@@ -40,7 +28,6 @@ import {
 } from '../../services/api';
 import type { ReportTemplate } from '../../services/api';
 import GoogleSheetImport from './GoogleSheetImport';
-import FieldMapping from './FieldMapping';
 import TemplateEditor from './TemplateEditor';
 import { Assignment, Description, SwapHoriz, Preview, CheckCircle } from '@mui/icons-material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -48,12 +35,6 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { Divider, Fade } from '@mui/material';
 import * as XLSX from 'xlsx';
-import DOMPurify from 'dompurify';
-
-
-function isPlainObject(obj: any): obj is Record<string, any> {
-  return obj && typeof obj === 'object' && !Array.isArray(obj);
-}
 
 const steps = ['Import Data', 'Choose Template', 'Review & Generate', 'Success'];
 
@@ -99,8 +80,8 @@ const stepIcons = [
 export default function ReportBuilder() {
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
-  const [importedData, setImportedData] = useState<{ headers: string[]; rows: any[] } | null>(null);
-  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [importedData, setImportedData] = useState<{ headers: string[]; rows: any[]; processedData: Record<string, any> } | null>(null);
+  // Removed unused mapping state
   const [selectedTemplateFilename, setSelectedTemplateFilename] = useState<string>('');
   const [reportData, setReportData] = useState<any>({});
   const [analysis, setAnalysis] = useState<any>(null);
@@ -112,30 +93,128 @@ export default function ReportBuilder() {
   const [editData, setEditData] = useState<Record<string, string>>({});
   const [autoFilledFields, setAutoFilledFields] = useState<Record<string, boolean>>({});
 
+  // Enhanced Excel upload handler
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        
+        if (json.length === 0) {
+          alert('Excel file appears to be empty');
+          return;
+        }
+        
+        const headers = json[0] as string[];
+        const rows = json.slice(1).filter((row: any) => Array.isArray(row) && row.length > 0); // Filter empty rows
+        
+        // Process data for intelligent field mapping
+        const processedData = processExcelData(headers, rows);
+        
+        setImportedData({ headers, rows, processedData });
+        
+        // Auto-populate editData with processed values
+        const autoMappedData: Record<string, string> = {};
+        Object.keys(processedData).forEach(key => {
+          if (processedData[key] !== null && processedData[key] !== undefined) {
+            autoMappedData[key] = String(processedData[key]);
+          }
+        });
+        
+        setEditData(prev => ({ ...prev, ...autoMappedData }));
+        
+      } catch (error) {
+        console.error('Error processing Excel file:', error);
+        alert('Error processing Excel file. Please check the file format.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  
+  // Process Excel data to extract meaningful information
+  const processExcelData = (headers: string[], rows: any[]): Record<string, any> => {
+    const processed: Record<string, any> = {};
+    
+    // Common field mappings
+    const fieldMappings: Record<string, string[]> = {
+      'company_name': ['company', 'company name', 'organization', 'business name'],
+      'revenue': ['revenue', 'total revenue', 'sales', 'income', 'turnover'],
+      'expenses': ['expenses', 'total expenses', 'costs', 'expenditure'],
+      'profit': ['profit', 'net profit', 'earnings', 'net income'],
+      'date': ['date', 'report date', 'period', 'month', 'year'],
+      'quarter': ['quarter', 'q1', 'q2', 'q3', 'q4', 'period'],
+      'department': ['department', 'division', 'team', 'unit'],
+      'manager': ['manager', 'supervisor', 'lead', 'director'],
+      'total': ['total', 'sum', 'amount', 'value'],
+      'percentage': ['percentage', 'percent', '%', 'rate'],
+      'count': ['count', 'number', 'quantity', 'qty'],
+      'average': ['average', 'avg', 'mean']
+    };
+    
+    // Try to map headers to common fields
+    headers.forEach((header, index) => {
+      const normalizedHeader = header.toLowerCase().trim();
+      
+      // Find matching field
+      for (const [field, patterns] of Object.entries(fieldMappings)) {
+        if (patterns.some(pattern => normalizedHeader.includes(pattern))) {
+          // Get the most common non-empty value from this column
+          const columnValues = rows.map(row => row[index]).filter(val => val !== null && val !== undefined && val !== '');
+          if (columnValues.length > 0) {
+            // For numeric fields, try to sum or average
+            if (['revenue', 'expenses', 'profit', 'total'].includes(field)) {
+              const numericValues = columnValues.map(val => parseFloat(String(val))).filter(val => !isNaN(val));
+              if (numericValues.length > 0) {
+                processed[field] = numericValues.reduce((sum, val) => sum + val, 0);
+              }
+            } else if (field === 'average') {
+              const numericValues = columnValues.map(val => parseFloat(String(val))).filter(val => !isNaN(val));
+              if (numericValues.length > 0) {
+                processed[field] = numericValues.reduce((sum, val) => sum + val, 0) / numericValues.length;
+              }
+            } else {
+              // For text fields, use the first non-empty value
+              processed[field] = columnValues[0];
+            }
+          }
+          break;
+        }
+      }
+    });
+    
+    // Add summary statistics
+    if (rows.length > 0) {
+      processed['total_rows'] = rows.length;
+      processed['data_source'] = 'Excel Import';
+      processed['import_date'] = new Date().toLocaleDateString();
+    }
+    
+    return processed;
+  };
+
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Use mock data if API fails
-  const { data: templates, isLoading: templatesLoading, error: templatesError } = useQuery({
+  const { data: templatesData, isLoading: templatesLoading } = useQuery({
     queryKey: ['reportTemplates'],
     queryFn: fetchReportTemplates,
-    retry: 1,
-    onError: (error) => {
-      console.log('API Error, using mock data:', error);
-    }
   });
 
-  const { data: wordTemplates, isLoading: wordTemplatesLoading, error: wordTemplatesError } = useQuery({
+  const { data: wordTemplatesData } = useQuery({
     queryKey: ['wordTemplates'],
     queryFn: fetchWordTemplates,
-    retry: 1,
-    onError: (error) => {
-      console.log('Word template API error:', error);
-    }
   });
 
   // Use mock data if API fails
-  const displayTemplates: ReportTemplate[] = Array.isArray(templates) ? templates : mockTemplates;
+  const displayTemplates: ReportTemplate[] = Array.isArray(templatesData) ? templatesData : mockTemplates;
 
   const createReportMutation = useMutation({
     mutationFn: createReport,
@@ -229,7 +308,7 @@ export default function ReportBuilder() {
       const data = await createReportMutation.mutateAsync({
         templateFilename: selectedTemplateFilename,
         data: editData,
-        analysis,
+        analysis
       });
       setSuccessData(data);
       setActiveStep((prevStep) => prevStep + 1);
@@ -285,29 +364,13 @@ export default function ReportBuilder() {
                   type="file"
                   accept=".xlsx,.xls"
                   style={{ display: 'none' }}
-                  onChange={e => {
-                    // Use ExcelImport logic
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = (evt) => {
-                      const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-                      const workbook = XLSX.read(data, { type: 'array' });
-                      const sheetName = workbook.SheetNames[0];
-                      const worksheet = workbook.Sheets[sheetName];
-                      const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                      const headers = json[0] as string[];
-                      const rows = json.slice(1);
-                      setImportedData({ headers, rows });
-                    };
-                    reader.readAsArrayBuffer(file);
-                  }}
+                  onChange={handleExcelUpload}
                 />
               </Box>
               <Divider sx={{ my: 3 }}>or</Divider>
               {/* Google Sheets Import */}
               <GoogleSheetImport
-                onDataParsed={setImportedData}
+                onDataParsed={(data) => setImportedData({ ...data, processedData: processExcelData(data.headers, data.rows) })}
                 apiKey={import.meta.env.VITE_GOOGLE_API_KEY || ''}
                 clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ''}
               />
@@ -351,7 +414,7 @@ export default function ReportBuilder() {
           <Box>
             <Typography variant="h6" gutterBottom>Choose Report Template</Typography>
             <Grid container spacing={3}>
-              {wordTemplates?.map(template => (
+              {wordTemplatesData?.map((template: any) => (
                 <Grid item xs={12} sm={6} md={4} key={template.id}>
                   <Card
                     onClick={() => setSelectedTemplateFilename(template.filename)}
