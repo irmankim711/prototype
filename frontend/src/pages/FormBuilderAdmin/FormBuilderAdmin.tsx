@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { createForm, updateForm, fetchForms, deleteForm } from '../../services/api';
+import { formBuilderAPI, type Form } from '../../services/formBuilder';
 import { QRCodeSVG } from 'qrcode.react';
 import { 
   Dialog, 
@@ -32,8 +32,6 @@ import {
   Grid
 } from '@mui/material';
 
-import type { DraggableProvided, DroppableProvided, DropResult, DraggableStateSnapshot } from '@hello-pangea/dnd';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
   Add,
   Delete,
@@ -41,167 +39,49 @@ import {
   Share,
   ContentCopy,
   Download,
-  DragIndicator,
   Assessment,
-  TextFields,
-  Email,
-  Numbers,
-  DateRange,
-  CheckBox,
-  RadioButtonChecked,
-  ArrowDropDown,
-  AttachFile,
-  Star,
-  LocationOn,
-  Restaurant,
-  Event,
-  Schedule,
-  AccessTime,
-  Link,
-  Phone,
-  TouchApp,
-  ToggleOn
+  Visibility,
+  VisibilityOff,
+  Settings,
+  Preview,
+  Save
 } from '@mui/icons-material';
 
-interface FormField {
-  id: string;
-  label: string;
-  type: string;
-  required: boolean;
-  options: string[];
-  placeholder?: string;
-  description?: string;
-  validation?: {
-    minLength?: number;
-    maxLength?: number;
-    pattern?: string;
-    min?: number;
-    max?: number;
-  };
-  styling?: {
-    width?: 'full' | 'half' | 'third' | 'quarter';
-    color?: string;
-    backgroundColor?: string;
-    borderRadius?: number;
-    fontSize?: number;
-  };
-  conditional?: {
-    dependsOn?: string;
-    showWhen?: string;
-    value?: any;
-  };
-  defaultValue?: any;
-  helpText?: string;
-  icon?: string;
-  order: number;
-}
-
-const FIELD_TYPES = [
-  { 
-    value: 'text', 
-    label: 'Text Input', 
-    icon: <TextFields />, 
-    description: 'Single line text input',
-    category: 'Basic',
-    color: '#2196F3',
-    preview: 'Enter your text here...'
-  },
-  { 
-    value: 'email', 
-    label: 'Email', 
-    icon: <Email />, 
-    description: 'Email address field',
-    category: 'Basic',
-    color: '#FF9800',
-    preview: 'user@example.com'
-  },
-  { 
-    value: 'number', 
-    label: 'Number', 
-    icon: <Numbers />, 
-    description: 'Numeric input field',
-    category: 'Basic',
-    color: '#4CAF50',
-    preview: '123'
-  }
-];
+import FormBuilder from '../../components/FormBuilder/FormBuilder';
 
 export default function FormBuilderAdmin() {
   const [showExistingForms, setShowExistingForms] = useState(false);
-  const [formTitle, setFormTitle] = useState('');
-  const [isActive, setIsActive] = useState(true);
-  const [previewMode, setPreviewMode] = useState(false);
-  const [fields, setFields] = useState<FormField[]>([]);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [field, setField] = useState<FormField>({
-    id: '',
-    label: '',
-    type: 'text',
-    required: false,
-    options: [],
-    order: 0
-  });
+  const [editingFormId, setEditingFormId] = useState<number | null>(null);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' | 'warning' | 'info' });
 
-  const { data: forms = [], isLoading: formsLoading, error: formsError } = useQuery({
+  const { data: formsData, isLoading: formsLoading, error: formsError, refetch } = useQuery({
     queryKey: ['forms'],
-    queryFn: fetchForms
+    queryFn: () => formBuilderAPI.getForms()
   });
 
-  const createMutation = useMutation({
-    mutationFn: createForm,
-    onSuccess: () => {
-      setSnackbar({ open: true, message: 'Form created successfully!', severity: 'success' });
-    },
-    onError: () => {
-      setSnackbar({ open: true, message: 'Failed to create form', severity: 'error' });
-    }
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: updateForm,
-    onSuccess: () => {
-      setSnackbar({ open: true, message: 'Form updated successfully!', severity: 'success' });
-    },
-    onError: () => {
-      setSnackbar({ open: true, message: 'Failed to update form', severity: 'error' });
-    }
-  });
+  const forms = formsData?.forms || [];
 
   const deleteMutation = useMutation({
-    mutationFn: deleteForm,
+    mutationFn: formBuilderAPI.deleteForm,
     onSuccess: () => {
       setSnackbar({ open: true, message: 'Form deleted successfully!', severity: 'success' });
+      refetch();
     },
     onError: () => {
       setSnackbar({ open: true, message: 'Failed to delete form', severity: 'error' });
     }
   });
 
-  const handleToggleActive = () => {
-    setIsActive(!isActive);
-  };
-
   const handleNewForm = () => {
     setShowExistingForms(false);
-    setFormTitle('');
-    setFields([]);
-    setField({
-      id: '',
-      label: '',
-      type: 'text',
-      required: false,
-      options: [],
-      order: 0
-    });
+    setEditingFormId(null);
   };
 
-  const handleEditForm = (form: any) => {
+  const handleEditForm = (form: Form) => {
     setShowExistingForms(false);
-    setFormTitle(form.title);
-    setFields(form.fields || []);
+    setEditingFormId(form.id);
   };
 
   const handleCopyLink = () => {
@@ -211,10 +91,29 @@ export default function FormBuilderAdmin() {
     }
   };
 
-  const handleDeleteForm = (formId: string) => {
+  const handleDeleteForm = (formId: number) => {
     if (window.confirm('Are you sure you want to delete this form?')) {
       deleteMutation.mutate(formId);
     }
+  };
+
+  const handleFormSave = (form: Form) => {
+    setSnackbar({ open: true, message: 'Form saved successfully!', severity: 'success' });
+    setShowExistingForms(true);
+    setEditingFormId(null);
+    refetch();
+  };
+
+  const handleFormCancel = () => {
+    setShowExistingForms(true);
+    setEditingFormId(null);
+  };
+
+  const handleShareForm = (form: Form) => {
+    const baseUrl = window.location.origin;
+    const shareUrl = `${baseUrl}/form/${form.id}`;
+    setShareUrl(shareUrl);
+    setShareDialogOpen(true);
   };
 
   return (
@@ -267,7 +166,7 @@ export default function FormBuilderAdmin() {
                     </Box>
                   </Grid>
                 ) : (
-                  forms.map((form: any) => (
+                  forms.map((form: Form) => (
                     <Grid item xs={12} md={6} lg={4} key={form.id}>
                       <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                         <CardContent sx={{ flexGrow: 1 }}>
@@ -284,6 +183,21 @@ export default function FormBuilderAdmin() {
                           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                             {form.description || 'No description provided'}
                           </Typography>
+                          <Box display="flex" gap={1} flexWrap="wrap" mb={2}>
+                            <Chip 
+                              label={`${form.submission_count} submissions`} 
+                              size="small" 
+                              color="primary"
+                            />
+                            <Chip 
+                              label={form.is_public ? 'Public' : 'Private'} 
+                              size="small" 
+                              color={form.is_public ? 'success' : 'default'}
+                            />
+                          </Box>
+                          <Typography variant="caption" color="text.secondary">
+                            Created: {new Date(form.created_at).toLocaleDateString()}
+                          </Typography>
                         </CardContent>
                         <CardActions sx={{ p: 2, pt: 0 }}>
                           <Button 
@@ -296,9 +210,7 @@ export default function FormBuilderAdmin() {
                           </Button>
                           <Button 
                             size="small" 
-                            onClick={() => {
-                              setShareDialogOpen(true);
-                            }}
+                            onClick={() => handleShareForm(form)}
                             startIcon={<Share />}
                             sx={{ color: '#059669' }}
                           >
@@ -320,51 +232,11 @@ export default function FormBuilderAdmin() {
             )}
           </Box>
         ) : (
-          <Box>
-            <Paper sx={{ p: 3, mb: 3 }}>
-              <TextField
-                label="Form Title"
-                value={formTitle}
-                onChange={(e) => setFormTitle(e.target.value)}
-                fullWidth
-                sx={{ mb: 2 }}
-              />
-              <Box display="flex" alignItems="center" mb={2}>
-                <Switch checked={isActive} onChange={handleToggleActive} />
-                <Typography sx={{ ml: 1 }}>{isActive ? 'Active' : 'Inactive'}</Typography>
-              </Box>
-            </Paper>
-            
-            <Box mb={2}>
-              <Button variant={previewMode ? 'outlined' : 'contained'} onClick={() => setPreviewMode(false)} sx={{ mr: 1 }}>
-                Edit Mode
-              </Button>
-              <Button variant={previewMode ? 'contained' : 'outlined'} onClick={() => setPreviewMode(true)}>
-                Preview
-              </Button>
-            </Box>
-            
-            <Divider sx={{ mb: 3 }} />
-
-            {!previewMode && (
-              <Typography variant="h6" gutterBottom>
-                Form Builder - Edit Mode
-              </Typography>
-            )}
-
-            {previewMode && (
-              <Box>
-                <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Form Preview
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Preview mode is active. Form fields will be displayed here.
-                  </Typography>
-                </Paper>
-              </Box>
-            )}
-          </Box>
+          <FormBuilder 
+            formId={editingFormId || undefined}
+            onSave={handleFormSave}
+            onCancel={handleFormCancel}
+          />
         )}
 
         {/* Share dialog */}
