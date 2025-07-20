@@ -90,6 +90,17 @@ export default function TemplateEditor({
     setEditedData(data);
   }, [data]);
 
+  // Auto-generate preview when data changes (with debounce)
+  useEffect(() => {
+    if (editedData && Object.keys(editedData).length > 0) {
+      const timer = setTimeout(() => {
+        handleGeneratePreview();
+      }, 1000); // Wait 1 second after data changes
+      
+      return () => clearTimeout(timer);
+    }
+  }, [editedData]);
+
   // Generate live preview
   const handleGeneratePreview = async () => {
     if (!templateName || !editedData) return;
@@ -98,10 +109,13 @@ export default function TemplateEditor({
     setPreviewError(null);
 
     try {
+      console.log('Generating preview with data:', editedData);
       const preview = await generateLivePreview(templateName, editedData);
+      console.log('Preview generated:', preview);
       setLivePreview(preview.preview);
     } catch (error: any) {
-      setPreviewError(error?.message || 'Failed to generate preview');
+      console.error('Preview generation error:', error);
+      setPreviewError(error?.message || 'Failed to generate preview. Please check your data and try again.');
     } finally {
       setIsGeneratingPreview(false);
     }
@@ -112,6 +126,16 @@ export default function TemplateEditor({
     const newData = { ...editedData, [key]: value };
     setEditedData(newData);
     onDataChange(newData);
+  };
+
+  // Download original template
+  const handleDownloadTemplate = () => {
+    const link = document.createElement('a');
+    link.href = `/mvp/templates/${templateName}/download`;
+    link.download = templateName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   if (isLoadingContent) {
@@ -149,6 +173,7 @@ export default function TemplateEditor({
         >
           <Tab label="Data Fields" />
           <Tab label="Live Preview" />
+          <Tab label="Original Template" />
           <Tab label="Template Content" />
         </Tabs>
 
@@ -190,7 +215,7 @@ export default function TemplateEditor({
             </Typography>
             <Button
               variant="outlined"
-              startIcon={<PreviewIcon />}
+              startIcon={isGeneratingPreview ? <CircularProgress size={20} /> : <PreviewIcon />}
               onClick={handleGeneratePreview}
               disabled={isGeneratingPreview}
             >
@@ -204,7 +229,24 @@ export default function TemplateEditor({
             </Alert>
           )}
           
-          {livePreview ? (
+          {livePreview && !isGeneratingPreview && !previewError && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              Preview generated successfully! You can see how your report will look below.
+            </Alert>
+          )}
+          
+          {isGeneratingPreview && (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+              <Box textAlign="center">
+                <CircularProgress size={40} sx={{ mb: 2 }} />
+                <Typography variant="body2" color="text.secondary">
+                  Generating preview...
+                </Typography>
+              </Box>
+            </Box>
+          )}
+          
+          {livePreview && !isGeneratingPreview ? (
             <Paper sx={{ p: 2, bgcolor: '#f8fafc' }}>
               <iframe
                 src={livePreview}
@@ -214,21 +256,122 @@ export default function TemplateEditor({
                 title="Template Preview"
               />
             </Paper>
-          ) : (
+          ) : !isGeneratingPreview ? (
             <Paper sx={{ p: 4, textAlign: 'center', bgcolor: '#f8fafc' }}>
               <Typography variant="body1" color="text.secondary">
                 Click "Generate Preview" to see a live preview of your filled template
               </Typography>
             </Paper>
-          )}
+          ) : null}
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6">
+              Original Template Preview
+            </Typography>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownloadTemplate}
+              size="small"
+            >
+              Download Original
+            </Button>
+          </Box>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            This shows how your template looks before any data is filled in. The placeholders are shown as they appear in the original document.
+          </Alert>
+          <Paper sx={{ p: 2, bgcolor: '#f8fafc', minHeight: '400px' }}>
+            {templateContent ? (
+              <Box>
+                {templateContent.content.map((item: any, index: number) => (
+                  <Box key={index} sx={{ mb: 2 }}>
+                    {item.type === 'paragraph' && (
+                      <Typography 
+                        variant="body1" 
+                        sx={{ 
+                          whiteSpace: 'pre-wrap',
+                          fontWeight: item.formatting?.bold ? 'bold' : 'normal',
+                          fontStyle: item.formatting?.italic ? 'italic' : 'normal',
+                          fontSize: item.formatting?.font_size ? `${item.formatting.font_size}px` : 'inherit',
+                          textAlign: item.formatting?.alignment === 1 ? 'center' : 
+                                   item.formatting?.alignment === 2 ? 'right' : 'left'
+                        }}
+                      >
+                        {item.text}
+                      </Typography>
+                    )}
+                    {item.type === 'table' && (
+                      <Box sx={{ mt: 2, mb: 2 }}>
+                        <table style={{ 
+                          borderCollapse: 'collapse', 
+                          width: '100%',
+                          border: '1px solid #ccc'
+                        }}>
+                          <tbody>
+                            {item.rows.map((row: any[], rowIndex: number) => (
+                              <tr key={rowIndex}>
+                                {row.map((cell: any, cellIndex: number) => (
+                                  <td key={cellIndex} style={{
+                                    border: '1px solid #ccc',
+                                    padding: '8px',
+                                    fontWeight: cell.formatting?.bold ? 'bold' : 'normal',
+                                    fontStyle: cell.formatting?.italic ? 'italic' : 'normal',
+                                    fontSize: cell.formatting?.font_size ? `${cell.formatting.font_size}px` : 'inherit'
+                                  }}>
+                                    {cell.text}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </Box>
+                    )}
+                  </Box>
+                ))}
+              </Box>
+            ) : (
+              <Box display="flex" justifyContent="center" alignItems="center" minHeight="300px">
+                <Typography variant="body1" color="text.secondary">
+                  Loading template preview...
+                </Typography>
+              </Box>
+            )}
+          </Paper>
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={3}>
           <Typography variant="h6" gutterBottom>
-            Template Structure
+            Template Content
           </Typography>
           {templateContent && (
             <Box>
+              <Typography variant="subtitle2" gutterBottom>
+                Template Information:
+              </Typography>
+              <Paper sx={{ p: 2, mb: 2, bgcolor: '#f8fafc' }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={6} sm={3}>
+                    <Typography variant="caption" color="text.secondary">Filename</Typography>
+                    <Typography variant="body2">{templateContent.template_info?.filename}</Typography>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Typography variant="caption" color="text.secondary">Paragraphs</Typography>
+                    <Typography variant="body2">{templateContent.template_info?.total_paragraphs}</Typography>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Typography variant="caption" color="text.secondary">Tables</Typography>
+                    <Typography variant="body2">{templateContent.template_info?.total_tables}</Typography>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Typography variant="caption" color="text.secondary">Placeholders</Typography>
+                    <Typography variant="body2">{templateContent.template_info?.total_placeholders}</Typography>
+                  </Grid>
+                </Grid>
+              </Paper>
+              
               <Typography variant="subtitle2" gutterBottom>
                 Placeholders found in template:
               </Typography>
@@ -245,17 +388,61 @@ export default function TemplateEditor({
               </Box>
               <Divider sx={{ my: 2 }} />
               <Typography variant="subtitle2" gutterBottom>
-                Template Content:
+                Template Content Structure:
               </Typography>
               <Paper sx={{ p: 2, bgcolor: '#f8fafc', maxHeight: '400px', overflow: 'auto' }}>
                 {templateContent.content.map((item: any, index: number) => (
-                  <Box key={index} sx={{ mb: 1 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {item.style}
-                    </Typography>
-                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                      {item.text}
-                    </Typography>
+                  <Box key={index} sx={{ mb: 2, p: 1, border: '1px solid #e0e7ef', borderRadius: 1 }}>
+                    {item.type === 'paragraph' && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Paragraph - Style: {item.style}
+                          {item.formatting?.font_size && ` | Font: ${item.formatting.font_size}pt`}
+                          {item.formatting?.bold && ' | Bold'}
+                          {item.formatting?.italic && ' | Italic'}
+                        </Typography>
+                        <Typography variant="body2" sx={{ 
+                          whiteSpace: 'pre-wrap',
+                          fontWeight: item.formatting?.bold ? 'bold' : 'normal',
+                          fontStyle: item.formatting?.italic ? 'italic' : 'normal',
+                          fontSize: item.formatting?.font_size ? `${item.formatting.font_size}px` : 'inherit'
+                        }}>
+                          {item.text}
+                        </Typography>
+                      </Box>
+                    )}
+                    {item.type === 'table' && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Table {item.index + 1} - {item.rows.length} rows
+                        </Typography>
+                        <Box sx={{ mt: 1, overflowX: 'auto' }}>
+                          <table style={{ 
+                            borderCollapse: 'collapse', 
+                            width: '100%',
+                            fontSize: '12px'
+                          }}>
+                            <tbody>
+                              {item.rows.map((row: any[], rowIndex: number) => (
+                                <tr key={rowIndex}>
+                                  {row.map((cell: any, cellIndex: number) => (
+                                    <td key={cellIndex} style={{
+                                      border: '1px solid #ccc',
+                                      padding: '4px 8px',
+                                      fontWeight: cell.formatting?.bold ? 'bold' : 'normal',
+                                      fontStyle: cell.formatting?.italic ? 'italic' : 'normal',
+                                      fontSize: cell.formatting?.font_size ? `${cell.formatting.font_size}px` : 'inherit'
+                                    }}>
+                                      {cell.text}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </Box>
+                      </Box>
+                    )}
                   </Box>
                 ))}
               </Paper>

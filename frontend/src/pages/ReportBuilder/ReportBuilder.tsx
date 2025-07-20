@@ -25,18 +25,22 @@ import {
   analyzeData,
   fetchTemplatePlaceholders,
   fetchWordTemplates,
+  generateReport,
+  downloadReport,
 } from '../../services/api';
 import type { ReportTemplate } from '../../services/api';
 import GoogleSheetImport from './GoogleSheetImport';
 import TemplateEditor from './TemplateEditor';
+import FieldMapping from './FieldMapping';
 import { Assignment, Description, SwapHoriz, Preview, CheckCircle } from '@mui/icons-material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { Divider, Fade } from '@mui/material';
 import * as XLSX from 'xlsx';
+import DownloadIcon from '@mui/icons-material/Download';
 
-const steps = ['Import Data', 'Choose Template', 'Review & Generate', 'Success'];
+const steps = ['Import Data', 'Choose Template', 'Map Fields', 'Review & Generate', 'Success'];
 
 // Mock data for fallback
 const mockTemplates = [
@@ -92,6 +96,7 @@ export default function ReportBuilder() {
   const [isLoadingPlaceholders, setIsLoadingPlaceholders] = useState(false);
   const [editData, setEditData] = useState<Record<string, string>>({});
   const [autoFilledFields, setAutoFilledFields] = useState<Record<string, boolean>>({});
+  const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
 
   // Enhanced Excel upload handler
   const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,54 +145,102 @@ export default function ReportBuilder() {
   
   // Process Excel data to extract meaningful information
   const processExcelData = (headers: string[], rows: any[]): Record<string, any> => {
+    console.log('Processing Excel data...');
+    console.log('Headers:', headers);
+    console.log('Number of rows:', rows.length);
+    console.log('First few rows:', rows.slice(0, 3));
+    
     const processed: Record<string, any> = {};
     
-    // Common field mappings
+    // Enhanced field mappings for the specific template placeholders
     const fieldMappings: Record<string, string[]> = {
-      'company_name': ['company', 'company name', 'organization', 'business name'],
-      'revenue': ['revenue', 'total revenue', 'sales', 'income', 'turnover'],
-      'expenses': ['expenses', 'total expenses', 'costs', 'expenditure'],
-      'profit': ['profit', 'net profit', 'earnings', 'net income'],
-      'date': ['date', 'report date', 'period', 'month', 'year'],
-      'quarter': ['quarter', 'q1', 'q2', 'q3', 'q4', 'period'],
-      'department': ['department', 'division', 'team', 'unit'],
-      'manager': ['manager', 'supervisor', 'lead', 'director'],
-      'total': ['total', 'sum', 'amount', 'value'],
-      'percentage': ['percentage', 'percent', '%', 'rate'],
-      'count': ['count', 'number', 'quantity', 'qty'],
-      'average': ['average', 'avg', 'mean']
+      // Template-specific mappings
+      'nama_peserta': ['nama', 'peserta', 'name', 'participant', 'nama peserta', 'participant name'],
+      'PROGRAM_TITLE': ['program', 'title', 'judul', 'program title', 'nama program', 'program name'],
+      'LOCATION_MAIN': ['location', 'lokasi', 'place', 'tempat', 'venue', 'alamat'],
+      'Time': ['time', 'waktu', 'jam', 'tanggal', 'date', 'schedule'],
+      'Place1': ['place', 'tempat', 'location', 'lokasi', 'venue'],
+      'bannering': ['banner', 'bannering', 'promosi', 'promotion'],
+      'Signature_Consultant': ['signature', 'consultant', 'konsultan', 'tanda tangan'],
+      'Image2': ['image', 'gambar', 'photo', 'foto'],
+      'Image4': ['image', 'gambar', 'photo', 'foto'],
+      'Image7': ['image', 'gambar', 'photo', 'foto'],
+      
+      // Generic mappings for common fields
+      'company_name': ['company', 'company name', 'organization', 'business name', 'perusahaan'],
+      'revenue': ['revenue', 'total revenue', 'sales', 'income', 'turnover', 'pendapatan'],
+      'expenses': ['expenses', 'total expenses', 'costs', 'expenditure', 'biaya'],
+      'profit': ['profit', 'net profit', 'earnings', 'net income', 'keuntungan'],
+      'date': ['date', 'report date', 'period', 'month', 'year', 'tanggal'],
+      'quarter': ['quarter', 'q1', 'q2', 'q3', 'q4', 'period', 'kuartal'],
+      'department': ['department', 'division', 'team', 'unit', 'departemen'],
+      'manager': ['manager', 'supervisor', 'lead', 'director', 'manajer'],
+      'total': ['total', 'sum', 'amount', 'value', 'jumlah'],
+      'percentage': ['percentage', 'percent', '%', 'rate', 'persentase'],
+      'count': ['count', 'number', 'quantity', 'qty', 'jumlah'],
+      'average': ['average', 'avg', 'mean', 'rata-rata']
     };
     
     // Try to map headers to common fields
     headers.forEach((header, index) => {
       const normalizedHeader = header.toLowerCase().trim();
+      console.log(`Processing header: "${header}" (normalized: "${normalizedHeader}")`);
       
       // Find matching field
       for (const [field, patterns] of Object.entries(fieldMappings)) {
         if (patterns.some(pattern => normalizedHeader.includes(pattern))) {
+          console.log(`Found match for "${header}" -> "${field}"`);
+          
           // Get the most common non-empty value from this column
           const columnValues = rows.map(row => row[index]).filter(val => val !== null && val !== undefined && val !== '');
+          console.log(`Column values for "${header}":`, columnValues.slice(0, 5));
+          
           if (columnValues.length > 0) {
             // For numeric fields, try to sum or average
             if (['revenue', 'expenses', 'profit', 'total'].includes(field)) {
               const numericValues = columnValues.map(val => parseFloat(String(val))).filter(val => !isNaN(val));
               if (numericValues.length > 0) {
                 processed[field] = numericValues.reduce((sum, val) => sum + val, 0);
+                console.log(`Calculated sum for "${field}":`, processed[field]);
               }
             } else if (field === 'average') {
               const numericValues = columnValues.map(val => parseFloat(String(val))).filter(val => !isNaN(val));
               if (numericValues.length > 0) {
                 processed[field] = numericValues.reduce((sum, val) => sum + val, 0) / numericValues.length;
+                console.log(`Calculated average for "${field}":`, processed[field]);
               }
             } else {
               // For text fields, use the first non-empty value
               processed[field] = columnValues[0];
+              console.log(`Set text value for "${field}":`, processed[field]);
             }
           }
           break;
         }
       }
     });
+    
+    // If no specific mappings found, create generic mappings for all headers
+    if (Object.keys(processed).length === 0) {
+      console.log('No specific mappings found, creating generic mappings...');
+      headers.forEach((header, index) => {
+        const normalizedHeader = header.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const columnValues = rows.map(row => row[index]).filter(val => val !== null && val !== undefined && val !== '');
+        
+        if (columnValues.length > 0) {
+          // Try to determine if it's numeric
+          const numericValues = columnValues.map(val => parseFloat(String(val))).filter(val => !isNaN(val));
+          if (numericValues.length > columnValues.length * 0.5) {
+            // Mostly numeric, calculate sum
+            processed[normalizedHeader] = numericValues.reduce((sum, val) => sum + val, 0);
+          } else {
+            // Text field, use first value
+            processed[normalizedHeader] = columnValues[0];
+          }
+          console.log(`Created generic mapping for "${header}" -> "${normalizedHeader}":`, processed[normalizedHeader]);
+        }
+      });
+    }
     
     // Add summary statistics
     if (rows.length > 0) {
@@ -196,6 +249,7 @@ export default function ReportBuilder() {
       processed['import_date'] = new Date().toLocaleDateString();
     }
     
+    console.log('Final processed data:', processed);
     return processed;
   };
 
@@ -251,16 +305,19 @@ export default function ReportBuilder() {
         setTemplatePlaceholders([]);
         return;
       }
+      
       setIsLoadingPlaceholders(true);
       try {
-        const placeholders = await fetchTemplatePlaceholders(selectedTemplateFilename);
-        setTemplatePlaceholders(placeholders);
-      } catch (e) {
+        const response = await fetchTemplatePlaceholders(selectedTemplateFilename);
+        setTemplatePlaceholders(response);
+      } catch (error) {
+        console.error('Failed to fetch template placeholders:', error);
         setTemplatePlaceholders([]);
       } finally {
         setIsLoadingPlaceholders(false);
       }
     };
+    
     fetchPlaceholders();
   }, [selectedTemplateFilename]);
 
@@ -273,30 +330,36 @@ export default function ReportBuilder() {
 
   // Step navigation handlers
   const handleNext = async () => {
-    // If on template selection step, auto-map and go to review
-    if (activeStep === 1 && importedData && selectedTemplateFilename) {
-      const placeholders = templatePlaceholders;
-      if (placeholders) {
-        const mappedRow = importedData.rows[0] || [];
-        const data: Record<string, string> = {};
-        const autoFilled: Record<string, boolean> = {};
-        placeholders.forEach((ph: string) => {
-          const colIdx = importedData.headers.findIndex(h => h.trim().toLowerCase() === ph.trim().toLowerCase());
-          if (colIdx !== -1) {
-            data[ph] = mappedRow[colIdx] ?? '';
-            autoFilled[ph] = true;
-          } else {
-            data[ph] = '';
-            autoFilled[ph] = false;
+    if (activeStep === 1) {
+      // Template placeholders are already fetched via useEffect when template is selected
+      // No need to fetch again here
+    }
+    
+    if (activeStep === 2) {
+      // Process field mapping data
+      const mappedData: Record<string, string> = {};
+      
+      // Apply field mapping to imported data
+      if (importedData && fieldMapping) {
+        Object.entries(fieldMapping).forEach(([excelHeader, placeholder]) => {
+          const headerIndex = importedData.headers.indexOf(excelHeader);
+          if (headerIndex !== -1) {
+            // Get the first non-empty value from this column
+            const columnValues = importedData.rows
+              .map(row => row[headerIndex])
+              .filter(val => val !== null && val !== undefined && val !== '');
+            
+            if (columnValues.length > 0) {
+              mappedData[placeholder] = String(columnValues[0]);
+            }
           }
         });
-        setReportData(data);
-        setAutoFilledFields(autoFilled);
-        try {
-          await analyzeDataMutation.mutateAsync(data);
-        } catch {}
       }
+      
+      // Merge with existing editData
+      setEditData(prev => ({ ...prev, ...mappedData }));
     }
+    
     setActiveStep((prev) => prev + 1);
   };
   const handleBack = () => setActiveStep((prev) => prev - 1);
@@ -305,12 +368,11 @@ export default function ReportBuilder() {
     setIsGenerating(true);
     setGenerationError(null);
     try {
-      const data = await createReportMutation.mutateAsync({
-        templateFilename: selectedTemplateFilename,
-        data: editData,
-        analysis
+      const result = await generateReport(selectedTemplateFilename, editData);
+      setSuccessData({
+        downloadUrl: result.downloadUrl,
+        message: result.message
       });
-      setSuccessData(data);
       setActiveStep((prevStep) => prevStep + 1);
     } catch (error: any) {
       setGenerationError(error?.message || 'Failed to generate report. Please try again.');
@@ -450,6 +512,15 @@ export default function ReportBuilder() {
         );
       case 2:
         return (
+          <FieldMapping
+            excelHeaders={importedData?.headers || []}
+            templatePlaceholders={templatePlaceholders}
+            currentMapping={fieldMapping}
+            onMappingChange={setFieldMapping}
+          />
+        );
+      case 3:
+        return (
           <TemplateEditor
             templateName={selectedTemplateFilename}
             data={editData}
@@ -466,41 +537,27 @@ export default function ReportBuilder() {
               <Box my={2}>
                 <Typography variant="subtitle1">Download your report:</Typography>
                 <Box display="flex" justifyContent="center" sx={{ gap: '16px', my: 2 }}>
-                  {([
-                    successData.outputUrl ? (
-                      <Button
-                        key="pdf"
-                        variant="contained"
-                        color="primary"
-                        component="a"
-                        href={successData.outputUrl}
-                        target="_blank"
-                      >
-                        Download PDF
-                      </Button>
-                    ) : null,
-                    successData.excelUrl ? (
-                      <Button
-                        key="excel"
-                        variant="outlined"
-                        color="primary"
-                        component="a"
-                        href={successData.excelUrl}
-                        target="_blank"
-                      >
-                        Download Excel
-                      </Button>
-                    ) : null
-                  ].filter(Boolean) as React.ReactNode[])}
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={() => downloadReport(successData.downloadUrl)}
+                    startIcon={<DownloadIcon />}
+                  >
+                    Download Report
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    component="a"
+                    href={successData.downloadUrl}
+                    target="_blank"
+                  >
+                    Open in New Tab
+                  </Button>
                 </Box>
-                <Button
-                  variant="text"
-                  component={Link}
-                  to={`/reports/${successData.id}`}
-                  sx={{ mt: 2 }}
-                >
-                  View Full Report
-                </Button>
+                <Alert severity="success" sx={{ mt: 2 }}>
+                  {successData.message || 'Your report has been generated successfully!'}
+                </Alert>
               </Box>
             )}
             <Box mt={3}>
@@ -539,6 +596,7 @@ export default function ReportBuilder() {
   const canProceed = () => {
     if (activeStep === 0) return !!importedData;
     if (activeStep === 1) return !!selectedTemplateFilename;
+    if (activeStep === 2) return Object.keys(fieldMapping).length > 0; // At least one field mapped
     return true;
   };
 

@@ -452,6 +452,28 @@ export const generateLivePreview = async (templateName: string, data: Record<str
   return result;
 };
 
+// Generate final report using MVP endpoint
+export const generateReport = async (templateFilename: string, data: Record<string, string>): Promise<{
+  downloadUrl: string;
+  message: string;
+}> => {
+  const { data: result } = await api.post('/mvp/generate-report', {
+    templateFilename,
+    data
+  });
+  return result;
+};
+
+// Download generated report
+export const downloadReport = async (downloadUrl: string): Promise<void> => {
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = 'generated_report.docx';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
 // Database test
 export const testDatabaseConnection = async (): Promise<{
   status: string;
