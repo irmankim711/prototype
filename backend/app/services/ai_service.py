@@ -11,8 +11,9 @@ class AIService:
         return self._analyze_with_openai(data)
 
     def _analyze_with_openai(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        model_name = os.getenv("OPENAI_MODEL", "gpt-4")
         response = self.openai_client.chat.completions.create(
-            model="gpt-4",
+            model=model_name,
             messages=[
                 {
                     "role": "system",
@@ -24,7 +25,10 @@ class AIService:
                 }
             ]
         )
-        return json.loads(response.choices[0].message.content)
+        try:
+            return json.loads(response.choices[0].message.content)
+        except json.JSONDecodeError:
+            return {"error": "Failed to decode OpenAI response"}
 
     def generate_report_suggestions(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Generate suggestions for report content based on the data"""
@@ -37,8 +41,9 @@ class AIService:
         4. Potential areas of concern
         """
         
+        model_name = os.getenv("OPENAI_MODEL", "gpt-4")
         response = self.openai_client.chat.completions.create(
-            model="gpt-4",
+            model=model_name,
             messages=[
                 {
                     "role": "system",
@@ -51,6 +56,9 @@ class AIService:
             ]
         )
         
-        return json.loads(response.choices[0].message.content)
+        try:
+            return json.loads(response.choices[0].message.content)
+        except json.JSONDecodeError:
+            return {"error": "Failed to decode OpenAI response"}
 
 ai_service = AIService()
