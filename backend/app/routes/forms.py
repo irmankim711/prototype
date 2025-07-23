@@ -226,7 +226,7 @@ def validate_form_data(form_schema, data):
     return errors
 
 @forms_bp.route('/', methods=['GET'])
-@jwt_required()
+# @jwt_required()  # Removed for public access
 @limiter.limit("100 per hour")
 def get_forms():
     """Get all forms for the current user with pagination and filtering."""

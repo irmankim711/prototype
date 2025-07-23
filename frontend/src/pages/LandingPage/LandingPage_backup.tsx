@@ -476,6 +476,7 @@ function LandingPage() {
                       </Box>
                     ),
                   }}
+                  autoComplete="name"
                 />
               </>
             )}
@@ -496,12 +497,12 @@ function LandingPage() {
                   </Box>
                 ),
               }}
+              autoComplete="email"
             />
 
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Password</Typography>
             <StyledInput
               fullWidth
-              type="password"
               placeholder="••••••••"
               variant="outlined"
               margin="dense"
@@ -515,6 +516,7 @@ function LandingPage() {
                   </Box>
                 ),
               }}
+              autoComplete="current-password"
             />
 
             {!isLoginMode && (
@@ -536,6 +538,7 @@ function LandingPage() {
                       </Box>
                     ),
                   }}
+                  autoComplete="new-password"
                 />
 
                 <Box sx={{ mb: 3 }}>

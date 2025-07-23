@@ -38,3 +38,40 @@ CREATE TABLE IF NOT EXISTS password_resets (
   user_id INT REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Forms table
+CREATE TABLE IF NOT EXISTS forms (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  description TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  user_id INT REFERENCES users(id) ON DELETE CASCADE NOT NULL
+);
+
+-- Submissions table
+CREATE TABLE IF NOT EXISTS submissions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  data JSONB NOT NULL,
+  submitted_at TIMESTAMPTZ DEFAULT NOW(),
+  form_id UUID REFERENCES forms(id) ON DELETE CASCADE NOT NULL,
+  user_id INT REFERENCES users(id) ON DELETE CASCADE NOT NULL
+);
+
+-- Webhook logs table
+CREATE TABLE IF NOT EXISTS webhook_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  processed BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_submissions_form_id ON submissions(form_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_user_id ON submissions(user_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_submitted_at ON submissions(submitted_at);
+CREATE INDEX IF NOT EXISTS idx_forms_user_id ON forms(user_id);
+CREATE INDEX IF NOT EXISTS idx_forms_is_active ON forms(is_active);

@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from flask_jwt_extended import JWTManager
+from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity, create_access_token
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from celery import Celery
@@ -43,6 +43,11 @@ def create_app(config_name=None):
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 3600))  # 1 hour
     app.config['JWT_REFRESH_TOKEN_EXPIRES'] = int(os.getenv('JWT_REFRESH_TOKEN_EXPIRES', 2592000))  # 30 days
+    # JWT Cookie configuration
+    app.config['JWT_TOKEN_LOCATION'] = ['cookies']
+    app.config['JWT_ACCESS_COOKIE_PATH'] = '/'
+    app.config['JWT_REFRESH_COOKIE_PATH'] = '/api/auth/refresh'
+    app.config['JWT_COOKIE_CSRF_PROTECT'] = False  # For development only! Enable and handle CSRF in production.
     
     # Database Configuration
     database_url = os.getenv('DATABASE_URL', 'sqlite:///app.db')
@@ -59,11 +64,15 @@ def create_app(config_name=None):
     }
     
     # CORS Configuration
-    cors_origins = os.getenv('CORS_ORIGINS', '*').split(',')
-    CORS(app, 
-          resources={r"/*": {"origins": cors_origins}}, 
-          supports_credentials=True,
-          methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+    CORS(app, resources={
+        r"/*": {
+            "origins": ["http://localhost:5173", "http://localhost:3002"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True,
+            "max_age": 86400
+        }
+    })
     
     # Initialize extensions
     db.init_app(app)
@@ -195,11 +204,13 @@ def register_blueprints(app):
     from .routes import api, dashboard_bp, users_bp, forms_bp, files_bp
     from .auth import auth_bp
     from .routes.mvp import mvp
+    from .public_routes import public_bp
     
     app.register_blueprint(api, url_prefix='/api')
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(users_bp, url_prefix='/api/users')
     app.register_blueprint(forms_bp, url_prefix='/api/forms')
     app.register_blueprint(files_bp, url_prefix='/api/files')
-    app.register_blueprint(auth_bp)
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(public_bp, url_prefix='/api')  # Public routes without auth
     app.register_blueprint(mvp, url_prefix='/mvp')

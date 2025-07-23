@@ -56,7 +56,9 @@ export async function login(req: Request, res: Response) {
   const { email, password } = req.body;
   const client = await pool.connect();
   try {
+    console.log('Login attempt for:', req.body.email);
     const userRes = await client.query('SELECT * FROM users WHERE email=$1', [email]);
+    console.log('Found user:', userRes.rows[0]?.email);
     if (!userRes.rowCount) return res.status(401).json({ error: 'Invalid credentials' });
     const user = userRes.rows[0];
 
@@ -79,12 +81,22 @@ export async function login(req: Request, res: Response) {
 
     const payload = { id: user.id, organization_id: user.organization_id, role: user.role };
     const accessToken = generateAccessToken(payload);
+    console.log('Generated accessToken:', accessToken);
+    console.log('User payload:', payload);
     const refreshToken = generateRefreshToken({ ...payload, token_id: uuidv4() });
 
     await client.query('INSERT INTO refresh_tokens(token, user_id, expires_at) VALUES($1,$2, NOW() + INTERVAL \'30 days\')', [refreshToken, user.id]);
 
     res.cookie('refreshToken', refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 30 * 24 * 60 * 60 * 1000 });
-    return res.json({ accessToken });
+    const responseData = {
+      token: accessToken,
+      user: {
+        id: user.id,
+        email: user.email
+      }
+    };
+    console.log('Sending response:', responseData);
+    res.json(responseData);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Login failed' });
@@ -100,7 +112,18 @@ export async function refreshToken(req: Request, res: Response) {
   try {
     const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET as string) as any;
     const accessToken = generateAccessToken({ id: payload.id, organization_id: payload.organization_id, role: payload.role });
-    return res.json({ accessToken });
+    console.log('Generated accessToken:', accessToken);
+    console.log('User payload:', { id: payload.id, organization_id: payload.organization_id, role: payload.role });
+    const userRes = await pool.query('SELECT email FROM users WHERE id=$1', [payload.id]);
+    const responseData = {
+      token: accessToken,
+      user: {
+        id: payload.id,
+        email: userRes.rows[0].email
+      }
+    };
+    console.log('Sending response:', responseData);
+    res.json(responseData);
   } catch (err) {
     return res.status(403).json({ error: 'Invalid refresh token' });
   }

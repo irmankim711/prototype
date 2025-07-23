@@ -543,6 +543,7 @@ export default function LandingPage() {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required
+                  autoComplete="email"
                 />
                 <StyledTextField
                   label="Password"
@@ -551,6 +552,7 @@ export default function LandingPage() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
+                  autoComplete="current-password"
                 />
                 <FormControlLabel
                   control={<Checkbox checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} />}
@@ -585,6 +587,7 @@ export default function LandingPage() {
                   value={signupEmail}
                   onChange={e => setSignupEmail(e.target.value)}
                   required
+                  autoComplete="email"
                 />
                 <StyledTextField
                   label="Password"
@@ -593,6 +596,7 @@ export default function LandingPage() {
                   value={signupPassword}
                   onChange={e => setSignupPassword(e.target.value)}
                   required
+                  autoComplete="new-password"
                 />
                 <StyledTextField
                   label="Confirm Password"

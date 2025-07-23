@@ -79,6 +79,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
             onChange={(e) => setEmail(e.target.value)}
             required
             style={{ width: "100%", padding: "8px", marginTop: "5px" }}
+            autoComplete="email"
           />
         </div>
 
@@ -91,6 +92,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
             onChange={(e) => setPassword(e.target.value)}
             required
             style={{ width: "100%", padding: "8px", marginTop: "5px" }}
+            autoComplete="current-password"
           />
         </div>
 

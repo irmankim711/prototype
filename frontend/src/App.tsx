@@ -8,9 +8,7 @@ import {
 import { ThemeProvider } from "@mui/material/styles";
 import { CssBaseline, Box } from "@mui/material";
 import { theme } from "./theme";
-import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useContext } from "react";
 import Sidebar from "./components/Layout/Sidebar";
 
 // Import pages
@@ -30,7 +28,6 @@ import AboutUs from './pages/AboutUs/AboutUs';
 const queryClient = new QueryClient();
 
 function AppLayout() {
-  // const { user } = useContext(AuthContext);
   const location = useLocation();
   // Sidebar is visible on all pages except landing page
   const showSidebar = location.pathname !== "/";
@@ -64,11 +61,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <AuthProvider>
-          <Router>
-            <AppLayout />
-          </Router>
-        </AuthProvider>
+        <Router>
+          <AppLayout />
+        </Router>
       </ThemeProvider>
     </QueryClientProvider>
   );

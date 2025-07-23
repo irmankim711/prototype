@@ -9,23 +9,14 @@ import {
   DialogActions, 
   Alert, 
   Snackbar, 
-  Chip, 
-  Tooltip
+  Chip,
+  IconButton
 } from '@mui/material';
+
 import {
   Box,
   Typography,
-  TextField,
   Button,
-  Paper,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  IconButton,
-  Switch,
-  Divider,
-  Stack,
   Card,
   CardContent,
   CardActions,
@@ -38,13 +29,7 @@ import {
   Edit,
   Share,
   ContentCopy,
-  Download,
-  Assessment,
-  Visibility,
-  VisibilityOff,
-  Settings,
-  Preview,
-  Save
+  Download
 } from '@mui/icons-material';
 
 import FormBuilder from '../../components/FormBuilder/FormBuilder';
@@ -55,10 +40,12 @@ export default function FormBuilderAdmin() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' | 'warning' | 'info' });
+  const [page, setPage] = useState(1);
 
   const { data: formsData, isLoading: formsLoading, error: formsError, refetch } = useQuery({
-    queryKey: ['forms'],
-    queryFn: () => formBuilderAPI.getForms()
+    queryKey: ['forms', page],
+    queryFn: () => formBuilderAPI.getForms({ page, limit: 10 }),
+    staleTime: 1000 * 60 * 5 // 5 minutes
   });
 
   const forms = formsData?.forms || [];
@@ -230,6 +217,25 @@ export default function FormBuilderAdmin() {
                 )}
               </Grid>
             )}
+            <Box display="flex" justifyContent="center" mt={3}>
+              <Button 
+                variant="outlined" 
+                onClick={() => setPage(page - 1)} 
+                disabled={page === 1}
+              >
+                Previous
+              </Button>
+              <Typography variant="body1" sx={{ mx: 2 }}>
+                Page {page}
+              </Typography>
+              <Button 
+                variant="outlined" 
+                onClick={() => setPage(page + 1)} 
+                disabled={forms.length < 10}
+              >
+                Next
+              </Button>
+            </Box>
           </Box>
         ) : (
           <FormBuilder 

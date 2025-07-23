@@ -244,6 +244,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             InputProps={{
               startAdornment: getFieldIcon(field.type)
             }}
+            autoComplete="on"
           />
         );
 
@@ -264,6 +265,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             InputProps={{
               startAdornment: getFieldIcon(field.type)
             }}
+            autoComplete="on"
           />
         );
 
@@ -283,6 +285,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             InputProps={{
               startAdornment: getFieldIcon(field.type)
             }}
+            autoComplete="email"
           />
         );
 
@@ -302,6 +305,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             InputProps={{
               startAdornment: getFieldIcon(field.type)
             }}
+            autoComplete="off"
           />
         );
 
@@ -398,6 +402,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             InputProps={{
               startAdornment: getFieldIcon(field.type)
             }}
+            autoComplete="bday"
           />
         );
 
@@ -417,6 +422,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             InputProps={{
               startAdornment: getFieldIcon(field.type)
             }}
+            autoComplete="off"
           />
         );
 
@@ -436,6 +442,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             InputProps={{
               startAdornment: getFieldIcon(field.type)
             }}
+            autoComplete="off"
           />
         );
 
@@ -455,6 +462,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             InputProps={{
               startAdornment: getFieldIcon(field.type)
             }}
+            autoComplete="tel"
           />
         );
 
@@ -474,6 +482,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             InputProps={{
               startAdornment: getFieldIcon(field.type)
             }}
+            autoComplete="url"
           />
         );
 
@@ -532,6 +541,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             InputProps={{
               startAdornment: getFieldIcon(field.type)
             }}
+            autoComplete="on"
           />
         );
     }

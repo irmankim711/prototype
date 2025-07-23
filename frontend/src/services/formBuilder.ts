@@ -89,7 +89,7 @@ export interface FormBuilderConfig {
 }
 
 // API Base URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = '/api';
 
 // Create axios instance with auth
 const api = axios.create({
@@ -122,14 +122,10 @@ api.interceptors.response.use(
 // Form Builder API Functions
 export const formBuilderAPI = {
   // Get all forms with filtering and pagination
-  getForms: async (params?: {
-    page?: number;
-    per_page?: number;
-    show_all?: boolean;
-    status?: 'active' | 'inactive' | 'all';
-    search?: string;
-  }) => {
-    const response = await api.get('/api/forms/', { params });
+  getForms: async ({ page = 1, limit = 10 }) => {
+    const response = await api.get('/forms', {
+      params: { page, per_page: limit }
+    });
     return response.data;
   },
 

@@ -297,6 +297,7 @@ export default function UserProfile() {
                 onChange={handleInputChange}
                 disabled={!editMode}
                 variant="outlined"
+                autoComplete="name"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -308,6 +309,7 @@ export default function UserProfile() {
                 onChange={handleInputChange}
                 disabled={!editMode}
                 variant="outlined"
+                autoComplete="email"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -319,6 +321,7 @@ export default function UserProfile() {
                 onChange={handleInputChange}
                 disabled={!editMode}
                 variant="outlined"
+                autoComplete="tel"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -330,6 +333,7 @@ export default function UserProfile() {
                 onChange={handleInputChange}
                 disabled={!editMode}
                 variant="outlined"
+                autoComplete="organization"
               />
             </Grid>
             <Grid item xs={12}>

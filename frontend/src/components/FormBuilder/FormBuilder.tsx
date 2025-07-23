@@ -278,6 +278,7 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
                   onChange={(e) => handleUpdateField(selectedField.id, { label: e.target.value })}
                   fullWidth
                   margin="normal"
+                  autoComplete="on"
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -287,6 +288,7 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
                   onChange={(e) => handleUpdateField(selectedField.id, { placeholder: e.target.value })}
                   fullWidth
                   margin="normal"
+                  autoComplete="on"
                 />
               </Grid>
               <Grid item xs={12}>
@@ -298,6 +300,7 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
                   margin="normal"
                   multiline
                   rows={2}
+                  autoComplete="on"
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -380,6 +383,7 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
             fullWidth
             disabled
             size="small"
+            autoComplete="on"
           />
         );
       case 'textarea':
@@ -393,6 +397,7 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
             rows={3}
             disabled
             size="small"
+            autoComplete="on"
           />
         );
       case 'email':
@@ -405,6 +410,7 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
             fullWidth
             disabled
             size="small"
+            autoComplete="email"
           />
         );
       case 'number':
@@ -417,6 +423,7 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
             fullWidth
             disabled
             size="small"
+            autoComplete="off"
           />
         );
       case 'select':
@@ -476,6 +483,7 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
             fullWidth
             disabled
             size="small"
+            autoComplete="on"
           />
         );
     }

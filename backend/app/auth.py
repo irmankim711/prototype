@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from flask import make_response
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -48,15 +49,19 @@ def login():
     access_token = create_access_token(identity=str(user.id))
     refresh_token = create_refresh_token(identity=str(user.id))
 
-    return (
-        jsonify(
-            {
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-            }
-        ),
-        200,
+    resp = make_response(jsonify({
+        "access_token": access_token
+        # Optionally, you can omit "refresh_token" from the body for extra security
+    }), 200)
+    resp.set_cookie(
+        "refresh_token",
+        refresh_token,
+        httponly=True,
+        samesite="Lax",  # Or "None" if using HTTPS and cross-site
+        secure=False,     # Set to True if using HTTPS
+        path="/api/auth/refresh"
     )
+    return resp
 
 
 @auth_bp.post("/refresh")

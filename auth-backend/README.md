@@ -64,7 +64,7 @@ JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 JWT_REFRESH_SECRET=your-super-secret-refresh-jwt-key-change-this-in-production
 
 # Server
-PORT=4000
+PORT=5000
 NODE_ENV=development
 CORS_ORIGIN=http://localhost:3002
 ```
