@@ -13,7 +13,7 @@ const api = axios.create({
 
 // Auth API instance for authentication endpoints
 const authApi = axios.create({
-  baseURL: `${API_BASE_URL}/api/auth`,
+  baseURL: `${API_BASE_URL}/api`,
   headers: {
     "Content-Type": "application/json",
   },
@@ -131,7 +131,7 @@ export interface FormField {
 export const login = async (
   credentials: LoginRequest
 ): Promise<LoginResponse> => {
-  const { data } = await authApi.post("/login", credentials);
+  const { data } = await authApi.post("/auth/login", credentials);
   if (data.access_token) {
     localStorage.setItem("token", data.access_token);
   }
@@ -143,7 +143,7 @@ export const register = async (userData: {
   password: string;
   confirmPassword: string;
 }): Promise<LoginResponse> => {
-  const { data } = await authApi.post("/register", userData);
+  const { data } = await authApi.post("/auth/register", userData);
   if (data.access_token) {
     localStorage.setItem("token", data.access_token);
   }
@@ -151,7 +151,7 @@ export const register = async (userData: {
 };
 
 export const getCurrentUser = async (): Promise<User> => {
-  const { data } = await authApi.get("/me");
+  const { data } = await authApi.get("/auth/me");
   return data;
 };
 
@@ -161,14 +161,14 @@ export const logout = (): void => {
 
 // Dashboard APIs
 export const fetchDashboardStats = async (): Promise<DashboardStats> => {
-  const { data } = await api.get("/api/dashboard/stats");
+  const { data } = await api.get("/dashboard/stats");
   return data;
 };
 
 export const fetchChartData = async (
   type: string = "reports_by_status"
 ): Promise<ChartData> => {
-  const { data } = await api.get(`/api/dashboard/charts?type=${type}`);
+  const { data } = await api.get(`/dashboard/charts?type=${type}`);
   return data;
 };
 
@@ -178,7 +178,7 @@ export const fetchRecentActivity = async (
   recent_activity: Report[];
   total: number;
 }> => {
-  const { data } = await api.get(`/api/dashboard/recent?limit=${limit}`);
+  const { data } = await api.get(`/dashboard/recent?limit=${limit}`);
   return data;
 };
 
@@ -188,7 +188,7 @@ export const fetchDashboardSummary = async (): Promise<{
   recentReports: Report[];
   availableTemplates: ReportTemplate[];
 }> => {
-  const { data } = await api.get("/api/dashboard/summary");
+  const { data } = await api.get("/dashboard/summary");
   return data;
 };
 
@@ -196,14 +196,14 @@ export const refreshDashboard = async (): Promise<{
   message: string;
   timestamp: string;
 }> => {
-  const { data } = await api.post("/api/dashboard/refresh");
+  const { data } = await api.post("/dashboard/refresh");
   return data;
 };
 
 export const fetchPerformanceMetrics = async (): Promise<
   Record<string, unknown>
 > => {
-  const { data } = await api.get("/api/dashboard/performance");
+  const { data } = await api.get("/dashboard/performance");
   return data;
 };
 
@@ -219,17 +219,17 @@ export const fetchTimelineData = async (
 
 // Reports APIs
 export const fetchReports = async (): Promise<Report[]> => {
-  const { data } = await api.get("/api/reports");
+  const { data } = await api.get("/reports");
   return data;
 };
 
 export const fetchRecentReports = async (): Promise<Report[]> => {
-  const { data } = await api.get("/api/reports/recent");
+  const { data } = await api.get("/reports/recent");
   return data;
 };
 
 export const fetchReportStats = async (): Promise<ReportStats> => {
-  const { data } = await api.get("/api/reports/stats");
+  const { data } = await api.get("/reports/stats");
   return data;
 };
 
@@ -242,14 +242,14 @@ export const updateReportTemplate = async (
   id: string,
   templateData: Partial<ReportTemplate>
 ): Promise<ReportTemplate> => {
-  const { data } = await api.put(`/api/reports/templates/${id}`, templateData);
+  const { data } = await api.put(`/reports/templates/${id}`, templateData);
   return data;
 };
 
 export const createReport = async (
   reportData: Partial<Report>
 ): Promise<Report> => {
-  const { data } = await api.post("/api/reports", reportData);
+  const { data } = await api.post("/reports", reportData);
   return data;
 };
 
@@ -257,12 +257,12 @@ export const updateReport = async (
   id: string,
   reportData: Partial<Report>
 ): Promise<Report> => {
-  const { data } = await api.put(`/api/reports/${id}`, reportData);
+  const { data } = await api.put(`/reports/${id}`, reportData);
   return data;
 };
 
 export const deleteReport = async (id: string): Promise<void> => {
-  await api.delete(`/api/reports/${id}`);
+  await api.delete(`/reports/${id}`);
 };
 
 export const getReportStatus = async (
@@ -271,7 +271,7 @@ export const getReportStatus = async (
   status: string;
   result?: Record<string, unknown>;
 }> => {
-  const { data } = await api.get(`/api/reports/${taskId}`);
+  const { data } = await api.get(`/reports/${taskId}`);
   return data;
 };
 
@@ -408,54 +408,79 @@ export const searchFiles = async (
 };
 
 // Fetch placeholders for a given template (Word docx)
-export const fetchTemplatePlaceholders = async (templateName: string): Promise<string[]> => {
-  const { data } = await api.get(`/mvp/templates/${encodeURIComponent(templateName)}/placeholders`);
+export const fetchTemplatePlaceholders = async (
+  templateName: string
+): Promise<string[]> => {
+  const { data } = await api.get(
+    `/mvp/templates/${encodeURIComponent(templateName)}/placeholders`
+  );
   return data.placeholders;
 };
 
 // Fetch list of available Word templates
-export const fetchWordTemplates = async (): Promise<Array<{id: string, name: string, description: string, filename: string, previewUrl?: string}>> => {
-  const { data } = await api.get('/mvp/templates/list');
+export const fetchWordTemplates = async (): Promise<
+  Array<{
+    id: string;
+    name: string;
+    description: string;
+    filename: string;
+    previewUrl?: string;
+  }>
+> => {
+  const { data } = await api.get("/mvp/templates/list");
   return data;
 };
 
 // Extract template content for frontend editing
-export const fetchTemplateContent = async (templateName: string): Promise<{
-  content: Array<{type: string, text: string, style: string}>;
+export const fetchTemplateContent = async (
+  templateName: string
+): Promise<{
+  content: Array<{ type: string; text: string; style: string }>;
   placeholders: string[];
 }> => {
-  const { data } = await api.get(`/mvp/templates/${encodeURIComponent(templateName)}/content`);
+  const { data } = await api.get(
+    `/mvp/templates/${encodeURIComponent(templateName)}/content`
+  );
   return data;
 };
 
 // Generate live preview of filled template
-export const generateLivePreview = async (templateName: string, data: Record<string, string>): Promise<{
+export const generateLivePreview = async (
+  templateName: string,
+  data: Record<string, string>
+): Promise<{
   preview: string;
   filename: string;
 }> => {
-  const { data: result } = await api.post(`/mvp/templates/${encodeURIComponent(templateName)}/preview`, {
-    data
-  });
+  const { data: result } = await api.post(
+    `/mvp/templates/${encodeURIComponent(templateName)}/preview`,
+    {
+      data,
+    }
+  );
   return result;
 };
 
 // Generate final report using MVP endpoint
-export const generateReport = async (templateFilename: string, data: Record<string, string>): Promise<{
+export const generateReport = async (
+  templateFilename: string,
+  data: Record<string, string>
+): Promise<{
   downloadUrl: string;
   message: string;
 }> => {
-  const { data: result } = await api.post('/mvp/generate-report', {
+  const { data: result } = await api.post("/mvp/generate-report", {
     templateFilename,
-    data
+    data,
   });
   return result;
 };
 
 // Download generated report
 export const downloadReport = async (downloadUrl: string): Promise<void> => {
-  const link = document.createElement('a');
+  const link = document.createElement("a");
   link.href = downloadUrl;
-  link.download = 'generated_report.docx';
+  link.download = "generated_report.docx";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -491,7 +516,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // Handle unauthorized access
       localStorage.removeItem("token");
-      window.location.href = "/login";
+      window.location.href = "/";
     }
     return Promise.reject(error);
   }
@@ -503,7 +528,7 @@ authApi.interceptors.response.use(
     if (error.response?.status === 401) {
       // Handle unauthorized access
       localStorage.removeItem("token");
-      window.location.href = "/login";
+      window.location.href = "/";
     }
     return Promise.reject(error);
   }

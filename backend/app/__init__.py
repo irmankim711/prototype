@@ -64,15 +64,13 @@ def create_app(config_name=None):
     }
     
     # CORS Configuration
-    CORS(app, resources={
-        r"/*": {
-            "origins": ["http://localhost:5173", "http://localhost:3002", "http://localhost:5174"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "supports_credentials": True,
-            "max_age": 86400
-        }
-    })
+    CORS(app, 
+         resources={
+             r"/api/*": {"origins": ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"]}
+         },
+         supports_credentials=True,
+         allow_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
     
     # Initialize extensions
     db.init_app(app)
@@ -108,6 +106,23 @@ def create_app(config_name=None):
                 environment=config_name
             )
     
+    # Enhanced logging configuration
+    if app.config.get('ENV') == 'development':
+        logging.basicConfig(level=logging.DEBUG)
+        app.logger.setLevel(logging.DEBUG)
+        app.logger.info('Starting app in development mode')
+        
+        @app.before_request
+        def log_request_info():
+            app.logger.debug(f'Request Headers: {request.headers}')
+            app.logger.debug(f'Request Body: {request.get_data()}')
+            
+        @app.after_request
+        def log_response_info(response):
+            app.logger.debug(f'Response Status: {response.status}')
+            app.logger.debug(f'Response Headers: {response.headers}')
+            return response
+    
     # Setup logging
     setup_logging(app)
     
@@ -136,6 +151,18 @@ def create_app(config_name=None):
             'environment': config_name,
             'database': db_status
         }), 200 if db_status == 'healthy' else 503
+    
+    # Request logging middleware
+    @app.before_request
+    def log_request():
+        app.logger.debug(f"Incoming Request: {request.method} {request.path}")
+        app.logger.debug(f"Headers: {dict(request.headers)}")
+        app.logger.debug(f"Body: {request.get_data()}")
+
+    @app.after_request
+    def log_response(response):
+        app.logger.debug(f"Outgoing Response: {response.status}")
+        return response
     
     # Security headers middleware
     @app.after_request
@@ -200,17 +227,26 @@ def register_error_handlers(app):
         return jsonify({'error': 'Rate limit exceeded'}), 429
 
 def register_blueprints(app):
-    """Register application blueprints"""
-    from .routes import api, dashboard_bp, users_bp, forms_bp, files_bp
+    """Register Flask blueprints."""
     from .auth import auth_bp
+    from .routes.dashboard import dashboard_bp
+    from .routes.users import users_bp
+    from .routes.forms import forms_bp
+    from .routes.files import files_bp
     from .routes.mvp import mvp
-    from .public_routes import public_bp
+    from .routes.api import api
     
-    app.register_blueprint(api, url_prefix='/api')
-    app.register_blueprint(dashboard_bp)
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
     app.register_blueprint(users_bp, url_prefix='/api/users')
     app.register_blueprint(forms_bp, url_prefix='/api/forms')
     app.register_blueprint(files_bp, url_prefix='/api/files')
-    app.register_blueprint(auth_bp, url_prefix='/api/auth')
-    app.register_blueprint(public_bp, url_prefix='/api')  # Public routes without auth
     app.register_blueprint(mvp, url_prefix='/api/mvp')
+    app.register_blueprint(api, url_prefix='/api')
+
+def main():
+    app = create_app()
+    app.run(host='0.0.0.0', port=5000)
+
+if __name__ == '__main__':
+    main()
