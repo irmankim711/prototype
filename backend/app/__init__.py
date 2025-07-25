@@ -66,7 +66,7 @@ def create_app(config_name=None):
     # CORS Configuration
     CORS(app, resources={
         r"/*": {
-            "origins": ["http://localhost:5173", "http://localhost:3002"],
+            "origins": ["http://localhost:5173", "http://localhost:3002", "http://localhost:5174"],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
             "supports_credentials": True,
@@ -213,4 +213,4 @@ def register_blueprints(app):
     app.register_blueprint(files_bp, url_prefix='/api/files')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(public_bp, url_prefix='/api')  # Public routes without auth
-    app.register_blueprint(mvp, url_prefix='/mvp')
+    app.register_blueprint(mvp, url_prefix='/api/mvp')

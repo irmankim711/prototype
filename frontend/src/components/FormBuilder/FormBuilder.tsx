@@ -1,18 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Box,
   Typography,
-  Paper,
   Button,
   TextField,
   Switch,
   FormControlLabel,
-  Divider,
   Grid,
   Card,
   CardContent,
-  CardActions,
   IconButton,
   Dialog,
   DialogTitle,
@@ -21,7 +18,6 @@ import {
   Alert,
   Snackbar,
   Chip,
-  Tooltip,
   Accordion,
   AccordionSummary,
   AccordionDetails,
@@ -37,7 +33,8 @@ import {
   Select,
   MenuItem,
   InputAdornment,
-  OutlinedInput
+  Radio,
+  Checkbox
 } from '@mui/material';
 import {
   Add,
@@ -45,36 +42,27 @@ import {
   Edit,
   Save,
   Preview,
-  Settings,
   DragIndicator,
-  ContentCopy,
-  Download,
-  Upload,
-  Visibility,
-  VisibilityOff,
   ExpandMore,
   TextFields,
   Email,
-  Numbers,
-  DateRange,
-  CheckBox,
-  RadioButtonChecked,
-  ArrowDropDown,
-  AttachFile,
-  Star,
-  LocationOn,
   Phone,
-  Link,
-  AccessTime,
-  Event,
+  AttachFile,
+  LocationOn,
+  Star,
+  ArrowDropDown,
   Subject,
-  Palette,
-  Code,
-  Help
+  Numbers,
+  RadioButtonChecked,
+  CheckBox,
+  DateRange,
+  AccessTime,
+  Event as EventIcon,
+  Link as LinkIcon
 } from '@mui/icons-material';
-import type { DraggableProvided, DroppableProvided, DropResult } from '@hello-pangea/dnd';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { formBuilderAPI, formBuilderUtils, type FormField, type FormSchema, type Form, FORM_BUILDER_CONSTANTS } from '../../services/formBuilder';
+import type { DropResult, DroppableProvided, DraggableProvided } from '@hello-pangea/dnd';
+import { formBuilderAPI, type Form, type FormField, formBuilderUtils } from '../../services/formBuilder';
 
 interface FormBuilderProps {
   formId?: number;
@@ -253,10 +241,10 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
       checkbox: <CheckBox />,
       date: <DateRange />,
       time: <AccessTime />,
-      datetime: <Event />,
+      datetime: <EventIcon />,
       file: <AttachFile />,
       phone: <Phone />,
-      url: <Link />,
+      url: <LinkIcon />,
       rating: <Star />,
       location: <LocationOn />
     };
@@ -444,7 +432,7 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
             {field.options?.map((option) => (
               <FormControlLabel
                 key={option}
-                control={<RadioButtonChecked disabled />}
+                control={<Radio disabled />}
                 label={option}
               />
             ))}
@@ -457,7 +445,7 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
             {field.options?.slice(0, 2).map((option) => (
               <FormControlLabel
                 key={option}
-                control={<CheckBox disabled />}
+                control={<Checkbox disabled />}
                 label={option}
               />
             ))}
@@ -498,18 +486,83 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
   }
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <Paper sx={{ p: 2, mb: 2 }}>
+    <Box 
+      sx={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        display: 'flex', 
+        flexDirection: 'column',
+        position: 'relative',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%)',
+          pointerEvents: 'none'
+        }
+      }}
+    >
+      {/* Modern Header with Glassmorphism */}
+      <Box 
+        sx={{ 
+          background: 'rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(20px)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+          p: 3,
+          mb: 3,
+          position: 'relative',
+          zIndex: 1
+        }}
+      >
         <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Typography variant="h5" sx={{ fontWeight: 600 }}>
-            {formId ? 'Edit Form' : 'Create New Form'}
-          </Typography>
-          <Box display="flex" gap={1}>
+          <Box>
+            <Typography 
+              variant="h4" 
+              sx={{ 
+                fontWeight: 700,
+                background: 'linear-gradient(45deg, #ffffff 30%, #f0f0f0 90%)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                mb: 0.5
+              }}
+            >
+              {formId ? '✨ Edit Form' : '🚀 Create New Form'}
+            </Typography>
+            <Typography 
+              variant="body1" 
+              sx={{ 
+                color: 'rgba(255, 255, 255, 0.8)',
+                fontWeight: 400
+              }}
+            >
+              Build beautiful forms with drag & drop simplicity
+            </Typography>
+          </Box>
+          <Box display="flex" gap={2}>
             <Button
               variant={previewMode ? 'outlined' : 'contained'}
               onClick={() => setPreviewMode(!previewMode)}
               startIcon={previewMode ? <Edit /> : <Preview />}
+              sx={{
+                borderRadius: '12px',
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 3,
+                py: 1.5,
+                background: previewMode ? 'rgba(255, 255, 255, 0.1)' : 'linear-gradient(45deg, #FF6B6B, #FF8E53)',
+                border: previewMode ? '2px solid rgba(255, 255, 255, 0.3)' : 'none',
+                color: 'white',
+                backdropFilter: 'blur(10px)',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 8px 25px rgba(0,0,0,0.15)'
+                }
+              }}
             >
               {previewMode ? 'Edit Mode' : 'Preview'}
             </Button>
@@ -518,28 +571,116 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
               onClick={handleSave}
               startIcon={<Save />}
               disabled={createMutation.isPending || updateMutation.isPending}
+              sx={{
+                borderRadius: '12px',
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 3,
+                py: 1.5,
+                background: 'linear-gradient(45deg, #4FACFE, #00F2FE)',
+                border: 'none',
+                color: 'white',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 8px 25px rgba(79, 172, 254, 0.4)'
+                },
+                '&:disabled': {
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  color: 'rgba(255, 255, 255, 0.5)'
+                }
+              }}
             >
-              Save Form
+              {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save Form'}
             </Button>
             {onCancel && (
-              <Button variant="outlined" onClick={onCancel}>
+              <Button 
+                variant="outlined" 
+                onClick={onCancel}
+                sx={{
+                  borderRadius: '12px',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 3,
+                  py: 1.5,
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                  color: 'white',
+                  backdropFilter: 'blur(10px)',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    transform: 'translateY(-2px)'
+                  }
+                }}
+              >
                 Cancel
               </Button>
             )}
           </Box>
         </Box>
-      </Paper>
+      </Box>
 
-      <Box sx={{ flex: 1, display: 'flex', gap: 2 }}>
+      <Box sx={{ flex: 1, display: 'flex', gap: 3, px: 3, pb: 3, position: 'relative', zIndex: 1 }}>
         {/* Left Panel - Form Configuration */}
-        <Paper sx={{ width: 300, p: 2 }}>
-          <Typography variant="h6" gutterBottom>Form Settings</Typography>
+        <Box 
+          sx={{ 
+            width: 320, 
+            background: 'rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(20px)',
+            borderRadius: '20px',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            p: 3,
+            height: 'fit-content',
+            position: 'sticky',
+            top: 20,
+            transition: 'all 0.3s ease'
+          }}
+        >
+          <Typography 
+            variant="h6" 
+            gutterBottom 
+            sx={{ 
+              color: 'white',
+              fontWeight: 700,
+              mb: 3,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}
+          >
+            ⚙️ Form Settings
+          </Typography>
           <TextField
             label="Form Title"
             value={formData.title}
             onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
             fullWidth
             margin="normal"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                background: 'rgba(255, 255, 255, 0.1)',
+                borderRadius: '12px',
+                backdropFilter: 'blur(10px)',
+                '& fieldset': {
+                  borderColor: 'rgba(255, 255, 255, 0.3)',
+                  borderWidth: '2px'
+                },
+                '&:hover fieldset': {
+                  borderColor: 'rgba(255, 255, 255, 0.5)'
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: '#4FACFE'
+                }
+              },
+              '& .MuiInputLabel-root': {
+                color: 'rgba(255, 255, 255, 0.8)',
+                fontWeight: 500
+              },
+              '& .MuiOutlinedInput-input': {
+                color: 'white',
+                fontWeight: 500
+              }
+            }}
           />
           <TextField
             label="Description"
@@ -549,32 +690,122 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
             margin="normal"
             multiline
             rows={3}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                background: 'rgba(255, 255, 255, 0.1)',
+                borderRadius: '12px',
+                backdropFilter: 'blur(10px)',
+                '& fieldset': {
+                  borderColor: 'rgba(255, 255, 255, 0.3)',
+                  borderWidth: '2px'
+                },
+                '&:hover fieldset': {
+                  borderColor: 'rgba(255, 255, 255, 0.5)'
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: '#4FACFE'
+                }
+              },
+              '& .MuiInputLabel-root': {
+                color: 'rgba(255, 255, 255, 0.8)',
+                fontWeight: 500
+              },
+              '& .MuiOutlinedInput-input': {
+                color: 'white',
+                fontWeight: 500
+              }
+            }}
           />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={formData.is_active}
-                onChange={(e) => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
-              />
-            }
-            label="Active"
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={formData.is_public}
-                onChange={(e) => setFormData(prev => ({ ...prev, is_public: e.target.checked }))}
-              />
-            }
-            label="Public"
+          <Box sx={{ mt: 3, mb: 2 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formData.is_active}
+                  onChange={(e) => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                  sx={{
+                    '& .MuiSwitch-switchBase.Mui-checked': {
+                      color: '#4FACFE'
+                    },
+                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                      backgroundColor: '#4FACFE'
+                    }
+                  }}
+                />
+              }
+              label={
+                <Typography sx={{ color: 'white', fontWeight: 500 }}>
+                  🟢 Active
+                </Typography>
+              }
+              sx={{ mb: 1 }}
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formData.is_public}
+                  onChange={(e) => setFormData(prev => ({ ...prev, is_public: e.target.checked }))}
+                  sx={{
+                    '& .MuiSwitch-switchBase.Mui-checked': {
+                      color: '#FF6B6B'
+                    },
+                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                      backgroundColor: '#FF6B6B'
+                    }
+                  }}
+                />
+              }
+              label={
+                <Typography sx={{ color: 'white', fontWeight: 500 }}>
+                  🌐 Public
+                </Typography>
+              }
+            />
+          </Box>
+
+          <Box 
+            sx={{ 
+              height: '2px',
+              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
+              my: 3
+            }} 
           />
 
-          <Divider sx={{ my: 2 }} />
-
-          <Typography variant="h6" gutterBottom>Field Types</Typography>
-          <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
-            <Tab label="Basic" />
-            <Tab label="Advanced" />
+          <Typography 
+            variant="h6" 
+            gutterBottom
+            sx={{ 
+              color: 'white',
+              fontWeight: 700,
+              mb: 2,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}
+          >
+            🧩 Field Types
+          </Typography>
+          <Tabs 
+            value={tabValue} 
+            onChange={(_, newValue) => setTabValue(newValue)}
+            sx={{
+              '& .MuiTabs-indicator': {
+                background: 'linear-gradient(45deg, #4FACFE, #00F2FE)',
+                height: '3px',
+                borderRadius: '3px'
+              },
+              '& .MuiTab-root': {
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontWeight: 600,
+                textTransform: 'none',
+                fontSize: '0.95rem',
+                '&.Mui-selected': {
+                  color: 'white'
+                }
+              }
+            }}
+          >
+            <Tab label="✨ Basic" />
+            <Tab label="🔧 Advanced" />
           </Tabs>
 
           <TabPanel value={tabValue} index={0}>
@@ -613,17 +844,67 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
               ))}
             </List>
           </TabPanel>
-        </Paper>
+        </Box>
 
         {/* Center Panel - Form Builder */}
-        <Paper sx={{ flex: 1, p: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            {previewMode ? 'Form Preview' : 'Form Builder'}
-          </Typography>
+        <Box 
+          sx={{ 
+            flex: 1,
+            background: 'rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(20px)',
+            borderRadius: '20px',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            p: 4,
+            position: 'relative',
+            overflow: 'hidden',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '1px',
+              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)'
+            }
+          }}
+        >
+          <Box sx={{ mb: 4 }}>
+            <Typography 
+              variant="h5" 
+              sx={{ 
+                color: 'white',
+                fontWeight: 700,
+                mb: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2
+              }}
+            >
+              {previewMode ? '👁️ Form Preview' : '🎨 Form Builder'}
+            </Typography>
+            <Typography 
+              variant="body1" 
+              sx={{ 
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontWeight: 400
+              }}
+            >
+              {previewMode ? 'See how your form will look to users' : 'Drag and drop fields to build your form'}
+            </Typography>
+          </Box>
 
           {previewMode ? (
             // Preview Mode
-            <Box sx={{ p: 2, border: '1px dashed #ccc', borderRadius: 1 }}>
+            <Box 
+              sx={{ 
+                p: 4, 
+                background: 'rgba(255, 255, 255, 0.1)',
+                backdropFilter: 'blur(10px)',
+                border: '2px dashed rgba(255, 255, 255, 0.3)', 
+                borderRadius: '16px',
+                minHeight: '400px'
+              }}
+            >
               {formData.schema?.fields.map((field) => (
                 <Box key={field.id} sx={{ mb: 2 }}>
                   {renderFieldPreview(field)}
@@ -638,7 +919,25 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
                   <Box
                     {...provided.droppableProps}
                     ref={provided.innerRef}
-                    sx={{ minHeight: 200 }}
+                    sx={{ 
+                      minHeight: 400,
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      borderRadius: '16px',
+                      border: '2px dashed rgba(255, 255, 255, 0.2)',
+                      p: 3,
+                      position: 'relative',
+                      '&:empty::after': {
+                        content: '"🎯 Drop fields here to start building your form"',
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        color: 'rgba(255, 255, 255, 0.5)',
+                        fontSize: '1.1rem',
+                        fontWeight: 500,
+                        textAlign: 'center'
+                      }
+                    }}
                   >
                     {formData.schema?.fields.map((field, index) => (
                       <Draggable key={field.id} draggableId={field.id} index={index}>
@@ -646,25 +945,86 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
                           <Card
                             ref={provided.innerRef}
                             {...provided.draggableProps}
-                            sx={{ mb: 2, cursor: 'pointer' }}
+                            sx={{ 
+                              mb: 3, 
+                              cursor: 'pointer',
+                              background: 'rgba(255, 255, 255, 0.1)',
+                              backdropFilter: 'blur(10px)',
+                              borderRadius: '16px',
+                              border: '1px solid rgba(255, 255, 255, 0.2)',
+                              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                              '&:hover': {
+                                transform: 'translateY(-4px)',
+                                boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
+                                background: 'rgba(255, 255, 255, 0.15)',
+                                border: '1px solid rgba(255, 255, 255, 0.3)'
+                              }
+                            }}
                             onClick={() => {
                               setSelectedField(field);
                               setFieldDialogOpen(true);
                             }}
                           >
-                            <CardContent>
-                              <Box display="flex" alignItems="center" gap={1}>
-                                <Box {...provided.dragHandleProps}>
-                                  <DragIndicator color="action" />
+                            <CardContent sx={{ p: 3 }}>
+                              <Box display="flex" alignItems="center" gap={2}>
+                                <Box 
+                                  {...provided.dragHandleProps}
+                                  sx={{
+                                    p: 1,
+                                    borderRadius: '8px',
+                                    background: 'rgba(255, 255, 255, 0.1)',
+                                    cursor: 'grab',
+                                    '&:active': {
+                                      cursor: 'grabbing'
+                                    }
+                                  }}
+                                >
+                                  <DragIndicator sx={{ color: 'rgba(255, 255, 255, 0.7)' }} />
                                 </Box>
                                 <Box sx={{ flex: 1 }}>
-                                  <Box display="flex" alignItems="center" gap={1}>
-                                    {getFieldIcon(field.type)}
-                                    <Typography variant="subtitle1">{field.label}</Typography>
-                                    {field.required && <Chip label="Required" size="small" color="primary" />}
+                                  <Box display="flex" alignItems="center" gap={2} mb={1}>
+                                    <Box 
+                                      sx={{
+                                        p: 1,
+                                        borderRadius: '8px',
+                                        background: 'linear-gradient(45deg, #4FACFE, #00F2FE)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                      }}
+                                    >
+                                      {getFieldIcon(field.type)}
+                                    </Box>
+                                    <Typography 
+                                      variant="h6" 
+                                      sx={{ 
+                                        color: 'white',
+                                        fontWeight: 600
+                                      }}
+                                    >
+                                      {field.label}
+                                    </Typography>
+                                    {field.required && (
+                                      <Chip 
+                                        label="Required" 
+                                        size="small" 
+                                        sx={{
+                                          background: 'linear-gradient(45deg, #FF6B6B, #FF8E53)',
+                                          color: 'white',
+                                          fontWeight: 600,
+                                          border: 'none'
+                                        }}
+                                      />
+                                    )}
                                   </Box>
                                   {field.description && (
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography 
+                                      variant="body2" 
+                                      sx={{ 
+                                        color: 'rgba(255, 255, 255, 0.7)',
+                                        fontWeight: 400
+                                      }}
+                                    >
                                       {field.description}
                                     </Typography>
                                   )}
@@ -675,6 +1035,15 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
                                     e.stopPropagation();
                                     handleDeleteField(field.id);
                                   }}
+                                  sx={{
+                                    background: 'rgba(255, 107, 107, 0.2)',
+                                    color: '#FF6B6B',
+                                    '&:hover': {
+                                      background: 'rgba(255, 107, 107, 0.3)',
+                                      transform: 'scale(1.1)'
+                                    },
+                                    transition: 'all 0.2s ease'
+                                  }}
                                 >
                                   <Delete />
                                 </IconButton>
@@ -684,13 +1053,12 @@ export default function FormBuilder({ formId, onSave, onCancel }: FormBuilderPro
                         )}
                       </Draggable>
                     ))}
-                    {provided.placeholder}
                   </Box>
                 )}
               </Droppable>
             </DragDropContext>
           )}
-        </Paper>
+        </Box>
       </Box>
 
       {/* Field Configuration Dialog */}

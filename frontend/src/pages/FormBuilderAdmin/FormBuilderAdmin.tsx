@@ -10,7 +10,9 @@ import {
   Alert, 
   Snackbar, 
   Chip,
-  IconButton
+  IconButton,
+  TextField,
+  InputAdornment
 } from '@mui/material';
 
 import {
@@ -29,18 +31,36 @@ import {
   Edit,
   Share,
   ContentCopy,
-  Download
+  Download,
+  Link as LinkIcon,
+  QrCode
 } from '@mui/icons-material';
 
 import FormBuilder from '../../components/FormBuilder/FormBuilder';
 
+interface ExternalForm {
+  id: string;
+  title: string;
+  url: string;
+  description?: string;
+  createdAt: Date;
+}
+
 export default function FormBuilderAdmin() {
-  const [showExistingForms, setShowExistingForms] = useState(false);
   const [editingFormId, setEditingFormId] = useState<number | null>(null);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' | 'warning' | 'info' });
   const [page, setPage] = useState(1);
+  
+  // External form states
+  const [externalForms, setExternalForms] = useState<ExternalForm[]>(() => {
+    const saved = localStorage.getItem('externalForms');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [newExternalForm, setNewExternalForm] = useState({ title: '', url: '', description: '' });
+  const [externalFormDialogOpen, setExternalFormDialogOpen] = useState(false);
+  const [showFormBuilder, setShowFormBuilder] = useState(false);
 
   const { data: formsData, isLoading: formsLoading, error: formsError, refetch } = useQuery({
     queryKey: ['forms', page],
@@ -62,13 +82,58 @@ export default function FormBuilderAdmin() {
   });
 
   const handleNewForm = () => {
-    setShowExistingForms(false);
+    setShowFormBuilder(true);
     setEditingFormId(null);
   };
 
   const handleEditForm = (form: Form) => {
-    setShowExistingForms(false);
+    setShowFormBuilder(true);
     setEditingFormId(form.id);
+  };
+
+  const handleAddExternalForm = () => {
+    if (!newExternalForm.title.trim() || !newExternalForm.url.trim()) {
+      setSnackbar({ open: true, message: 'Please fill in title and URL', severity: 'error' });
+      return;
+    }
+
+    // Basic URL validation
+    try {
+      new URL(newExternalForm.url);
+    } catch {
+      setSnackbar({ open: true, message: 'Please enter a valid URL', severity: 'error' });
+      return;
+    }
+
+    const newForm: ExternalForm = {
+      id: Date.now().toString(),
+      title: newExternalForm.title,
+      url: newExternalForm.url,
+      description: newExternalForm.description,
+      createdAt: new Date()
+    };
+
+    const updatedForms = [...externalForms, newForm];
+    setExternalForms(updatedForms);
+    localStorage.setItem('externalForms', JSON.stringify(updatedForms));
+    
+    setNewExternalForm({ title: '', url: '', description: '' });
+    setExternalFormDialogOpen(false);
+    setSnackbar({ open: true, message: 'External form added successfully!', severity: 'success' });
+  };
+
+  const handleDeleteExternalForm = (formId: string) => {
+    if (window.confirm('Are you sure you want to delete this external form?')) {
+      const updatedForms = externalForms.filter(form => form.id !== formId);
+      setExternalForms(updatedForms);
+      localStorage.setItem('externalForms', JSON.stringify(updatedForms));
+      setSnackbar({ open: true, message: 'External form deleted successfully!', severity: 'success' });
+    }
+  };
+
+  const handleShareExternalForm = (form: ExternalForm) => {
+    setShareUrl(form.url);
+    setShareDialogOpen(true);
   };
 
   const handleCopyLink = () => {
@@ -84,15 +149,15 @@ export default function FormBuilderAdmin() {
     }
   };
 
-  const handleFormSave = (form: Form) => {
+  const handleFormSave = () => {
     setSnackbar({ open: true, message: 'Form saved successfully!', severity: 'success' });
-    setShowExistingForms(true);
+    setShowFormBuilder(false);
     setEditingFormId(null);
     refetch();
   };
 
   const handleFormCancel = () => {
-    setShowExistingForms(true);
+    setShowFormBuilder(false);
     setEditingFormId(null);
   };
 
@@ -112,23 +177,30 @@ export default function FormBuilderAdmin() {
           </Typography>
           <Box>
             <Button 
-              variant={showExistingForms ? 'contained' : 'outlined'} 
-              onClick={() => setShowExistingForms(true)}
-              sx={{ mr: 1 }}
-            >
-              My Forms
-            </Button>
-            <Button 
-              variant={!showExistingForms ? 'contained' : 'outlined'} 
+              variant="contained" 
               onClick={handleNewForm}
               startIcon={<Add />}
+              sx={{ mr: 1, bgcolor: '#1e3a8a' }}
             >
               New Form
+            </Button>
+            <Button 
+              variant="outlined" 
+              onClick={() => setExternalFormDialogOpen(true)}
+              startIcon={<LinkIcon />}
+            >
+              Add Link
             </Button>
           </Box>
         </Box>
 
-        {showExistingForms ? (
+        {showFormBuilder ? (
+          <FormBuilder 
+            formId={editingFormId || undefined}
+            onSave={handleFormSave}
+            onCancel={handleFormCancel}
+          />
+        ) : (
           <Box>
             {formsLoading && (
               <Box display="flex" justifyContent="center" p={4}>
@@ -142,107 +214,176 @@ export default function FormBuilderAdmin() {
             ) : null}
             {!formsLoading && !formsError && (
               <Grid container spacing={3}>
-                {forms.length === 0 ? (
+                {forms.length === 0 && externalForms.length === 0 ? (
                   <Grid item xs={12}>
                     <Box textAlign="center" p={4}>
                       <Typography variant="h6" color="text.secondary">No forms found</Typography>
-                      <Typography variant="body2" color="text.secondary" mb={2}>Create your first form to get started</Typography>
-                      <Button variant="contained" onClick={handleNewForm} startIcon={<Add />}>
-                        Create New Form
-                      </Button>
+                      <Typography variant="body2" color="text.secondary" mb={2}>Create your first form or add an external form link to get started</Typography>
+                      <Box display="flex" gap={2} justifyContent="center">
+                        <Button variant="contained" onClick={handleNewForm} startIcon={<Add />} sx={{ bgcolor: '#1e3a8a' }}>
+                          Create New Form
+                        </Button>
+                        <Button variant="outlined" onClick={() => setExternalFormDialogOpen(true)} startIcon={<LinkIcon />}>
+                          Add Link
+                        </Button>
+                      </Box>
                     </Box>
                   </Grid>
                 ) : (
-                  forms.map((form: Form) => (
-                    <Grid item xs={12} md={6} lg={4} key={form.id}>
-                      <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                        <CardContent sx={{ flexGrow: 1 }}>
-                          <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
-                            <Typography variant="h6" sx={{ fontWeight: 600, color: '#1e3a8a' }}>
-                              {form.title}
+                  <>
+                    {/* Internal Forms */}
+                    {forms.map((form: Form) => (
+                      <Grid item xs={12} md={6} lg={4} key={`internal-${form.id}`}>
+                        <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                          <CardContent sx={{ flexGrow: 1 }}>
+                            <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
+                              <Typography variant="h6" sx={{ fontWeight: 600, color: '#1e3a8a' }}>
+                                {form.title}
+                              </Typography>
+                              <Chip 
+                                label={form.is_active ? 'Active' : 'Inactive'} 
+                                color={form.is_active ? 'success' : 'default'} 
+                                size="small" 
+                              />
+                            </Box>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                              {form.description || 'No description provided'}
                             </Typography>
-                            <Chip 
-                              label={form.is_active ? 'Active' : 'Inactive'} 
-                              color={form.is_active ? 'success' : 'default'} 
+                            <Box display="flex" gap={1} flexWrap="wrap" mb={2}>
+                              <Chip 
+                                label={`${form.submission_count} submissions`} 
+                                size="small" 
+                                color="primary"
+                              />
+                              <Chip 
+                                label={form.is_public ? 'Public' : 'Private'} 
+                                size="small" 
+                                color={form.is_public ? 'success' : 'default'}
+                              />
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Created: {new Date(form.created_at).toLocaleDateString()}
+                            </Typography>
+                          </CardContent>
+                          <CardActions sx={{ p: 2, pt: 0 }}>
+                            <Button 
                               size="small" 
-                            />
-                          </Box>
-                          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            {form.description || 'No description provided'}
-                          </Typography>
-                          <Box display="flex" gap={1} flexWrap="wrap" mb={2}>
-                            <Chip 
-                              label={`${form.submission_count} submissions`} 
+                              onClick={() => handleEditForm(form)}
+                              startIcon={<Edit />}
+                              sx={{ color: '#1e3a8a' }}
+                            >
+                              Edit
+                            </Button>
+                            <Button 
                               size="small" 
-                              color="primary"
-                            />
-                            <Chip 
-                              label={form.is_public ? 'Public' : 'Private'} 
+                              onClick={() => handleShareForm(form)}
+                              startIcon={<Share />}
+                              sx={{ color: '#059669' }}
+                            >
+                              Share
+                            </Button>
+                            <IconButton 
                               size="small" 
-                              color={form.is_public ? 'success' : 'default'}
-                            />
-                          </Box>
-                          <Typography variant="caption" color="text.secondary">
-                            Created: {new Date(form.created_at).toLocaleDateString()}
-                          </Typography>
-                        </CardContent>
-                        <CardActions sx={{ p: 2, pt: 0 }}>
-                          <Button 
-                            size="small" 
-                            onClick={() => handleEditForm(form)}
-                            startIcon={<Edit />}
-                            sx={{ color: '#1e3a8a' }}
-                          >
-                            Edit
-                          </Button>
-                          <Button 
-                            size="small" 
-                            onClick={() => handleShareForm(form)}
-                            startIcon={<Share />}
-                            sx={{ color: '#059669' }}
-                          >
-                            Share
-                          </Button>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleDeleteForm(form.id)}
-                            sx={{ color: '#dc2626', ml: 'auto' }}
-                          >
-                            <Delete />
-                          </IconButton>
-                        </CardActions>
-                      </Card>
-                    </Grid>
-                  ))
+                              onClick={() => handleDeleteForm(form.id)}
+                              sx={{ color: '#dc2626', ml: 'auto' }}
+                            >
+                              <Delete />
+                            </IconButton>
+                          </CardActions>
+                        </Card>
+                      </Grid>
+                    ))}
+                    
+                    {/* External Forms */}
+                    {externalForms.map((form) => (
+                      <Grid item xs={12} md={6} lg={4} key={`external-${form.id}`}>
+                        <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                          <CardContent sx={{ flexGrow: 1 }}>
+                            <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
+                              <Typography variant="h6" sx={{ fontWeight: 600, color: '#1e3a8a' }}>
+                                {form.title}
+                              </Typography>
+                              <Chip 
+                                label="External" 
+                                color="info" 
+                                size="small" 
+                                icon={<LinkIcon />}
+                              />
+                            </Box>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                              {form.description || 'No description provided'}
+                            </Typography>
+                            <Box 
+                              sx={{ 
+                                p: 1, 
+                                bgcolor: 'grey.100', 
+                                borderRadius: 1, 
+                                mb: 2,
+                                wordBreak: 'break-all'
+                              }}
+                            >
+                              <Typography variant="caption" color="text.secondary">
+                                {form.url}
+                              </Typography>
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Added: {new Date(form.createdAt).toLocaleDateString()}
+                            </Typography>
+                          </CardContent>
+                          <CardActions sx={{ p: 2, pt: 0 }}>
+                            <Button 
+                              size="small" 
+                              onClick={() => window.open(form.url, '_blank')}
+                              startIcon={<LinkIcon />}
+                              sx={{ color: '#1e3a8a' }}
+                            >
+                              Open
+                            </Button>
+                            <Button 
+                              size="small" 
+                              onClick={() => handleShareExternalForm(form)}
+                              startIcon={<QrCode />}
+                              sx={{ color: '#059669' }}
+                            >
+                              QR Code
+                            </Button>
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleDeleteExternalForm(form.id)}
+                              sx={{ color: '#dc2626', ml: 'auto' }}
+                            >
+                              <Delete />
+                            </IconButton>
+                          </CardActions>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </>
                 )}
               </Grid>
             )}
-            <Box display="flex" justifyContent="center" mt={3}>
-              <Button 
-                variant="outlined" 
-                onClick={() => setPage(page - 1)} 
-                disabled={page === 1}
-              >
-                Previous
-              </Button>
-              <Typography variant="body1" sx={{ mx: 2 }}>
-                Page {page}
-              </Typography>
-              <Button 
-                variant="outlined" 
-                onClick={() => setPage(page + 1)} 
-                disabled={forms.length < 10}
-              >
-                Next
-              </Button>
-            </Box>
+            {forms.length > 0 && (
+              <Box display="flex" justifyContent="center" mt={3}>
+                <Button 
+                  variant="outlined" 
+                  onClick={() => setPage(page - 1)} 
+                  disabled={page === 1}
+                >
+                  Previous
+                </Button>
+                <Typography variant="body1" sx={{ mx: 2 }}>
+                  Page {page}
+                </Typography>
+                <Button 
+                  variant="outlined" 
+                  onClick={() => setPage(page + 1)} 
+                  disabled={forms.length < 10}
+                >
+                  Next
+                </Button>
+              </Box>
+            )}
           </Box>
-        ) : (
-          <FormBuilder 
-            formId={editingFormId || undefined}
-            onSave={handleFormSave}
-            onCancel={handleFormCancel}
-          />
         )}
 
         {/* Share dialog */}
@@ -261,7 +402,29 @@ export default function FormBuilderAdmin() {
                   <Button variant="outlined" startIcon={<ContentCopy />} onClick={handleCopyLink}>
                     Copy Link
                   </Button>
-                  <Button variant="outlined" startIcon={<Download />}>
+                  <Button 
+                    variant="outlined" 
+                    startIcon={<Download />}
+                    onClick={() => {
+                      const canvas = document.createElement('canvas');
+                      const ctx = canvas.getContext('2d');
+                      const svg = document.querySelector('svg');
+                      if (svg && ctx) {
+                        const svgData = new XMLSerializer().serializeToString(svg);
+                        const img = new Image();
+                        img.onload = () => {
+                          canvas.width = img.width;
+                          canvas.height = img.height;
+                          ctx.drawImage(img, 0, 0);
+                          const link = document.createElement('a');
+                          link.download = 'qr-code.png';
+                          link.href = canvas.toDataURL();
+                          link.click();
+                        };
+                        img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+                      }
+                    }}
+                  >
                     Download QR
                   </Button>
                 </Box>
@@ -270,6 +433,63 @@ export default function FormBuilderAdmin() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setShareDialogOpen(false)}>Close</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Add External Form Dialog */}
+        <Dialog 
+          open={externalFormDialogOpen} 
+          onClose={() => setExternalFormDialogOpen(false)} 
+          maxWidth="sm" 
+          fullWidth
+        >
+          <DialogTitle>Add Form Link</DialogTitle>
+          <DialogContent>
+            <Box sx={{ pt: 1 }}>
+              <TextField
+                fullWidth
+                label="Form Title"
+                value={newExternalForm.title}
+                onChange={(e) => setNewExternalForm({ ...newExternalForm, title: e.target.value })}
+                margin="normal"
+                required
+              />
+              <TextField
+                fullWidth
+                label="Form URL"
+                value={newExternalForm.url}
+                onChange={(e) => setNewExternalForm({ ...newExternalForm, url: e.target.value })}
+                margin="normal"
+                required
+                placeholder="https://example.com/form"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <LinkIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <TextField
+                fullWidth
+                label="Description (Optional)"
+                value={newExternalForm.description}
+                onChange={(e) => setNewExternalForm({ ...newExternalForm, description: e.target.value })}
+                margin="normal"
+                multiline
+                rows={3}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setExternalFormDialogOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={handleAddExternalForm} 
+              variant="contained"
+              sx={{ bgcolor: '#1e3a8a' }}
+            >
+              Add Form
+            </Button>
           </DialogActions>
         </Dialog>
 

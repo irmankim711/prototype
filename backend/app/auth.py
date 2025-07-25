@@ -50,17 +50,34 @@ def login():
     refresh_token = create_refresh_token(identity=str(user.id))
 
     resp = make_response(jsonify({
-        "access_token": access_token
-        # Optionally, you can omit "refresh_token" from the body for extra security
+        "access_token": access_token,
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "created_at": user.created_at.isoformat() if user.created_at else None
+        }
     }), 200)
+    
+    # Set access token cookie (required for authentication)
+    resp.set_cookie(
+        "access_token_cookie",
+        access_token,
+        httponly=True,
+        samesite="Lax",
+        secure=False,  # Set to True if using HTTPS
+        path="/"
+    )
+    
+    # Set refresh token cookie
     resp.set_cookie(
         "refresh_token",
         refresh_token,
         httponly=True,
-        samesite="Lax",  # Or "None" if using HTTPS and cross-site
-        secure=False,     # Set to True if using HTTPS
+        samesite="Lax",
+        secure=False,
         path="/api/auth/refresh"
     )
+    
     return resp
 
 
