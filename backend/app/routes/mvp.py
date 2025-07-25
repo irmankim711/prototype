@@ -455,14 +455,61 @@ def generate_report():
         output_filename = f"report_{uuid.uuid4().hex}.docx"
         output_path = os.path.join(output_dir, output_filename)
         
-        # Fill template using docxtpl
-        from docxtpl import DocxTemplate
-        doc = DocxTemplate(template_path)
-        doc.render(context)
+        # Use manual replacement instead of docxtpl to handle problematic placeholders
+        from docx import Document
+        import shutil
+        
+        # Copy the original template to the output path
+        shutil.copy2(template_path, output_path)
+        
+        # Load the document and manually replace placeholders
+        doc = Document(output_path)
+        
+        # Debug: print context data
+        print(f"Report generation context data: {context}")
+        
+        # Replace placeholders in paragraphs
+        for paragraph in doc.paragraphs:
+            if paragraph.text:
+                original_text = paragraph.text
+                for key, value in context.items():
+                    original_text = original_text.replace(f'{{{{{key}}}}}', str(value))
+                
+                # If text changed, update the paragraph
+                if original_text != paragraph.text:
+                    # Clear the paragraph and add the new text
+                    for run in paragraph.runs:
+                        run.clear()
+                    if paragraph.runs:
+                        paragraph.runs[0].text = original_text
+                    else:
+                        paragraph.add_run(original_text)
+        
+        # Replace placeholders in tables
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        if paragraph.text:
+                            original_text = paragraph.text
+                            for key, value in context.items():
+                                original_text = original_text.replace(f'{{{{{key}}}}}', str(value))
+                            
+                            # If text changed, update the paragraph
+                            if original_text != paragraph.text:
+                                # Clear the paragraph and add the new text
+                                for run in paragraph.runs:
+                                    run.clear()
+                                if paragraph.runs:
+                                    paragraph.runs[0].text = original_text
+                                else:
+                                    paragraph.add_run(original_text)
+        
+        # Save the modified document
         doc.save(output_path)
         
         # Create download URL
-        download_url = f"/mvp/static/generated/{output_filename}"
+        download_url = f"/api/mvp/static/generated/{output_filename}"
         
         return jsonify({
             'downloadUrl': download_url,
