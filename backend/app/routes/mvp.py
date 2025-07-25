@@ -234,7 +234,22 @@ def generate_live_preview(template_name):
         
         # Create a temporary filled template
         doc = DocxTemplate(template_path)
-        doc.render(context)
+        
+        # Debug: print context data
+        print(f"Preview context data: {context}")
+        
+        # Handle problematic placeholder names by normalizing them
+        normalized_context = {}
+        for key, value in context.items():
+            # Replace spaces with underscores in placeholder names if needed
+            normalized_key = key.replace(' ', '_')
+            normalized_context[key] = value
+            if normalized_key != key:
+                normalized_context[normalized_key] = value
+        
+        print(f"Normalized context: {normalized_context}")
+        
+        doc.render(normalized_context)
         
         # Save to temporary file
         import tempfile
@@ -254,7 +269,6 @@ def generate_live_preview(template_name):
                 pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
             
             # Clean up temporary files
-            import os
             os.unlink(tmp_path)
             os.unlink(pdf_path)
             
@@ -263,7 +277,16 @@ def generate_live_preview(template_name):
                 'filename': f'preview_{uuid.uuid4().hex}.pdf'
             })
             
-        except ImportError:
+        except Exception as e:
+            # Clean up temp file in case of error
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
+            
+            # Log the conversion error and fall back to reportlab
+            print(f"docx2pdf conversion failed: {e}")
+            
             # Fallback: Create a styled PDF that mimics the template
             buffer = io.BytesIO()
             pdf_doc = SimpleDocTemplate(buffer, pagesize=letter)
@@ -292,55 +315,70 @@ def generate_live_preview(template_name):
             # Process paragraphs with preserved formatting
             for paragraph in doc_original.paragraphs:
                 if paragraph.text.strip():
-                    # Replace placeholders with actual values
-                    text = paragraph.text
-                    for key, value in context.items():
-                        text = text.replace(f'{{{{{key}}}}}', str(value))
-                    
-                    if text.strip():
-                        # Determine style based on paragraph properties
-                        if paragraph.style.name.startswith('Heading'):
-                            p = Paragraph(text, title_style)
-                        else:
-                            p = Paragraph(text, normal_style)
-                        story.append(p)
+                    try:
+                        # Replace placeholders with actual values
+                        text = paragraph.text
+                        for key, value in context.items():
+                            text = text.replace(f'{{{{{key}}}}}', str(value))
+                        
+                        if text.strip():
+                            # Escape special characters for reportlab
+                            text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                            
+                            # Determine style based on paragraph properties
+                            if paragraph.style.name.startswith('Heading'):
+                                p = Paragraph(text, title_style)
+                            else:
+                                p = Paragraph(text, normal_style)
+                            story.append(p)
+                    except Exception as e:
+                        # Skip problematic paragraphs but continue processing
+                        print(f"Error processing paragraph: {e}")
+                        continue
             
             # Process tables with preserved structure
             for table in doc_original.tables:
-                from reportlab.platypus import Table, TableStyle
-                from reportlab.lib import colors
-                
-                table_data = []
-                for row in table.rows:
-                    row_data = []
-                    for cell in row.cells:
-                        cell_text = ''
-                        for paragraph in cell.paragraphs:
-                            if paragraph.text.strip():
-                                text = paragraph.text
-                                for key, value in context.items():
-                                    text = text.replace(f'{{{{{key}}}}}', str(value))
-                                cell_text += text + ' '
-                        row_data.append(cell_text.strip())
-                    table_data.append(row_data)
-                
-                if table_data:
-                    pdf_table = Table(table_data)
-                    pdf_table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 14),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-                        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                        ('FONTSIZE', (0, 1), (-1, -1), 12),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.black)
-                    ]))
-                    story.append(pdf_table)
-                    story.append(Spacer(1, 20))
+                try:
+                    from reportlab.platypus import Table, TableStyle
+                    from reportlab.lib import colors
+                    
+                    table_data = []
+                    for row in table.rows:
+                        row_data = []
+                        for cell in row.cells:
+                            cell_text = ''
+                            for paragraph in cell.paragraphs:
+                                if paragraph.text.strip():
+                                    text = paragraph.text
+                                    for key, value in context.items():
+                                        text = text.replace(f'{{{{{key}}}}}', str(value))
+                                    # Escape special characters
+                                    text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                                    cell_text += text + ' '
+                            row_data.append(cell_text.strip())
+                        table_data.append(row_data)
+                    
+                    if table_data:
+                        pdf_table = Table(table_data)
+                        pdf_table.setStyle(TableStyle([
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                            ('FONTSIZE', (0, 0), (-1, 0), 14),
+                            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+                            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                            ('FONTSIZE', (0, 1), (-1, -1), 12),
+                            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                        ]))
+                        story.append(pdf_table)
+                        story.append(Spacer(1, 20))
+                except Exception as e:
+                    # Skip problematic tables but continue processing
+                    print(f"Error processing table: {e}")
+                    continue
             
             pdf_doc.build(story)
             buffer.seek(0)

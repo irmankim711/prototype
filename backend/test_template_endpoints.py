@@ -15,7 +15,7 @@ def test_list_templates():
     """Test the template list endpoint"""
     print("Testing template list endpoint...")
     try:
-        response = requests.get(f"{BASE_URL}/mvp/templates/list")
+        response = requests.get(f"{BASE_URL}/api/mvp/templates/list")
         if response.status_code == 200:
             templates = response.json()
             print(f"✅ Found {len(templates)} templates:")
@@ -33,7 +33,7 @@ def test_template_placeholders(template_name):
     """Test the placeholders endpoint"""
     print(f"\nTesting placeholders for template: {template_name}")
     try:
-        response = requests.get(f"{BASE_URL}/mvp/templates/{template_name}/placeholders")
+        response = requests.get(f"{BASE_URL}/api/mvp/templates/{template_name}/placeholders")
         if response.status_code == 200:
             data = response.json()
             placeholders = data.get('placeholders', [])
@@ -52,7 +52,7 @@ def test_template_content(template_name):
     """Test the content extraction endpoint"""
     print(f"\nTesting content extraction for template: {template_name}")
     try:
-        response = requests.get(f"{BASE_URL}/mvp/templates/{template_name}/content")
+        response = requests.get(f"{BASE_URL}/api/mvp/templates/{template_name}/content")
         if response.status_code == 200:
             data = response.json()
             content = data.get('content', [])
@@ -71,7 +71,7 @@ def test_live_preview(template_name, test_data):
     print(f"\nTesting live preview for template: {template_name}")
     try:
         response = requests.post(
-            f"{BASE_URL}/mvp/templates/{template_name}/preview",
+            f"{BASE_URL}/api/mvp/templates/{template_name}/preview",
             json={"data": test_data},
             headers={"Content-Type": "application/json"}
         )
@@ -111,10 +111,34 @@ def main():
     
     # Test 4: Generate live preview
     if placeholders:
-        # Create test data based on placeholders
+        # Create test data based on placeholders with safe values
         test_data = {}
+        placeholder_map = {
+            'nama_peserta': 'John Doe',
+            'PROGRAM_TITLE': 'Test Training Program',
+            'LOCATION_MAIN': 'Test Location',
+            'Time': '2024-01-15 10:00 AM',
+            'Place1': 'Conference Room A',
+            'Date': '2024-01-15',
+            'KAD PENGENALAN': '123456789',
+            'bannering': 'Test Banner',
+            'bil': '001',
+            'who': 'Test Instructor',
+            'addr': '123 Test Street',
+            'tel': '+60123456789',
+            'pre_mark': '85',
+            'post_mark': '90'
+        }
+        
         for placeholder in placeholders:
-            test_data[placeholder] = f"Test value for {placeholder}"
+            if placeholder in placeholder_map:
+                test_data[placeholder] = placeholder_map[placeholder]
+            elif placeholder.startswith('Image'):
+                test_data[placeholder] = f"[Image placeholder for {placeholder}]"
+            elif placeholder.startswith('Signature'):
+                test_data[placeholder] = f"[Signature placeholder for {placeholder}]"
+            else:
+                test_data[placeholder] = f"Test value for {placeholder}"
         
         preview_data = test_live_preview(first_template, test_data)
     
