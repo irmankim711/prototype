@@ -1,0 +1,40 @@
+/* ReportBuilder specific styles */
+.excel-upload-input {
+  display: none;
+}
+
+.data-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.data-preview-thead {
+  position: sticky;
+  top: 0;
+  background-color: #f8fafc;
+}
+
+.data-preview-th {
+  border-bottom: 2px solid #e0e7ef;
+  padding: 8px;
+  color: #0e1c40;
+  font-weight: 600;
+  min-width: 100px;
+}
+
+.data-preview-tr-even {
+  background-color: #ffffff;
+}
+
+.data-preview-tr-odd {
+  background-color: #f8fafc;
+}
+
+.data-preview-td {
+  border-bottom: 1px solid #f1f5f9;
+  padding: 8px;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
