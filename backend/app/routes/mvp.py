@@ -229,33 +229,61 @@ def generate_live_preview(template_name):
         return jsonify({'error': 'No data provided for preview'}), 400
 
     try:
-        # Use docxtpl to preserve original formatting
-        from docxtpl import DocxTemplate
+        # For problematic templates, use manual replacement instead of docxtpl
+        from docx import Document
+        import tempfile
+        import shutil
         
-        # Create a temporary filled template
-        doc = DocxTemplate(template_path)
+        # Copy the original template to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_file:
+            shutil.copy2(template_path, tmp_file.name)
+            tmp_path = tmp_file.name
+        
+        # Load the document and manually replace placeholders
+        doc = Document(tmp_path)
         
         # Debug: print context data
         print(f"Preview context data: {context}")
         
-        # Handle problematic placeholder names by normalizing them
-        normalized_context = {}
-        for key, value in context.items():
-            # Replace spaces with underscores in placeholder names if needed
-            normalized_key = key.replace(' ', '_')
-            normalized_context[key] = value
-            if normalized_key != key:
-                normalized_context[normalized_key] = value
+        # Replace placeholders in paragraphs
+        for paragraph in doc.paragraphs:
+            if paragraph.text:
+                original_text = paragraph.text
+                for key, value in context.items():
+                    original_text = original_text.replace(f'{{{{{key}}}}}', str(value))
+                
+                # If text changed, update the paragraph
+                if original_text != paragraph.text:
+                    # Clear the paragraph and add the new text
+                    for run in paragraph.runs:
+                        run.clear()
+                    if paragraph.runs:
+                        paragraph.runs[0].text = original_text
+                    else:
+                        paragraph.add_run(original_text)
         
-        print(f"Normalized context: {normalized_context}")
+        # Replace placeholders in tables
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        if paragraph.text:
+                            original_text = paragraph.text
+                            for key, value in context.items():
+                                original_text = original_text.replace(f'{{{{{key}}}}}', str(value))
+                            
+                            # If text changed, update the paragraph
+                            if original_text != paragraph.text:
+                                # Clear the paragraph and add the new text
+                                for run in paragraph.runs:
+                                    run.clear()
+                                if paragraph.runs:
+                                    paragraph.runs[0].text = original_text
+                                else:
+                                    paragraph.add_run(original_text)
         
-        doc.render(normalized_context)
-        
-        # Save to temporary file
-        import tempfile
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_file:
-            doc.save(tmp_file.name)
-            tmp_path = tmp_file.name
+        # Save the modified document
+        doc.save(tmp_path)
         
         # Convert to PDF using python-docx2pdf or similar
         try:
