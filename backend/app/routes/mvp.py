@@ -215,145 +215,124 @@ def generate_live_preview(template_name):
     Generates a live preview of the filled template as PDF.
     Preserves original template formatting and styles.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     # Sanitize filename to prevent directory traversal
     safe_name = os.path.basename(template_name)
     template_path = os.path.join(TEMPLATE_DIR, safe_name)
+    
+    logger.info(f"Attempting to generate preview for template: {safe_name}")
+    logger.info(f"Template path: {template_path}")
 
     if not os.path.isfile(template_path):
+        logger.error(f"Template not found at path: {template_path}")
         return jsonify({'error': 'Template not found'}), 404
 
     data = request.get_json()
-    context = data.get('data', {})
+    context = data.get('data', {}) if data else {}
+    
+    logger.info(f"Received context data: {context}")
     
     if not context:
+        logger.warning("No data provided for preview")
         return jsonify({'error': 'No data provided for preview'}), 400
 
     try:
-        # Use docxtpl to preserve original formatting
-        from docxtpl import DocxTemplate
+        # Create a styled PDF that mimics the template using only reportlab
+        buffer = io.BytesIO()
+        pdf_doc = SimpleDocTemplate(buffer, pagesize=letter)
+        story = []
+        styles = getSampleStyleSheet()
         
-        # Create a temporary filled template
-        doc = DocxTemplate(template_path)
-        doc.render(context)
+        # Create custom styles to match template
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            spaceAfter=20,
+            alignment=1  # Center alignment
+        )
         
-        # Save to temporary file
-        import tempfile
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_file:
-            doc.save(tmp_file.name)
-            tmp_path = tmp_file.name
+        normal_style = ParagraphStyle(
+            'CustomNormal',
+            parent=styles['Normal'],
+            fontSize=12,
+            spaceAfter=12
+        )
         
-        # Convert to PDF using python-docx2pdf or similar
-        try:
-            from docx2pdf import convert
-            pdf_path = tmp_path.replace('.docx', '.pdf')
-            convert(tmp_path, pdf_path)
-            
-            # Read PDF and convert to base64
-            with open(pdf_path, 'rb') as pdf_file:
-                pdf_content = pdf_file.read()
-                pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
-            
-            # Clean up temporary files
-            import os
-            os.unlink(tmp_path)
-            os.unlink(pdf_path)
-            
-            return jsonify({
-                'preview': f'data:application/pdf;base64,{pdf_base64}',
-                'filename': f'preview_{uuid.uuid4().hex}.pdf'
-            })
-            
-        except ImportError:
-            # Fallback: Create a styled PDF that mimics the template
-            buffer = io.BytesIO()
-            pdf_doc = SimpleDocTemplate(buffer, pagesize=letter)
-            story = []
-            styles = getSampleStyleSheet()
-            
-            # Create custom styles to match template
-            title_style = ParagraphStyle(
-                'CustomTitle',
-                parent=styles['Heading1'],
-                fontSize=16,
-                spaceAfter=20,
-                alignment=1  # Center alignment
-            )
-            
-            normal_style = ParagraphStyle(
-                'CustomNormal',
-                parent=styles['Normal'],
-                fontSize=12,
-                spaceAfter=12
-            )
-            
-            # Read the original template to understand structure
-            doc_original = Document(template_path)
-            
-            # Process paragraphs with preserved formatting
-            for paragraph in doc_original.paragraphs:
-                if paragraph.text.strip():
-                    # Replace placeholders with actual values
-                    text = paragraph.text
-                    for key, value in context.items():
-                        text = text.replace(f'{{{{{key}}}}}', str(value))
-                    
-                    if text.strip():
-                        # Determine style based on paragraph properties
-                        if paragraph.style.name.startswith('Heading'):
-                            p = Paragraph(text, title_style)
-                        else:
-                            p = Paragraph(text, normal_style)
-                        story.append(p)
-            
-            # Process tables with preserved structure
-            for table in doc_original.tables:
-                from reportlab.platypus import Table, TableStyle
-                from reportlab.lib import colors
+        # Read the original template to understand structure
+        from docx import Document
+        doc_original = Document(template_path)
+        
+        # Process paragraphs with preserved formatting
+        for paragraph in doc_original.paragraphs:
+            if paragraph.text.strip():
+                # Replace placeholders with actual values
+                text = paragraph.text
+                for key, value in context.items():
+                    text = text.replace(f'{{{{{key}}}}}', str(value))
                 
-                table_data = []
-                for row in table.rows:
-                    row_data = []
-                    for cell in row.cells:
-                        cell_text = ''
-                        for paragraph in cell.paragraphs:
-                            if paragraph.text.strip():
-                                text = paragraph.text
-                                for key, value in context.items():
-                                    text = text.replace(f'{{{{{key}}}}}', str(value))
-                                cell_text += text + ' '
-                        row_data.append(cell_text.strip())
-                    table_data.append(row_data)
-                
-                if table_data:
-                    pdf_table = Table(table_data)
-                    pdf_table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 14),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-                        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                        ('FONTSIZE', (0, 1), (-1, -1), 12),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.black)
-                    ]))
-                    story.append(pdf_table)
-                    story.append(Spacer(1, 20))
+                if text.strip():
+                    # Determine style based on paragraph properties
+                    if paragraph.style and hasattr(paragraph.style, 'name') and paragraph.style.name and paragraph.style.name.startswith('Heading'):
+                        p = Paragraph(text, title_style)
+                    else:
+                        p = Paragraph(text, normal_style)
+                    story.append(p)
+        
+        # Process tables with preserved structure
+        for table in doc_original.tables:
+            from reportlab.platypus import Table, TableStyle
+            from reportlab.lib import colors
             
-            pdf_doc.build(story)
-            buffer.seek(0)
+            table_data = []
+            for row in table.rows:
+                row_data = []
+                for cell in row.cells:
+                    cell_text = ''
+                    for paragraph in cell.paragraphs:
+                        if paragraph.text.strip():
+                            text = paragraph.text
+                            for key, value in context.items():
+                                text = text.replace(f'{{{{{key}}}}}', str(value))
+                            cell_text += text + ' '
+                    row_data.append(cell_text.strip())
+                table_data.append(row_data)
             
-            # Convert to base64 for frontend display
-            pdf_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
-            
-            return jsonify({
-                'preview': f'data:application/pdf;base64,{pdf_base64}',
-                'filename': f'preview_{uuid.uuid4().hex}.pdf'
-            })
+            if table_data:
+                pdf_table = Table(table_data)
+                pdf_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 14),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                    ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 12),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ]))
+                story.append(pdf_table)
+                story.append(Spacer(1, 20))
+        
+        pdf_doc.build(story)
+        buffer.seek(0)
+        
+        # Convert to base64 for frontend display
+        pdf_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        
+        logger.info("Successfully generated PDF preview using fallback method")
+        
+        return jsonify({
+            'preview': f'data:application/pdf;base64,{pdf_base64}',
+            'filename': f'preview_{uuid.uuid4().hex}.pdf'
+        })
         
     except Exception as e:
+        logger.error(f"Failed to generate preview: {str(e)}")
         return jsonify({'error': f'Failed to generate preview: {str(e)}'}), 500
 
 @mvp.route('/templates/list', methods=['GET'])

@@ -37,6 +37,7 @@ reportlab>=4.0.0
 python-docx>=0.8.11
 docxtpl>=0.16.7
 pillow>=10.0.0
+qrcode[pil]>=7.4.0
 
 # AI and Data Processing
 openai>=1.0.0
