@@ -1,0 +1,78 @@
+[
+  {
+    "test": "Server Connection",
+    "success": true,
+    "message": "Server is running and responsive",
+    "timestamp": "2025-07-26 19:07:57"
+  },
+  {
+    "test": "List Templates",
+    "success": true,
+    "message": "Found 1 templates",
+    "timestamp": "2025-07-26 19:07:59",
+    "response": {
+      "templates": [
+        {
+          "description": "",
+          "filename": "Temp1.docx",
+          "id": "Temp1.docx",
+          "name": "Temp1"
+        }
+      ]
+    }
+  },
+  {
+    "test": "Extract Placeholders",
+    "success": true,
+    "message": "Found 20 placeholders",
+    "timestamp": "2025-07-26 19:08:01",
+    "response": {
+      "placeholders": [
+        "participant.address",
+        "signature.executive.name",
+        "participant.ic",
+        "signature.head.name",
+        "program.place",
+        "program.location",
+        "program.time",
+        "participant.pre_mark",
+        "signature.consultant.name",
+        "participant.tel",
+        "program.organizer",
+        "participant.bil",
+        "participant.post_mark",
+        "#images",
+        "program.date",
+        "/images",
+        "program.title",
+        "program.banner",
+        ".",
+        "participant.name"
+      ]
+    }
+  },
+  {
+    "test": "Template Preview",
+    "success": true,
+    "message": "Generated PDF preview (36940 chars)",
+    "timestamp": "2025-07-26 19:08:04",
+    "response": {
+      "filename": "preview_324417dd28804e83b5e515fa0608465e.pdf"
+    }
+  },
+  {
+    "test": "Generate Report",
+    "success": false,
+    "message": "HTTP 500: {\n  \"error\": \"Failed to generate report: unexpected char '#' at 390377\",\n  \"status\": \"error\"\n}\n",
+    "timestamp": "2025-07-26 19:08:06"
+  },
+  {
+    "test": "Download Template",
+    "success": true,
+    "message": "Downloaded template 96530 bytes",
+    "timestamp": "2025-07-26 19:08:08",
+    "response": {
+      "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    }
+  }
+]

@@ -131,8 +131,18 @@ class Form(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    # New fields for enhanced form builder
+    external_url = db.Column(db.String(500))  # External URL for form sharing
+    qr_code_data = db.Column(db.Text)  # Base64 encoded QR code
+    form_settings = db.Column(db.JSON)  # Additional form settings (themes, notifications, etc.)
+    access_key = db.Column(db.String(100))  # Unique access key for public forms
+    view_count = db.Column(db.Integer, default=0)  # Track form views
+    submission_limit = db.Column(db.Integer)  # Optional submission limit
+    expires_at = db.Column(db.DateTime)  # Optional expiration date
+    
     # Relationships
     submissions = db.relationship('FormSubmission', backref='form', lazy=True, cascade='all, delete-orphan')
+    qr_codes = db.relationship('FormQRCode', backref='form', lazy=True, cascade='all, delete-orphan')
 
 class FormSubmission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -142,6 +152,36 @@ class FormSubmission(db.Model):
     submitter_email = db.Column(db.String(120))  # For anonymous submissions
     submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(20), default='submitted')  # submitted, reviewed, approved, rejected
+    
+    # Enhanced submission tracking
+    ip_address = db.Column(db.String(45))  # IPv4/IPv6 support
+    user_agent = db.Column(db.Text)
+    submission_source = db.Column(db.String(50), default='web')  # web, qr_code, api, mobile
+    location_data = db.Column(db.JSON)  # Optional location information
+    processing_notes = db.Column(db.Text)  # Admin notes for processing
+
+# New model for QR Code management
+class FormQRCode(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    form_id = db.Column(db.Integer, db.ForeignKey('form.id'), nullable=False)
+    qr_code_data = db.Column(db.Text, nullable=False)  # Base64 encoded QR code
+    external_url = db.Column(db.String(500), nullable=False)  # URL that QR code points to
+    title = db.Column(db.String(200))  # Custom title for QR code
+    description = db.Column(db.Text)  # Description of QR code purpose
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # QR Code settings
+    size = db.Column(db.Integer, default=200)  # QR code size in pixels
+    error_correction = db.Column(db.String(10), default='M')  # L, M, Q, H
+    border = db.Column(db.Integer, default=4)  # Border size
+    background_color = db.Column(db.String(7), default='#FFFFFF')  # Hex color
+    foreground_color = db.Column(db.String(7), default='#000000')  # Hex color
+    
+    # Analytics
+    scan_count = db.Column(db.Integer, default=0)
+    last_scanned = db.Column(db.DateTime)
+    is_active = db.Column(db.Boolean, default=True)
 
 # File Management Models
 class File(db.Model):

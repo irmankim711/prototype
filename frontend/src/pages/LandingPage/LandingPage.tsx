@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Box,
   Button,
@@ -18,20 +18,72 @@ import {
   Alert,
   CircularProgress,
   Modal,
+  Chip,
+  Avatar,
+  alpha,
+  Fade,
+  Slide,
+  Zoom,
+  keyframes,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { login, register } from "../../services/api";
 import React from "react";
+import {
+  AutoAwesome,
+  TrendingUp,
+  Security,
+  Speed,
+  Visibility,
+  Timeline,
+  Analytics,
+  CloudUpload,
+  Integration,
+  ArrowForward,
+  PlayArrow,
+} from "@mui/icons-material";
 
-// Styled components
+// Keyframe animations
+const float = keyframes`
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(2deg); }
+`;
+
+const pulse = keyframes`
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+`;
+
+const rotate = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`;
+
+const slideInFromLeft = keyframes`
+  from { transform: translateX(-100px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+`;
+
+const slideInFromRight = keyframes`
+  from { transform: translateX(100px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+`;
+
+const fadeInUp = keyframes`
+  from { transform: translateY(50px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+`;
+
+// Enhanced styled components
 const StyledAppBar = styled(AppBar)(() => ({
-  backgroundColor: "transparent",
-  backdropFilter: "blur(10px)",
-  boxShadow: "none",
-  borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-  position: "sticky",
+  backgroundColor: "rgba(255, 255, 255, 0.95)",
+  backdropFilter: "blur(20px)",
+  boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
+  borderBottom: "1px solid rgba(255, 255, 255, 0.3)",
+  position: "fixed",
   top: 0,
-  zIndex: 100,
+  zIndex: 1000,
   transition: "all 0.3s ease",
 }));
 
@@ -43,110 +95,184 @@ const StyledToolbar = styled(Toolbar)(({ theme }) => ({
 }));
 
 const NavButton = styled(Button)(() => ({
-  color: "#334155",
+  color: "#475569",
   textTransform: "none",
-  fontWeight: 500,
+  fontWeight: 600,
   position: "relative",
   overflow: "hidden",
   padding: "8px 16px",
-  "&::after": {
+  borderRadius: "8px",
+  "&::before": {
     content: '""',
     position: "absolute",
-    bottom: 0,
-    left: 0,
-    width: "0%",
-    height: "2px",
-    backgroundColor: "#0e1c40",
-    transition: "width 0.3s ease",
+    top: 0,
+    left: "-100%",
+    width: "100%",
+    height: "100%",
+    background:
+      "linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.1), transparent)",
+    transition: "left 0.5s ease",
   },
   "&:hover": {
-    backgroundColor: "transparent",
-    color: "#0e1c40",
-    "&::after": {
-      width: "100%",
+    backgroundColor: alpha("#6366f1", 0.1),
+    color: "#6366f1",
+    transform: "translateY(-2px)",
+    "&::before": {
+      left: "100%",
     },
   },
 }));
 
 const RegisterButton = styled(Button)(({ theme }) => ({
-  backgroundColor: "#0e1c40",
+  background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
   color: "white",
   textTransform: "none",
-  fontWeight: 500,
+  fontWeight: 600,
   padding: theme.spacing(1, 3),
-  borderRadius: "8px",
-  boxShadow: "0 4px 14px rgba(14, 28, 64, 0.2)",
+  borderRadius: "12px",
+  boxShadow: "0 8px 25px rgba(99, 102, 241, 0.3)",
   transition: "all 0.3s ease",
   "&:hover": {
-    backgroundColor: "#192e5b",
+    background: "linear-gradient(135deg, #5856eb 0%, #7c3aed 100%)",
     transform: "translateY(-3px)",
-    boxShadow: "0 6px 20px rgba(14, 28, 64, 0.3)",
+    boxShadow: "0 12px 35px rgba(99, 102, 241, 0.4)",
   },
 }));
 
 const HeroSection = styled(Box)(({ theme }) => ({
-  backgroundColor: "#f8fafc",
-  background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
-  padding: theme.spacing(12, 0, 8),
+  minHeight: "100vh",
+  background: `
+    radial-gradient(circle at 20% 80%, ${alpha(
+      "#6366f1",
+      0.15
+    )} 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, ${alpha(
+      "#8b5cf6",
+      0.15
+    )} 0%, transparent 50%),
+    linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)
+  `,
+  position: "relative",
+  overflow: "hidden",
+  display: "flex",
+  alignItems: "center",
+  "&::before": {
+    content: '""',
+    position: "absolute",
+    top: "10%",
+    right: "10%",
+    width: "300px",
+    height: "300px",
+    borderRadius: "50%",
+    background: `radial-gradient(circle, ${alpha(
+      "#6366f1",
+      0.1
+    )} 0%, transparent 70%)`,
+    animation: `${float} 6s ease-in-out infinite`,
+  },
+  "&::after": {
+    content: '""',
+    position: "absolute",
+    bottom: "10%",
+    left: "10%",
+    width: "200px",
+    height: "200px",
+    borderRadius: "50%",
+    background: `radial-gradient(circle, ${alpha(
+      "#8b5cf6",
+      0.1
+    )} 0%, transparent 70%)`,
+    animation: `${float} 8s ease-in-out infinite reverse`,
+  },
+}));
+
+const FloatingElement = styled(Box)<{ delay?: number }>(({ delay = 0 }) => ({
+  position: "absolute",
+  animation: `${float} ${4 + delay}s ease-in-out infinite`,
+  animationDelay: `${delay}s`,
+}));
+
+const FeatureCard = styled(Box)(({ theme }) => ({
+  background: "rgba(255, 255, 255, 0.8)",
+  backdropFilter: "blur(20px)",
+  borderRadius: "20px",
+  boxShadow: "0 15px 35px rgba(0, 0, 0, 0.08)",
+  padding: theme.spacing(4),
+  transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+  border: "1px solid rgba(255, 255, 255, 0.3)",
+  height: "100%",
+  display: "flex",
+  flexDirection: "column",
   position: "relative",
   overflow: "hidden",
   "&::before": {
     content: '""',
     position: "absolute",
-    top: "-10%",
-    right: "-5%",
-    width: "500px",
-    height: "500px",
-    borderRadius: "50%",
+    top: 0,
+    left: "-100%",
+    width: "100%",
+    height: "100%",
     background:
-      "radial-gradient(circle, rgba(58, 89, 152, 0.1) 0%, rgba(14, 28, 64, 0.05) 70%)",
+      "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent)",
+    transition: "left 0.6s ease",
   },
-  "&::after": {
-    content: '""',
-    position: "absolute",
-    bottom: "-15%",
-    left: "-10%",
-    width: "600px",
-    height: "600px",
-    borderRadius: "50%",
-    background:
-      "radial-gradient(circle, rgba(14, 28, 64, 0.08) 0%, rgba(58, 89, 152, 0.03) 70%)",
+  "&:hover": {
+    transform: "translateY(-15px) scale(1.02)",
+    boxShadow: "0 25px 50px rgba(99, 102, 241, 0.15)",
+    border: "1px solid rgba(99, 102, 241, 0.3)",
+    "&::before": {
+      left: "100%",
+    },
   },
 }));
 
-const FeatureCard = styled(Box)(({ theme }) => ({
-  background: "rgba(255, 255, 255, 0.7)",
-  backdropFilter: "blur(10px)",
+const AnimatedIcon = styled(Box)<{ color?: string }>(
+  ({ theme, color = "#6366f1" }) => ({
+    width: "80px",
+    height: "80px",
+    borderRadius: "20px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "32px",
+    marginBottom: theme.spacing(3),
+    background: `linear-gradient(135deg, ${color} 0%, ${alpha(
+      color,
+      0.8
+    )} 100%)`,
+    color: "white",
+    boxShadow: `0 10px 25px ${alpha(color, 0.3)}`,
+    transition: "all 0.3s ease",
+    position: "relative",
+    "&::before": {
+      content: '""',
+      position: "absolute",
+      inset: "-2px",
+      borderRadius: "22px",
+      padding: "2px",
+      background: `linear-gradient(135deg, ${color}, transparent, ${color})`,
+      mask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
+      maskComposite: "xor",
+      animation: `${rotate} 3s linear infinite`,
+    },
+    "&:hover": {
+      transform: "rotate(10deg) scale(1.1)",
+      animation: `${pulse} 0.6s ease-in-out`,
+    },
+  })
+);
+
+const StatsCard = styled(Box)(({ theme }) => ({
+  background: "rgba(255, 255, 255, 0.9)",
+  backdropFilter: "blur(20px)",
   borderRadius: "16px",
-  boxShadow: "0 10px 30px rgba(0, 0, 0, 0.05)",
   padding: theme.spacing(3),
+  textAlign: "center",
+  border: "1px solid rgba(255, 255, 255, 0.3)",
   transition: "all 0.3s ease",
-  border: "1px solid rgba(255, 255, 255, 0.2)",
-  height: "100%",
-  display: "flex",
-  flexDirection: "column",
   "&:hover": {
-    transform: "translateY(-10px)",
-    boxShadow: "0 15px 35px rgba(14, 28, 64, 0.1)",
-    border: "1px solid rgba(58, 89, 152, 0.3)",
-  },
-}));
-
-const AnimatedIcon = styled(Box)(({ theme }) => ({
-  width: "60px",
-  height: "60px",
-  borderRadius: "12px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "24px",
-  marginBottom: theme.spacing(2),
-  background: "linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%)",
-  boxShadow: "0 8px 16px rgba(14, 28, 64, 0.1)",
-  transition: "all 0.3s ease",
-  color: "#0e1c40",
-  "&:hover": {
-    transform: "rotate(5deg) scale(1.1)",
+    transform: "translateY(-5px)",
+    boxShadow: "0 15px 30px rgba(0, 0, 0, 0.1)",
   },
 }));
 
@@ -154,36 +280,41 @@ const LoginCard = styled(Card)(({ theme }) => ({
   maxWidth: 450,
   margin: "0 auto",
   padding: theme.spacing(4),
-  boxShadow: "0 20px 40px rgba(0, 0, 0, 0.1)",
-  borderRadius: "20px",
+  boxShadow: "0 25px 50px rgba(0, 0, 0, 0.15)",
+  borderRadius: "24px",
   background: "rgba(255, 255, 255, 0.95)",
-  backdropFilter: "blur(10px)",
-  border: "1px solid rgba(255, 255, 255, 0.2)",
+  backdropFilter: "blur(20px)",
+  border: "1px solid rgba(255, 255, 255, 0.3)",
   transition: "all 0.3s ease",
 }));
 
 const StyledTextField = styled(TextField)(({ theme }) => ({
   marginBottom: theme.spacing(2),
   "& .MuiOutlinedInput-root": {
-    borderRadius: "10px",
+    borderRadius: "12px",
+    transition: "all 0.3s ease",
     "& fieldset": {
       borderColor: "rgba(0, 0, 0, 0.1)",
+      transition: "all 0.3s ease",
     },
     "&:hover fieldset": {
-      borderColor: "#0e1c40",
+      borderColor: "#6366f1",
+      boxShadow: "0 4px 12px rgba(99, 102, 241, 0.15)",
     },
     "&.Mui-focused fieldset": {
-      borderColor: "#0e1c40",
+      borderColor: "#6366f1",
+      borderWidth: "2px",
+      boxShadow: "0 4px 12px rgba(99, 102, 241, 0.25)",
     },
   },
   "& .MuiInputLabel-root": {
     color: "#64748b",
     "&.Mui-focused": {
-      color: "#0e1c40",
+      color: "#6366f1",
     },
   },
   "& .MuiInputBase-input": {
-    padding: "14px 16px",
+    padding: "16px 18px",
   },
 }));
 
@@ -205,6 +336,24 @@ export default function LandingPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [animationTrigger, setAnimationTrigger] = useState(false);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  // Refs for scroll animations
+  const featuresRef = useRef<HTMLDivElement>(null);
+  const statsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setAnimationTrigger(true);
+
+    // Mouse move effect
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, []);
 
   const handleShowLogin = () => {
     setShowLogin(true);
@@ -274,9 +423,6 @@ export default function LandingPage() {
     }
   };
 
-  // Section refs for smooth scroll
-  const featuresRef = React.useRef<HTMLDivElement>(null);
-
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState<
@@ -296,6 +442,64 @@ export default function LandingPage() {
     setModalOpen(true);
   };
   const handleCloseModal = () => setModalOpen(false);
+
+  const features = [
+    {
+      icon: <AutoAwesome />,
+      title: "AI-Powered Analytics",
+      description:
+        "Advanced machine learning algorithms that transform your data into actionable insights automatically.",
+      color: "#6366f1",
+      delay: 100,
+    },
+    {
+      icon: <Security />,
+      title: "Enterprise Security",
+      description:
+        "Bank-grade encryption and compliance standards protecting your most sensitive business data.",
+      color: "#10b981",
+      delay: 200,
+    },
+    {
+      icon: <Speed />,
+      title: "Lightning Fast",
+      description:
+        "Optimized performance that processes millions of records in seconds, not hours.",
+      color: "#f59e0b",
+      delay: 300,
+    },
+    {
+      icon: <Integration />,
+      title: "Seamless Integration",
+      description:
+        "Connect with 500+ business tools and platforms with just a few clicks.",
+      color: "#ec4899",
+      delay: 400,
+    },
+    {
+      icon: <Timeline />,
+      title: "Real-time Insights",
+      description:
+        "Live dashboards and real-time analytics keep you ahead of the competition.",
+      color: "#8b5cf6",
+      delay: 500,
+    },
+    {
+      icon: <CloudUpload />,
+      title: "Cloud Native",
+      description:
+        "Built for the cloud with automatic scaling and 99.9% uptime guarantee.",
+      color: "#06b6d4",
+      delay: 600,
+    },
+  ];
+
+  const stats = [
+    { number: "10M+", label: "Reports Generated", color: "#6366f1" },
+    { number: "500+", label: "Enterprise Clients", color: "#10b981" },
+    { number: "99.9%", label: "Uptime Guarantee", color: "#f59e0b" },
+    { number: "24/7", label: "Expert Support", color: "#ec4899" },
+  ];
 
   return (
     <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>

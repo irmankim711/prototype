@@ -5,10 +5,13 @@ from flask_limiter import Limiter
 from datetime import datetime
 from sqlalchemy import desc, func
 from sqlalchemy.exc import SQLAlchemyError
-from ..models import db, Form, FormSubmission, Permission, User
+from ..models import db, Form, FormSubmission, Permission, User, FormQRCode
 from ..decorators import require_permission, get_current_user_id, get_current_user
 import json
 import uuid
+import qrcode
+import io
+import base64
 from werkzeug.exceptions import BadRequest, Unauthorized, NotFound
 import logging
 
@@ -226,7 +229,7 @@ def validate_form_data(form_schema, data):
     return errors
 
 @forms_bp.route('/', methods=['GET'])
-# @jwt_required()  # Removed for public access
+@jwt_required()  # JWT required for forms access
 @limiter.limit("100 per hour")
 def get_forms():
     """Get all forms for the current user with pagination and filtering."""
@@ -677,3 +680,194 @@ def bad_request(error):
 def internal_error(error):
     current_app.logger.error(f"Forms API Error: {error}")
     return jsonify({'error': 'Internal server error'}), 500
+
+# QR Code Generation Utilities
+def generate_qr_code(url, size=200, error_correction='M', border=4, bg_color='#FFFFFF', fg_color='#000000'):
+    """Generate QR code for a given URL"""
+    try:
+        # Map error correction levels
+        error_levels = {
+            'L': qrcode.constants.ERROR_CORRECT_L,
+            'M': qrcode.constants.ERROR_CORRECT_M,
+            'Q': qrcode.constants.ERROR_CORRECT_Q,
+            'H': qrcode.constants.ERROR_CORRECT_H,
+        }
+        
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=error_levels.get(error_correction, qrcode.constants.ERROR_CORRECT_M),
+            box_size=max(1, size // 25),  # Calculate box size based on desired total size
+            border=border,
+        )
+        
+        qr.add_data(url)
+        qr.make(fit=True)
+        
+        # Create QR code image
+        img = qr.make_image(fill_color=fg_color, back_color=bg_color)
+        
+        # Resize if needed
+        if hasattr(img, 'resize'):
+            img = img.resize((size, size))
+        
+        # Convert to base64
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        img_str = base64.b64encode(buffer.getvalue()).decode()
+        
+        return f"data:image/png;base64,{img_str}"
+        
+    except Exception as e:
+        current_app.logger.error(f"Error generating QR code: {str(e)}")
+        raise
+
+# QR Code Management Endpoints
+
+@forms_bp.route('/<int:form_id>/qr-codes', methods=['POST'])
+@jwt_required()
+def create_form_qr_code(form_id):
+    """Create a QR code for a form"""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+        
+        # Get form and check permissions
+        form = Form.query.get_or_404(form_id)
+        if form.creator_id != user.id and not user.has_permission(Permission.UPDATE_TEMPLATE):
+            return jsonify({'error': 'Permission denied'}), 403
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+        
+        # Validate required fields
+        if 'external_url' not in data:
+            return jsonify({'error': 'external_url is required'}), 400
+        
+        external_url = data['external_url'].strip()
+        if not external_url:
+            return jsonify({'error': 'external_url cannot be empty'}), 400
+        
+        # Generate QR code
+        qr_settings = {
+            'size': data.get('size', 200),
+            'error_correction': data.get('error_correction', 'M'),
+            'border': data.get('border', 4),
+            'bg_color': data.get('background_color', '#FFFFFF'),
+            'fg_color': data.get('foreground_color', '#000000'),
+        }
+        
+        qr_code_data = generate_qr_code(external_url, **qr_settings)
+        
+        # Create QR code record
+        form_qr = FormQRCode(
+            form_id=form.id,
+            qr_code_data=qr_code_data,
+            external_url=external_url,
+            title=data.get('title', f'QR Code for {form.title}'),
+            description=data.get('description', ''),
+            size=qr_settings['size'],
+            error_correction=qr_settings['error_correction'],
+            border=qr_settings['border'],
+            background_color=qr_settings['bg_color'],
+            foreground_color=qr_settings['fg_color']
+        )
+        
+        db.session.add(form_qr)
+        db.session.commit()
+        
+        current_app.logger.info(f"QR code created for form {form_id} by user {user.id}")
+        
+        return jsonify({
+            'message': 'QR code created successfully',
+            'qr_code': {
+                'id': form_qr.id,
+                'qr_code_data': form_qr.qr_code_data,
+                'external_url': form_qr.external_url,
+                'title': form_qr.title,
+                'description': form_qr.description,
+                'created_at': form_qr.created_at.isoformat(),
+                'settings': {
+                    'size': form_qr.size,
+                    'error_correction': form_qr.error_correction,
+                    'border': form_qr.border,
+                    'background_color': form_qr.background_color,
+                    'foreground_color': form_qr.foreground_color
+                }
+            }
+        }), 201
+        
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Database error in create_form_qr_code: {str(e)}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error in create_form_qr_code: {str(e)}")
+        return jsonify({'error': 'Failed to create QR code'}), 500
+
+@forms_bp.route('/<int:form_id>/qr-codes', methods=['GET'])
+@jwt_required()
+def get_form_qr_codes(form_id):
+    """Get all QR codes for a form"""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+        
+        # Get form and check permissions
+        form = Form.query.get_or_404(form_id)
+        if not form.is_public and form.creator_id != user.id and not user.has_permission(Permission.VIEW_USERS):
+            return jsonify({'error': 'Permission denied'}), 403
+        
+        qr_codes = FormQRCode.query.filter_by(form_id=form_id, is_active=True).all()
+        
+        qr_codes_data = []
+        for qr in qr_codes:
+            qr_codes_data.append({
+                'id': qr.id,
+                'qr_code_data': qr.qr_code_data,
+                'external_url': qr.external_url,
+                'title': qr.title,
+                'description': qr.description,
+                'created_at': qr.created_at.isoformat(),
+                'updated_at': qr.updated_at.isoformat(),
+                'scan_count': qr.scan_count,
+                'last_scanned': qr.last_scanned.isoformat() if qr.last_scanned else None,
+                'settings': {
+                    'size': qr.size,
+                    'error_correction': qr.error_correction,
+                    'border': qr.border,
+                    'background_color': qr.background_color,
+                    'foreground_color': qr.foreground_color
+                }
+            })
+        
+        return jsonify({
+            'qr_codes': qr_codes_data,
+            'count': len(qr_codes_data)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in get_form_qr_codes: {str(e)}")
+        return jsonify({'error': 'Failed to retrieve QR codes'}), 500
+
+@forms_bp.route('/qr/<int:qr_id>/scan', methods=['POST'])
+def track_qr_scan(qr_id):
+    """Track QR code scan (public endpoint)"""
+    try:
+        qr_code = FormQRCode.query.filter_by(id=qr_id, is_active=True).first_or_404()
+        
+        # Update scan statistics
+        qr_code.scan_count += 1
+        qr_code.last_scanned = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Scan tracked successfully',
+            'redirect_url': qr_code.external_url
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in track_qr_scan: {str(e)}")
+        return jsonify({'error': 'Failed to track scan'}), 500

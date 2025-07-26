@@ -7,12 +7,15 @@ import {
 } from "react-router-dom";
 import { ThemeProvider } from "@mui/material/styles";
 import { CssBaseline, Box } from "@mui/material";
-import { theme } from "./theme";
+import enhancedTheme from "./theme/enhancedTheme";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import Sidebar from "./components/Layout/Sidebar";
+import EnhancedSidebar from "./components/Layout/EnhancedSidebar";
+
+// Import enhanced styles
+import "./styles/enhancedDashboard.css";
 
 // Import pages
-import LandingPage from "./pages/LandingPage/LandingPage";
+import LandingPageEnhanced from "./pages/LandingPage/LandingPageEnhanced";
 import Dashboard from "./pages/Dashboard/Dashboard";
 
 import Submission from "./pages/Submission/Submission";
@@ -21,26 +24,34 @@ import ReportHistory from "./pages/ReportHistory/ReportHistory";
 import ReportTemplates from "./pages/ReportTemplates/ReportTemplates";
 import RealtimeDashboard from "./pages/RealtimeDashboard";
 import FormBuilderAdmin from "./pages/FormBuilderAdmin/FormBuilderAdmin";
+import FormBuilderDashboardEnhanced from "./pages/FormBuilderAdmin/FormBuilderDashboardEnhanced";
 import UserProfile from "./pages/UserProfile/UserProfile";
 import Settings from "./pages/Settings/Settings";
-import AboutUs from './pages/AboutUs/AboutUs';
+import AboutUs from "./pages/AboutUs/AboutUs";
 
 const queryClient = new QueryClient();
 
 function AppLayout() {
   const location = useLocation();
-  // Sidebar is visible on all pages except landing page
-  const showSidebar = location.pathname !== "/";
+  // Sidebar is visible on all pages except landing page and about us page
+  const showSidebar =
+    location.pathname !== "/" && location.pathname !== "/about";
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
-      {showSidebar && <Sidebar />}
-      <Box component="main" sx={{ flexGrow: 1, p: 3, ml: showSidebar ? "240px" : 0 }}>
+      {showSidebar && <EnhancedSidebar />}
+      <Box
+        component="main"
+        sx={{ flexGrow: 1, p: 3, ml: showSidebar ? "260px" : 0 }}
+      >
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={<LandingPageEnhanced />} />
           <Route path="/about" element={<AboutUs />} />
           <Route path="/dashboard" element={<Dashboard />} />
-
+          <Route
+            path="/dashboard-enhanced"
+            element={<FormBuilderDashboardEnhanced />}
+          />
           <Route path="/submission" element={<Submission />} />
           <Route path="/report-builder" element={<ReportBuilder />} />
           <Route path="/report-history" element={<ReportHistory />} />
@@ -59,7 +70,7 @@ function AppLayout() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
+      <ThemeProvider theme={enhancedTheme}>
         <CssBaseline />
         <Router>
           <AppLayout />

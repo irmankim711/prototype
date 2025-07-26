@@ -26,8 +26,26 @@ const authApi = axios.create({
 export interface User {
   id: string;
   email: string;
-  created_at: string;
+  first_name?: string;
+  last_name?: string;
+  username?: string;
+  phone?: string;
+  company?: string;
+  job_title?: string;
+  bio?: string;
+  avatar_url?: string;
+  timezone?: string;
+  language?: string;
+  theme?: string;
+  email_notifications?: boolean;
+  push_notifications?: boolean;
+  full_name?: string;
   role?: string;
+  is_active?: boolean;
+  created_at: string;
+  updated_at?: string;
+  last_login?: string;
+  permissions?: string[];
 }
 
 export interface LoginRequest {
@@ -51,7 +69,7 @@ export interface Report {
   templateFilename?: string;
   outputUrl?: string;
   data?: Record<string, unknown>;
-  analysis?: any;
+  analysis?: Record<string, unknown>;
 }
 
 export interface ReportTemplate {
@@ -277,37 +295,42 @@ export const getReportStatus = async (
 
 // Users APIs
 export const fetchUserProfile = async (): Promise<User> => {
-  const { data } = await api.get("/api/users/profile");
+  const { data } = await api.get("/users/profile");
   return data;
 };
 
+export interface UpdateUserProfileResponse {
+  message: string;
+  user: User;
+}
+
 export const updateUserProfile = async (
   userData: Partial<User>
-): Promise<User> => {
-  const { data } = await api.put("/api/users/profile", userData);
+): Promise<UpdateUserProfileResponse> => {
+  const { data } = await api.put("/users/profile", userData);
   return data;
 };
 
 export const fetchUserSettings = async (): Promise<Record<string, unknown>> => {
-  const { data } = await api.get("/api/users/settings");
+  const { data } = await api.get("/users/settings");
   return data;
 };
 
 export const updateUserSettings = async (
   settings: Record<string, unknown>
 ): Promise<Record<string, unknown>> => {
-  const { data } = await api.put("/api/users/settings", settings);
+  const { data } = await api.put("/users/settings", settings);
   return data;
 };
 
 // Forms APIs
 export const fetchForms = async (): Promise<Form[]> => {
-  const { data } = await api.get("/api/forms/");
+  const { data } = await api.get("/forms/");
   return data;
 };
 
 export const createForm = async (formData: Partial<Form>): Promise<Form> => {
-  const { data } = await api.post("/api/forms/", formData);
+  const { data } = await api.post("/forms/", formData);
   return data;
 };
 
@@ -315,12 +338,12 @@ export const updateForm = async (
   id: string,
   formData: Partial<Form>
 ): Promise<Form> => {
-  const { data } = await api.put(`/api/forms/${id}`, formData);
+  const { data } = await api.put(`/forms/${id}`, formData);
   return data;
 };
 
 export const deleteForm = async (id: string): Promise<void> => {
-  await api.delete(`/api/forms/${id}`);
+  await api.delete(`/forms/${id}`);
 };
 
 // Files APIs
@@ -337,13 +360,13 @@ export const fetchFiles = async (
   };
 }> => {
   const { data } = await api.get(
-    `/api/files/?page=${page}&per_page=${perPage}`
+    `/files/?page=${page}&per_page=${perPage}`
   );
   return data;
 };
 
 export const uploadFile = async (formData: FormData): Promise<FileInfo> => {
-  const { data } = await api.post("/api/files/upload", formData, {
+  const { data } = await api.post("/files/upload", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
@@ -352,18 +375,18 @@ export const uploadFile = async (formData: FormData): Promise<FileInfo> => {
 };
 
 export const downloadFile = async (fileId: string): Promise<Blob> => {
-  const response = await api.get(`/api/files/${fileId}/download`, {
+  const response = await api.get(`/files/${fileId}/download`, {
     responseType: "blob",
   });
   return response.data;
 };
 
 export const deleteFile = async (fileId: string): Promise<void> => {
-  await api.delete(`/api/files/${fileId}`);
+  await api.delete(`/files/${fileId}`);
 };
 
 export const fetchFileStats = async (): Promise<FileStats> => {
-  const { data } = await api.get("/api/files/stats");
+  const { data } = await api.get("/files/stats");
   return data;
 };
 
@@ -371,7 +394,7 @@ export const updateFileVisibility = async (
   fileId: string,
   isPublic: boolean
 ): Promise<{ message: string; is_public: boolean }> => {
-  const { data } = await api.put(`/api/files/${fileId}/visibility`, {
+  const { data } = await api.put(`/files/${fileId}/visibility`, {
     is_public: isPublic,
   });
   return data;
@@ -381,7 +404,7 @@ export const renameFile = async (
   fileId: string,
   filename: string
 ): Promise<{ message: string; filename: string }> => {
-  const { data } = await api.put(`/api/files/${fileId}/rename`, { filename });
+  const { data } = await api.put(`/files/${fileId}/rename`, { filename });
   return data;
 };
 
@@ -400,7 +423,7 @@ export const searchFiles = async (
   };
 }> => {
   const { data } = await api.get(
-    `/api/files/search?q=${encodeURIComponent(
+    `/files/search?q=${encodeURIComponent(
       query
     )}&page=${page}&per_page=${perPage}`
   );
@@ -477,13 +500,35 @@ export const generateReport = async (
 };
 
 // Download generated report
-export const downloadReport = async (downloadUrl: string): Promise<void> => {
-  const link = document.createElement("a");
-  link.href = downloadUrl;
-  link.download = "generated_report.docx";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+export const downloadReport = async (downloadUrl: string, filename?: string): Promise<void> => {
+  try {
+    // If downloadUrl is relative, make it absolute
+    const fullUrl = downloadUrl.startsWith('http') ? downloadUrl : `${API_BASE_URL}${downloadUrl}`;
+    
+    // Fetch the file
+    const response = await fetch(fullUrl);
+    if (!response.ok) {
+      throw new Error(`Download failed: ${response.statusText}`);
+    }
+    
+    // Get the blob
+    const blob = await response.blob();
+    
+    // Create download link
+    const link = document.createElement("a");
+    const url = window.URL.createObjectURL(blob);
+    link.href = url;
+    link.download = filename || "generated_report.docx";
+    document.body.appendChild(link);
+    link.click();
+    
+    // Cleanup
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Download failed:', error);
+    throw error;
+  }
 };
 
 // Database test

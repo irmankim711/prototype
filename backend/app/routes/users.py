@@ -19,10 +19,22 @@ def get_profile():
         'email': user.email,
         'first_name': user.first_name,
         'last_name': user.last_name,
+        'username': user.username,
+        'phone': user.phone,
+        'company': user.company,
+        'job_title': user.job_title,
+        'bio': user.bio,
+        'avatar_url': user.avatar_url,
+        'timezone': user.timezone,
+        'language': user.language,
+        'theme': user.theme,
+        'email_notifications': user.email_notifications,
+        'push_notifications': user.push_notifications,
         'full_name': user.full_name,
         'role': user.role.value,
         'is_active': user.is_active,
         'created_at': user.created_at.isoformat(),
+        'updated_at': user.updated_at.isoformat() if user.updated_at else None,
         'last_login': user.last_login.isoformat() if user.last_login else None,
         'permissions': [p.value for p in user.get_permissions()]
     }), 200
@@ -36,16 +48,70 @@ def update_profile():
         return jsonify({'error': 'User not found'}), 404
     
     data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
     
+    # Update profile fields
     if 'first_name' in data:
-        user.first_name = data['first_name']
+        user.first_name = data['first_name'].strip() if data['first_name'] else None
     if 'last_name' in data:
-        user.last_name = data['last_name']
+        user.last_name = data['last_name'].strip() if data['last_name'] else None
+    if 'username' in data:
+        username = data['username'].strip() if data['username'] else None
+        if username:
+            # Check if username is already taken by another user
+            existing_user = User.query.filter_by(username=username).first()
+            if existing_user and existing_user.id != user.id:
+                return jsonify({'error': 'Username already taken'}), 400
+            user.username = username
+    if 'phone' in data:
+        user.phone = data['phone'].strip() if data['phone'] else None
+    if 'company' in data:
+        user.company = data['company'].strip() if data['company'] else None
+    if 'job_title' in data:
+        user.job_title = data['job_title'].strip() if data['job_title'] else None
+    if 'bio' in data:
+        user.bio = data['bio'].strip() if data['bio'] else None
+    if 'timezone' in data:
+        user.timezone = data['timezone'] or 'UTC'
+    if 'language' in data:
+        user.language = data['language'] or 'en'
+    if 'theme' in data:
+        user.theme = data['theme'] or 'light'
+    if 'email_notifications' in data:
+        user.email_notifications = bool(data['email_notifications'])
+    if 'push_notifications' in data:
+        user.push_notifications = bool(data['push_notifications'])
     
     user.updated_at = datetime.utcnow()
-    db.session.commit()
     
-    return jsonify({'message': 'Profile updated successfully'}), 200
+    try:
+        db.session.commit()
+        return jsonify({
+            'message': 'Profile updated successfully',
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'username': user.username,
+                'phone': user.phone,
+                'company': user.company,
+                'job_title': user.job_title,
+                'bio': user.bio,
+                'timezone': user.timezone,
+                'language': user.language,
+                'theme': user.theme,
+                'email_notifications': user.email_notifications,
+                'push_notifications': user.push_notifications,
+                'full_name': user.full_name,
+                'role': user.role.value,
+                'updated_at': user.updated_at.isoformat()
+            }
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update profile'}), 500
 
 @users_bp.route('/change-password', methods=['POST'])
 @jwt_required()

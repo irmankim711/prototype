@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_tok
 from flask_limiter.util import get_remote_address
 from flask_limiter import Limiter
 from datetime import datetime, timedelta
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, or_
 from sqlalchemy.exc import SQLAlchemyError
 from ..models import db, Report, ReportTemplate, User
 from ..services.report_service import report_service
@@ -276,6 +276,74 @@ def get_recent_reports():
         
     except Exception as e:
         current_app.logger.error(f"Error in get_recent_reports: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@api.route('/reports/history', methods=['GET'])
+@jwt_required()
+@limiter.limit("100 per hour")
+def get_reports_history():
+    """Get reports history for the current user with pagination and filtering"""
+    try:
+        user_id = get_current_user_id()
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)  # Max 100 per page
+        status = request.args.get('status')
+        search = request.args.get('search', '').strip()
+        
+        if page < 1:
+            return jsonify({'error': 'Page number must be positive'}), 400
+        
+        query = Report.query.filter_by(user_id=user_id)
+        
+        # Filter by status if provided
+        if status:
+            valid_statuses = ['processing', 'completed', 'failed', 'pending', 'draft']
+            if status not in valid_statuses:
+                return jsonify({'error': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'}), 400
+            query = query.filter_by(status=status)
+        
+        # Filter by search term if provided
+        if search:
+            query = query.filter(
+                or_(
+                    Report.title.ilike(f'%{search}%'),
+                    Report.description.ilike(f'%{search}%')
+                )
+            )
+        
+        # Order by creation date (newest first) and paginate
+        reports = query.order_by(desc(Report.created_at)).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        return jsonify({
+            'reports': [{
+                'id': report.id,
+                'title': report.title,
+                'description': report.description,
+                'status': report.status,
+                'createdAt': report.created_at.isoformat(),
+                'updatedAt': report.updated_at.isoformat() if report.updated_at else report.created_at.isoformat(),
+                'templateId': report.template_id,
+                'outputUrl': report.output_url,
+                'data': report.data  # Include the form data used to generate the report
+            } for report in reports.items],
+            'pagination': {
+                'page': reports.page,
+                'pages': reports.pages,
+                'per_page': reports.per_page,
+                'total': reports.total,
+                'has_next': reports.has_next,
+                'has_prev': reports.has_prev
+            },
+            'filters': {
+                'status': status,
+                'search': search
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in get_reports_history: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
 @api.route('/reports/stats', methods=['GET'])
