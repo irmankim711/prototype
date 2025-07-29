@@ -45,6 +45,7 @@ import {
 } from "@mui/icons-material";
 
 import FormBuilder from "../../components/FormBuilder/FormBuilder";
+import SimpleQRGenerator from "../../components/forms/SimpleQRGenerator";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -109,6 +110,9 @@ export default function FormBuilderAdmin() {
   });
 
   const [page] = useState(1);
+
+  // QR Code state
+  const [showQRGenerator, setShowQRGenerator] = useState(false);
 
   // Fetch forms data
   const {
@@ -259,6 +263,17 @@ export default function FormBuilderAdmin() {
       message: "Form saved successfully!",
       severity: "success",
     });
+  };
+
+  // QR Code handlers
+  const handleGenerateQR = (form: Form) => {
+    setSelectedForm(form);
+    setShowQRGenerator(true);
+  };
+
+  const handleCloseQRGenerator = () => {
+    setShowQRGenerator(false);
+    setSelectedForm(null);
   };
 
   if (showFormBuilder) {
@@ -438,13 +453,7 @@ export default function FormBuilderAdmin() {
                     <Button
                       size="small"
                       startIcon={<QrCode />}
-                      onClick={() => {
-                        setSnackbar({
-                          open: true,
-                          message: "QR code feature coming soon!",
-                          severity: "info",
-                        });
-                      }}
+                      onClick={() => handleGenerateQR(form)}
                     >
                       QR Code
                     </Button>
@@ -546,11 +555,14 @@ export default function FormBuilderAdmin() {
                       size="small"
                       startIcon={<QrCode />}
                       onClick={() => {
-                        setSnackbar({
-                          open: true,
-                          message: "QR code generated!",
-                          severity: "info",
-                        });
+                        // For external forms, create QR directly with URL
+                        setSelectedForm({
+                          id: parseInt(form.id),
+                          title: form.title,
+                          description: form.description || "",
+                          external_url: form.url,
+                        } as Form);
+                        setShowQRGenerator(true);
                       }}
                     >
                       QR Code
@@ -756,6 +768,16 @@ export default function FormBuilderAdmin() {
       >
         <Add />
       </Fab>
+
+      {/* QR Code Generator Modal */}
+      {showQRGenerator && selectedForm && (
+        <SimpleQRGenerator
+          formId={selectedForm.id}
+          formTitle={selectedForm.title}
+          onClose={handleCloseQRGenerator}
+          defaultUrl={selectedForm.external_url}
+        />
+      )}
 
       {/* Snackbar for notifications */}
       <Snackbar

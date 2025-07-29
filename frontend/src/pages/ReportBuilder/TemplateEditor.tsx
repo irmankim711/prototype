@@ -126,6 +126,13 @@ export default function TemplateEditor({
     onDataChange(editedData);
   }, [editedData, onDataChange]);
 
+  // Auto-generate preview when data changes, if not in edit mode
+  useEffect(() => {
+    if (!editableContent && Object.keys(editedData).length > 0) {
+      handleGeneratePreview();
+    }
+  }, [editedData, editableContent]);
+
   // Don't auto-initialize editable content - let user choose their mode
 
   const handleGeneratePreview = async () => {

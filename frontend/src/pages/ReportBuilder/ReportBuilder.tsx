@@ -608,25 +608,12 @@ export default function ReportBuilder() {
     const aggregateNumericData = (values: number[], field: string) => {
       if (values.length === 0) return null;
 
-      if (
-        field.includes("total") ||
-        field.includes("sum") ||
-        field.includes("revenue") ||
-        field.includes("expense")
-      ) {
-        return values.reduce((sum, val) => sum + val, 0);
-      } else if (
-        field.includes("average") ||
-        field.includes("avg") ||
-        field.includes("mean")
-      ) {
-        return values.reduce((sum, val) => sum + val, 0) / values.length;
-      } else if (field.includes("count")) {
-        return values.length;
-      } else {
-        // For other numeric fields, use the most recent or common value
-        return values[values.length - 1];
-      }
+      const sum = values.reduce((acc, val) => acc + val, 0);
+      const avg = sum / values.length;
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+
+      return { sum, avg, min, max };
     };
 
     // Process each header and try to map to known fields
@@ -665,15 +652,20 @@ export default function ReportBuilder() {
           const numericValues = columnValues
             .map((val) => parseFloat(String(val)))
             .filter((val) => !isNaN(val));
-          const aggregatedValue = aggregateNumericData(
+          const aggregated = aggregateNumericData(
             numericValues,
             matchedField
           );
-          if (aggregatedValue !== null) {
-            processed[matchedField] = aggregatedValue;
-            // Also store formatted version for display
-            processed[`${matchedField}_formatted`] =
-              new Intl.NumberFormat().format(aggregatedValue);
+          if (aggregated !== null) {
+            processed[`${matchedField}_sum`] = aggregated.sum;
+            processed[`${matchedField}_avg`] = aggregated.avg;
+            processed[`${matchedField}_min`] = aggregated.min;
+            processed[`${matchedField}_max`] = aggregated.max;
+            // Store formatted versions
+            processed[`${matchedField}_sum_formatted`] = new Intl.NumberFormat().format(aggregated.sum);
+            processed[`${matchedField}_avg_formatted`] = new Intl.NumberFormat().format(aggregated.avg);
+            processed[`${matchedField}_min_formatted`] = new Intl.NumberFormat().format(aggregated.min);
+            processed[`${matchedField}_max_formatted`] = new Intl.NumberFormat().format(aggregated.max);
           }
         } else if (dataType === "date") {
           // Use the most recent valid date
@@ -875,6 +867,18 @@ export default function ReportBuilder() {
 
       // Merge with existing editData
       setEditData((prev) => ({ ...prev, ...mappedData }));
+
+      // Integrate AI analysis after mapping
+      analyzeDataMutation.mutate(editData, {
+        onSuccess: (analysis) => {
+          setEditData((prev) => ({
+            ...prev,
+            ai_summary: analysis.summary,
+            ai_insights: analysis.insights.join('\n'),
+            ai_suggestions: analysis.suggestions,
+          }));
+        },
+      });
     }
 
     setActiveStep((prev) => prev + 1);
