@@ -67,6 +67,7 @@ import {
   ViewModule,
   ViewStream,
   GridView,
+  Close,
 } from "@mui/icons-material";
 import { Bar, Doughnut } from "react-chartjs-2";
 import debounce from "lodash/debounce";
@@ -1448,12 +1449,38 @@ export default function FormBuilderDashboardEnhanced() {
       </TabPanel>
 
       {/* QR Code Manager Dialog */}
-      {selectedFormForQR && (
-        <QRCodeManager
-          formId={selectedFormForQR.id}
-          formTitle={selectedFormForQR.title}
-        />
-      )}
+      <Dialog
+        open={!!selectedFormForQR}
+        onClose={() => setSelectedFormForQR(null)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              QR Code Manager: {selectedFormForQR?.title}
+            </Typography>
+            <IconButton onClick={() => setSelectedFormForQR(null)}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          {selectedFormForQR && (
+            <QRCodeManager
+              formId={selectedFormForQR.id}
+              formTitle={selectedFormForQR.title}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Share Dialog */}
       <Dialog

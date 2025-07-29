@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   Typography,
-  Paper,
   CircularProgress,
   Alert,
   useTheme,
@@ -14,9 +13,6 @@ import {
   LinearProgress,
   Avatar,
   Grid,
-  Card,
-  CardMedia,
-  CardContent,
 } from "@mui/material";
 // Removed unused react-hook-form imports
 import {
@@ -915,8 +911,8 @@ export default function ReportBuilder() {
       case 0:
         return (
           <Fade in={activeStep === 0}>
-            <Box>
-              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+            <Box sx={{ padding: 0, margin: 0 }}>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
                 <Typography variant="h6" gutterBottom sx={{ flex: 1 }}>
                   Import Data
                 </Typography>
@@ -927,12 +923,9 @@ export default function ReportBuilder() {
               {/* Drag-and-drop Excel upload */}
               <Box
                 sx={{
-                  border: "2px dashed #0e1c40",
-                  borderRadius: 3,
-                  p: 4,
-                  mb: 3,
+                  p: 2,
+                  mb: 2,
                   textAlign: "center",
-                  bgcolor: "rgba(14,28,64,0.03)",
                   transition: "background 0.2s",
                   "&:hover": { bgcolor: "rgba(14,28,64,0.07)" },
                   cursor: "pointer",
@@ -960,7 +953,7 @@ export default function ReportBuilder() {
                   aria-label="Upload Excel file"
                 />
               </Box>
-              <Divider sx={{ my: 3 }}>or</Divider>
+              <Divider sx={{ my: 1 }}>or</Divider>
               {/* Google Sheets Import */}
               <GoogleSheetImport
                 onDataParsed={(data) =>
@@ -972,16 +965,13 @@ export default function ReportBuilder() {
                 apiKey={import.meta.env.VITE_GOOGLE_API_KEY || ""}
                 clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ""}
               />
-              {/* Enhanced preview card for imported data */}
+              {/* Enhanced preview for imported data */}
               {importedData && (
-                <Paper
-                  elevation={3}
+                <Box
                   sx={{
                     mt: 4,
                     p: 3,
-                    borderRadius: 3,
                     position: "relative",
-                    border: "1.5px solid #22c55e",
                   }}
                 >
                   <Box sx={{ position: "absolute", top: 16, right: 16 }}>
@@ -1182,50 +1172,55 @@ export default function ReportBuilder() {
                     {Object.keys(importedData.processedData || {}).length}{" "}
                     mapped fields. Proceed to next step.
                   </Alert>
-                </Paper>
+                </Box>
               )}
             </Box>
           </Fade>
         );
       case 1:
         return (
-          <Box>
+          <Box sx={{ padding: 0, margin: 0 }}>
             <Typography variant="h6" gutterBottom>
               Choose Report Template
             </Typography>
             <Grid container spacing={3}>
               {wordTemplatesData?.map((template: WordTemplateType) => (
                 <Grid item xs={12} sm={6} md={4} key={template.id}>
-                  <Card
+                  <Box
                     onClick={() =>
                       setSelectedTemplateFilename(template.filename)
                     }
                     sx={{
-                      border:
-                        selectedTemplateFilename === template.filename
-                          ? "2px solid #0e1c40"
-                          : "1px solid #e0e7ef",
                       cursor: "pointer",
-                      boxShadow:
-                        selectedTemplateFilename === template.filename ? 6 : 1,
-                      transition: "box-shadow 0.2s, border 0.2s",
+                      transition: "opacity 0.2s",
+                      opacity:
+                        selectedTemplateFilename === template.filename
+                          ? 1
+                          : 0.7,
+                      "&:hover": {
+                        opacity: 1,
+                      },
                     }}
                   >
-                    <CardMedia
+                    <Box
                       component="img"
-                      height="140"
-                      image={
+                      sx={{
+                        width: "100%",
+                        height: "140px",
+                        objectFit: "cover",
+                      }}
+                      src={
                         template.previewUrl || "/static/previews/default.png"
                       }
                       alt={template.name}
                     />
-                    <CardContent>
+                    <Box sx={{ p: 1 }}>
                       <Typography variant="h6">{template.name}</Typography>
                       <Typography variant="body2" color="text.secondary">
                         {template.description}
                       </Typography>
-                    </CardContent>
-                  </Card>
+                    </Box>
+                  </Box>
                 </Grid>
               ))}
             </Grid>
@@ -1263,7 +1258,7 @@ export default function ReportBuilder() {
         );
       case 4:
         return (
-          <Box textAlign="center">
+          <Box textAlign="center" sx={{ padding: 0, margin: 0 }}>
             <Typography variant="h5" gutterBottom>
               Report Generated Successfully!
             </Typography>
@@ -1350,144 +1345,125 @@ export default function ReportBuilder() {
     <Box
       sx={{
         minHeight: "100vh",
-        bgcolor: "rgba(248,250,252,0.9)",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        py: 6,
         width: "100vw",
         boxSizing: "border-box",
+        padding: 0,
+        margin: 0,
+        flexDirection: isMobile ? "column" : "row",
       }}
     >
+      {/* Sidebar/Stepper */}
       <Box
         sx={{
-          width: isMobile ? "100%" : 900,
-          maxWidth: "98vw",
-          borderRadius: 5,
-          boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.15)",
-          background: "rgba(255,255,255,0.85)",
-          backdropFilter: "blur(12px)",
-          p: isMobile ? 2 : 4,
+          width: isMobile ? "100%" : 220,
+          minWidth: isMobile ? "100%" : 220,
+          backgroundColor: "#f8f9fa",
+          padding: 2,
           display: "flex",
-          flexDirection: isMobile ? "column" : "row",
-          gap: 4,
-          margin: "0 auto",
+          flexDirection: isMobile ? "row" : "column",
           alignItems: "center",
-          justifyContent: "center",
+          justifyContent: isMobile ? "space-between" : "flex-start",
+          gap: isMobile ? 1 : 3,
         }}
       >
-        {/* Sidebar/Stepper */}
-        <Box
-          sx={{
-            width: isMobile ? "100%" : 220,
-            minWidth: isMobile ? "100%" : 180,
-            borderRight: isMobile ? "none" : "1px solid #e0e7ef",
-            borderBottom: isMobile ? "1px solid #e0e7ef" : "none",
-            pb: isMobile ? 2 : 0,
-            mb: isMobile ? 2 : 0,
-            display: "flex",
-            flexDirection: isMobile ? "row" : "column",
-            alignItems: "center",
-            justifyContent: isMobile ? "space-between" : "flex-start",
-            gap: isMobile ? 1 : 3,
-          }}
-        >
-          {steps.map((label, idx) => (
-            <Tooltip
-              title={label}
-              key={label}
-              placement={isMobile ? "top" : "right"}
+        {steps.map((label, idx) => (
+          <Tooltip
+            title={label}
+            key={label}
+            placement={isMobile ? "top" : "right"}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                opacity: idx > activeStep ? 0.4 : 1,
+                transition: "opacity 0.2s",
+              }}
             >
-              <Box
+              <Avatar
                 sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  opacity: idx > activeStep ? 0.4 : 1,
-                  transition: "opacity 0.2s",
+                  bgcolor: idx === activeStep ? "#0e1c40" : "#e0e7ef",
+                  color: idx === activeStep ? "white" : "#64748b",
+                  width: 48,
+                  height: 48,
+                  mb: isMobile ? 0 : 1,
+                  border: idx < activeStep ? "2px solid #22c55e" : "none",
+                  boxShadow: idx === activeStep ? "0 0 0 4px #e0e7ef" : "none",
                 }}
               >
-                <Avatar
+                {stepIcons[idx]}
+              </Avatar>
+              {!isMobile && (
+                <Typography
+                  variant="caption"
                   sx={{
-                    bgcolor: idx === activeStep ? "#0e1c40" : "#e0e7ef",
-                    color: idx === activeStep ? "white" : "#64748b",
-                    width: 48,
-                    height: 48,
-                    mb: isMobile ? 0 : 1,
-                    border: idx < activeStep ? "2px solid #22c55e" : "none",
-                    boxShadow:
-                      idx === activeStep ? "0 0 0 4px #e0e7ef" : "none",
+                    color: idx === activeStep ? "#0e1c40" : "#64748b",
+                    fontWeight: idx === activeStep ? 700 : 400,
                   }}
                 >
-                  {stepIcons[idx]}
-                </Avatar>
-                {!isMobile && (
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: idx === activeStep ? "#0e1c40" : "#64748b",
-                      fontWeight: idx === activeStep ? 700 : 400,
-                    }}
-                  >
-                    {label}
-                  </Typography>
-                )}
-              </Box>
-            </Tooltip>
-          ))}
-          {/* Progress bar */}
-          <Box
+                  {label}
+                </Typography>
+              )}
+            </Box>
+          </Tooltip>
+        ))}
+        {/* Progress bar */}
+        <Box
+          sx={{
+            width: isMobile ? "100%" : "80%",
+            mt: isMobile ? 0 : 3,
+            alignSelf: "center",
+          }}
+        >
+          <LinearProgress
+            variant="determinate"
+            value={((activeStep + 1) / steps.length) * 100}
             sx={{
-              width: isMobile ? "100%" : "80%",
-              mt: isMobile ? 0 : 3,
-              alignSelf: "center",
+              height: 8,
+              borderRadius: 4,
+              bgcolor: "#e0e7ef",
+              "& .MuiLinearProgress-bar": { bgcolor: "#0e1c40" },
             }}
-          >
-            <LinearProgress
-              variant="determinate"
-              value={((activeStep + 1) / steps.length) * 100}
-              sx={{
-                height: 8,
-                borderRadius: 4,
-                bgcolor: "#e0e7ef",
-                "& .MuiLinearProgress-bar": { bgcolor: "#0e1c40" },
-              }}
-            />
-          </Box>
+          />
         </Box>
-        {/* Main Content Card */}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography
-            variant="h4"
-            gutterBottom
-            sx={{
-              color: "#0e1c40",
-              fontWeight: 700,
-              mb: 3,
-              textAlign: "center",
-            }}
-          >
-            Create New Report
-          </Typography>
-          {getStepContent(activeStep)}
-          <Box display="flex" justifyContent="flex-end" mt={4} gap={2}>
-            {activeStep > 0 && (
-              <Button variant="outlined" onClick={handleBack}>
-                Back
-              </Button>
-            )}
-            {activeStep < steps.length - 1 && (
-              <Button
-                variant="contained"
-                onClick={handleNext}
-                disabled={!canProceed()}
-              >
-                Next
-              </Button>
-            )}
-          </Box>
-          {/* You can add navigation buttons here if needed */}
+      </Box>
+
+      {/* Main Content Area */}
+      <Box
+        sx={{ flex: 1, minWidth: 0, padding: 1, backgroundColor: "#ffffff" }}
+      >
+        <Typography
+          variant="h4"
+          gutterBottom
+          sx={{
+            color: "#0e1c40",
+            fontWeight: 700,
+            mb: 2,
+            textAlign: "left",
+          }}
+        >
+          Create New Report
+        </Typography>
+        {getStepContent(activeStep)}
+        <Box display="flex" justifyContent="flex-end" mt={2} gap={2}>
+          {activeStep > 0 && (
+            <Button variant="outlined" onClick={handleBack}>
+              Back
+            </Button>
+          )}
+          {activeStep < steps.length - 1 && (
+            <Button
+              variant="contained"
+              onClick={handleNext}
+              disabled={!canProceed()}
+            >
+              Next
+            </Button>
+          )}
         </Box>
+        {/* You can add navigation buttons here if needed */}
       </Box>
     </Box>
   );

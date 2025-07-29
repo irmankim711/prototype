@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import QRCode from "qrcode";
 import {
   Box,
   Typography,
@@ -20,16 +21,9 @@ import {
   Select,
   MenuItem,
   Slider,
-  Switch,
-  FormControlLabel,
-  Divider,
   Paper,
   Avatar,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  ListItemSecondaryAction,
+  CircularProgress,
 } from "@mui/material";
 import {
   QrCode,
@@ -37,13 +31,10 @@ import {
   Edit,
   Delete,
   Download,
-  Share,
   Visibility,
   ContentCopy,
   Launch,
   Settings,
-  Analytics,
-  Info,
 } from "@mui/icons-material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formBuilderAPI, type FormQRCode } from "../../services/formBuilder";
@@ -64,6 +55,11 @@ interface QRCodeFormData {
   foreground_color: string;
 }
 
+interface QuickQRData {
+  url: string;
+  qrCodeDataUrl: string;
+}
+
 const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
   const queryClient = useQueryClient();
 
@@ -81,6 +77,74 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
   });
   const [previewUrl, setPreviewUrl] = useState("");
 
+  // Quick QR generation state
+  const [quickQR, setQuickQR] = useState<QuickQRData | null>(null);
+  const [quickQRUrl, setQuickQRUrl] = useState(
+    `${window.location.origin}/forms/${formId}`
+  );
+  const [generatingQuickQR, setGeneratingQuickQR] = useState(false);
+
+  const generateQuickQR = React.useCallback(async () => {
+    console.log("generateQuickQR called with URL:", quickQRUrl);
+    if (!quickQRUrl.trim()) {
+      console.log("No URL provided, exiting");
+      return;
+    }
+
+    setGeneratingQuickQR(true);
+    console.log("Starting QR generation...");
+
+    try {
+      // Generate QR code using the qrcode library (client-side)
+      console.log("Generating QR with qrcode library...");
+      const qrCodeDataUrl = await QRCode.toDataURL(quickQRUrl, {
+        width: 256,
+        margin: 2,
+        color: {
+          dark: "#000000",
+          light: "#FFFFFF",
+        },
+      });
+
+      console.log(
+        "QR generation successful, data URL length:",
+        qrCodeDataUrl.length
+      );
+      console.log("Data URL preview:", qrCodeDataUrl.substring(0, 100) + "...");
+
+      setQuickQR({
+        url: quickQRUrl,
+        qrCodeDataUrl: qrCodeDataUrl,
+      });
+    } catch (error) {
+      console.error("Failed to generate QR code:", error);
+      // Fallback to external API if client-side generation fails
+      try {
+        console.log("Trying fallback API...");
+        const fallbackUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(
+          quickQRUrl
+        )}`;
+        console.log("Fallback URL:", fallbackUrl);
+        setQuickQR({
+          url: quickQRUrl,
+          qrCodeDataUrl: fallbackUrl,
+        });
+      } catch (fallbackError) {
+        console.error("Fallback QR generation also failed:", fallbackError);
+      }
+    } finally {
+      setGeneratingQuickQR(false);
+      console.log("QR generation process completed");
+    }
+  }, [quickQRUrl]);
+
+  // Auto-generate QR code on component mount for demo
+  useEffect(() => {
+    if (quickQRUrl && !quickQR) {
+      generateQuickQR();
+    }
+  }, [quickQRUrl, quickQR, generateQuickQR]);
+
   // Fetch QR codes
   const { data: qrCodes, isLoading } = useQuery({
     queryKey: ["form-qr-codes", formId],
@@ -89,7 +153,7 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
 
   // Create QR code mutation
   const createQRMutation = useMutation({
-    mutationFn: (data: Partial<QRCodeFormData>) =>
+    mutationFn: (data: QRCodeFormData) =>
       formBuilderAPI.createFormQRCode(formId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["form-qr-codes", formId] });
@@ -156,13 +220,24 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
   };
 
   const handleSubmit = () => {
+    // Ensure external_url is provided
+    if (!formData.external_url?.trim()) {
+      alert("Please provide a valid URL for the QR code");
+      return;
+    }
+
+    const submitData = {
+      ...formData,
+      external_url: formData.external_url.trim(),
+    };
+
     if (editingQR) {
       updateQRMutation.mutate({
         qrId: editingQR.id,
-        data: formData,
+        data: submitData,
       });
     } else {
-      createQRMutation.mutate(formData);
+      createQRMutation.mutate(submitData);
     }
   };
 
@@ -188,25 +263,38 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
     document.body.removeChild(link);
   };
 
-  const generatePreviewUrl = () => {
+  const handleQuickQRDownload = () => {
+    if (quickQR) {
+      const link = document.createElement("a");
+      link.href = quickQR.qrCodeDataUrl;
+      link.download = `qr_code_${formTitle
+        .replace(/[^a-z0-9]/gi, "_")
+        .toLowerCase()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const generatePreviewUrl = React.useCallback(() => {
     if (formData.external_url) {
       // This would typically call an API to generate a preview QR code
       setPreviewUrl(
         "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2Y0ZjRmNCIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTIiIGZpbGw9IiM2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5RUiBDb2RlIFByZXZpZXc8L3RleHQ+Cjwvc3ZnPgo="
       );
     }
-  };
+  }, [formData.external_url]);
 
   useEffect(() => {
     generatePreviewUrl();
-  }, [formData.external_url, formData.size]);
+  }, [formData.external_url, formData.size, generatePreviewUrl]);
 
   if (isLoading) {
     return <Typography>Loading QR codes...</Typography>;
   }
 
   return (
-    <Box>
+    <Box sx={{ p: 3 }}>
       <Box
         sx={{
           display: "flex",
@@ -230,6 +318,170 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
           Create QR Code
         </Button>
       </Box>
+
+      {/* Quick QR Generation Section */}
+      <Card
+        sx={{
+          mb: 3,
+          border: "2px dashed",
+          borderColor: "primary.main",
+          bgcolor: "primary.50",
+        }}
+      >
+        <CardContent>
+          <Typography
+            variant="h6"
+            gutterBottom
+            sx={{ display: "flex", alignItems: "center", gap: 1 }}
+          >
+            <QrCode color="primary" />
+            Quick QR Generator
+          </Typography>
+          <Typography variant="body2" color="text.secondary" paragraph>
+            Generate a QR code instantly for any URL. Perfect for quick sharing!
+          </Typography>
+
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Enter URL"
+                placeholder={`${window.location.origin}/forms/${formId}`}
+                value={quickQRUrl}
+                onChange={(e) => setQuickQRUrl(e.target.value)}
+                variant="outlined"
+                helperText="Enter any URL to generate a QR code"
+              />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={generateQuickQR}
+                disabled={!quickQRUrl.trim() || generatingQuickQR}
+                startIcon={
+                  generatingQuickQR ? (
+                    <CircularProgress size={20} />
+                  ) : (
+                    <QrCode />
+                  )
+                }
+                sx={{ height: 56 }}
+              >
+                {generatingQuickQR ? "Generating..." : "Generate QR"}
+              </Button>
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <Button
+                fullWidth
+                variant="outlined"
+                onClick={() => {
+                  console.log("Manual test button clicked");
+                  setQuickQR(null);
+                  generateQuickQR();
+                }}
+                disabled={generatingQuickQR}
+                sx={{ height: 56 }}
+              >
+                Test QR
+              </Button>
+            </Grid>
+            {quickQR && (
+              <Grid item xs={12} md={3}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  onClick={handleQuickQRDownload}
+                  startIcon={<Download />}
+                  sx={{ height: 56 }}
+                >
+                  Download
+                </Button>
+              </Grid>
+            )}
+          </Grid>
+
+          {/* QR Generation Status */}
+          {generatingQuickQR && (
+            <Box sx={{ mt: 2, textAlign: "center" }}>
+              <CircularProgress size={24} />
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Generating QR Code...
+              </Typography>
+            </Box>
+          )}
+
+          {quickQR && (
+            <Box sx={{ mt: 3, textAlign: "center" }}>
+              <Card variant="outlined" sx={{ display: "inline-block", p: 2 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Generated QR Code:
+                </Typography>
+                <Box
+                  component="img"
+                  src={quickQR.qrCodeDataUrl}
+                  alt="Generated QR Code"
+                  sx={{
+                    width: 200,
+                    height: 200,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    display: "block",
+                    margin: "0 auto",
+                  }}
+                  onError={(e) => {
+                    console.error("QR Code image failed to load:", e);
+                    console.log("Image src:", quickQR.qrCodeDataUrl);
+                  }}
+                  onLoad={() => {
+                    console.log("QR Code image loaded successfully");
+                  }}
+                />
+                <Typography
+                  variant="caption"
+                  display="block"
+                  sx={{ mt: 1, wordBreak: "break-all" }}
+                >
+                  URL: {quickQR.url}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  display="block"
+                  sx={{
+                    mt: 0.5,
+                    wordBreak: "break-all",
+                    color: "text.secondary",
+                  }}
+                >
+                  Source: {quickQR.qrCodeDataUrl}
+                </Typography>
+              </Card>
+            </Box>
+          )}
+
+          {/* Debug Info */}
+          <Box sx={{ mt: 2, p: 2, bgcolor: "grey.100", borderRadius: 1 }}>
+            <Typography variant="caption" display="block">
+              Debug Info:
+            </Typography>
+            <Typography variant="caption" display="block">
+              quickQRUrl: {quickQRUrl}
+            </Typography>
+            <Typography variant="caption" display="block">
+              generatingQuickQR: {generatingQuickQR.toString()}
+            </Typography>
+            <Typography variant="caption" display="block">
+              quickQR exists: {quickQR ? "Yes" : "No"}
+            </Typography>
+            {quickQR && (
+              <Typography variant="caption" display="block">
+                QR Data URL length: {quickQR.qrCodeDataUrl.length}
+              </Typography>
+            )}
+          </Box>
+        </CardContent>
+      </Card>
 
       {qrCodes?.qr_codes.length === 0 ? (
         <Paper sx={{ p: 4, textAlign: "center" }}>
@@ -280,10 +532,11 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
                   )}
 
                   <Box sx={{ textAlign: "center", mb: 2 }}>
-                    <img
+                    <Box
+                      component="img"
                       src={qr.qr_code_data}
                       alt={qr.title}
-                      style={{ maxWidth: "150px", height: "auto" }}
+                      sx={{ maxWidth: "150px", height: "auto" }}
                     />
                   </Box>
 
@@ -507,10 +760,11 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
                     borderRadius: 1,
                   }}
                 >
-                  <img
+                  <Box
+                    component="img"
                     src={previewUrl}
                     alt="QR Code Preview"
-                    style={{ maxWidth: "100%", height: "auto" }}
+                    sx={{ maxWidth: "100%", height: "auto" }}
                   />
                   <Typography variant="caption" display="block" sx={{ mt: 1 }}>
                     Preview QR Code

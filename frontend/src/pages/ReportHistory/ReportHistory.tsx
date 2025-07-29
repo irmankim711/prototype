@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Box,
   Typography,
@@ -18,31 +18,32 @@ import {
   DialogContent,
   DialogActions,
   Button,
-} from '@mui/material';
+  Alert,
+} from "@mui/material";
 import {
   Download as DownloadIcon,
   Visibility as ViewIcon,
   Delete as DeleteIcon,
-} from '@mui/icons-material';
-import { useQuery } from '@tanstack/react-query';
-import type { Report } from '../../services/api';
+} from "@mui/icons-material";
+import { useQuery } from "@tanstack/react-query";
+import {
+  fetchReportsHistory,
+  downloadReport,
+  type Report,
+} from "../../services/api";
 
-// Mock function - replace with actual API call
-const fetchReportHistory = async (): Promise<Report[]> => {
-  const response = await fetch('/api/reports/history');
-  return response.json();
-};
-
-const getStatusColor = (status: string) => {
+const getStatusColor = (
+  status: string
+): "success" | "warning" | "error" | "default" => {
   switch (status) {
-    case 'completed':
-      return 'success';
-    case 'processing':
-      return 'warning';
-    case 'failed':
-      return 'error';
+    case "completed":
+      return "success";
+    case "processing":
+      return "warning";
+    case "failed":
+      return "error";
     default:
-      return 'default';
+      return "default";
   }
 };
 
@@ -51,17 +52,28 @@ export default function ReportHistory() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const { data: reports, isLoading } = useQuery({
-    queryKey: ['reportHistory'],
-    queryFn: fetchReportHistory,
+  const {
+    data: reportData,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ["reportHistory", page + 1, rowsPerPage],
+    queryFn: () => fetchReportsHistory(page + 1, rowsPerPage),
+    retry: 3,
   });
+
+  const reports = reportData?.reports || [];
+  const totalReports = reportData?.pagination?.total || 0;
 
   const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);
   };
 
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChangeRowsPerPage = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
@@ -76,10 +88,36 @@ export default function ReportHistory() {
     setIsPreviewOpen(false);
   };
 
+  const handleDownloadReport = async (report: Report) => {
+    if (report.outputUrl) {
+      try {
+        await downloadReport(report.outputUrl, `${report.title}.docx`);
+      } catch (err) {
+        setError("Failed to download report");
+        console.error("Download error:", err);
+      }
+    }
+  };
+
   if (isLoading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="400px"
+      >
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Box p={3}>
+        <Alert severity="error">
+          Failed to load report history. Please try again later.
+        </Alert>
       </Box>
     );
   }
@@ -89,6 +127,12 @@ export default function ReportHistory() {
       <Typography variant="h4" gutterBottom>
         Report History
       </Typography>
+
+      {error && (
+        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       <Paper>
         <TableContainer>
@@ -103,53 +147,49 @@ export default function ReportHistory() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {reports
-                ?.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((report) => (
-                  <TableRow key={report.id}>
-                    <TableCell>{report.title}</TableCell>
-                    <TableCell>
-                      {report.templateId}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(report.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={report.status}
-                        color={getStatusColor(report.status) as any}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        size="small"
-                        disabled={report.status !== 'completed'}
-                        component="a"
-                        href={report.outputUrl || '#'}
-                        target="_blank"
-                      >
-                        <DownloadIcon />
-                      </IconButton>
-                      <IconButton 
-                        size="small"
-                        onClick={() => handlePreviewReport(report)}
-                      >
-                        <ViewIcon />
-                      </IconButton>
-                      <IconButton size="small" color="error">
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
+              {reports.map((report) => (
+                <TableRow key={report.id}>
+                  <TableCell>{report.title}</TableCell>
+                  <TableCell>{report.templateId}</TableCell>
+                  <TableCell>
+                    {new Date(report.createdAt).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={report.status}
+                      color={getStatusColor(report.status)}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      size="small"
+                      disabled={
+                        report.status !== "completed" || !report.outputUrl
+                      }
+                      onClick={() => handleDownloadReport(report)}
+                    >
+                      <DownloadIcon />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      onClick={() => handlePreviewReport(report)}
+                    >
+                      <ViewIcon />
+                    </IconButton>
+                    <IconButton size="small" color="error">
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </TableContainer>
         <TablePagination
           rowsPerPageOptions={[5, 10, 25]}
           component="div"
-          count={reports?.length || 0}
+          count={totalReports}
           rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={handleChangePage}
@@ -163,14 +203,17 @@ export default function ReportHistory() {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>
-          {selectedReport?.title}
-        </DialogTitle>
+        <DialogTitle>{selectedReport?.title}</DialogTitle>
         <DialogContent dividers>
-          {selectedReport?.status === 'completed' ? (
-            <iframe
+          {selectedReport?.status === "completed" ? (
+            <Box
+              component="iframe"
               src={selectedReport.outputUrl}
-              style={{ width: '100%', height: '500px', border: 'none' }}
+              sx={{
+                width: "100%",
+                height: "500px",
+                border: "none",
+              }}
               title="Report Preview"
             />
           ) : (
@@ -183,12 +226,12 @@ export default function ReportHistory() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClosePreview}>Close</Button>
-          {selectedReport?.status === 'completed' && (
+          {selectedReport?.status === "completed" && (
             <Button
               variant="contained"
-              component="a"
-              href={selectedReport.outputUrl || '#'}
-              target="_blank"
+              onClick={() =>
+                selectedReport && handleDownloadReport(selectedReport)
+              }
               startIcon={<DownloadIcon />}
             >
               Download

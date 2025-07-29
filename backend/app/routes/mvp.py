@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, send_from_directory
+from flask import Blueprint, jsonify, request, send_from_directory, current_app
 from docxtpl import DocxTemplate
 import os
 import uuid
@@ -10,6 +10,11 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.units import inch
+from app.services.ai_service import ai_service
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 mvp = Blueprint('mvp', __name__)
 
@@ -18,21 +23,230 @@ TEMPLATE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../te
 @mvp.route('/ai/analyze', methods=['POST'])
 def ai_analyze():
     """
-    Mock AI analysis endpoint to prevent frontend errors while testing.
+    Enhanced AI analysis endpoint using OpenAI for comprehensive data analysis
     """
     try:
         data = request.get_json()
-        return jsonify({
-            'summary': 'Data analysis completed successfully.',
-            'insights': ['Analysis placeholder'],
-            'suggestions': 'Consider reviewing your data.'
-        })
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided for analysis',
+                'summary': 'Analysis failed - missing data',
+                'insights': [],
+                'suggestions': ['Please provide data to analyze']
+            }), 400
+        
+        # Extract context and analysis type from request
+        context = data.get('context', 'general')
+        analysis_data = data.get('data', data)
+        
+        # Log the analysis request
+        logger.info(f"AI analysis requested for context: {context}")
+        
+        # Call enhanced AI service
+        result = ai_service.analyze_data(analysis_data, context)
+        
+        # Ensure the response includes all expected fields for frontend compatibility
+        response = {
+            'success': result.get('success', True),
+            'summary': result.get('summary', 'Analysis completed'),
+            'insights': result.get('insights', []),
+            'patterns': result.get('patterns', []),
+            'anomalies': result.get('anomalies', []),
+            'recommendations': result.get('recommendations', []),
+            'risks': result.get('risks', []),
+            'opportunities': result.get('opportunities', []),
+            'confidence_score': result.get('confidence_score', 0.8),
+            'data_quality': result.get('data_quality', 'medium'),
+            'analysis_type': context,
+            'timestamp': result.get('timestamp'),
+            'suggestions': result.get('recommendations', [])  # For backward compatibility
+        }
+        
+        if not result.get('success', True):
+            response['error'] = result.get('error', 'Unknown error occurred')
+            return jsonify(response), 500
+        
+        return jsonify(response)
+        
     except Exception as e:
+        logger.error(f"Error in AI analysis endpoint: {str(e)}")
         return jsonify({
-            'summary': 'Analysis completed with warnings.',
-            'insights': ['Mock analysis result'],
-            'suggestions': 'Data appears to be valid.'
+            'success': False,
+            'error': str(e),
+            'summary': 'Analysis failed due to technical error',
+            'insights': ['Technical error prevented analysis completion'],
+            'suggestions': ['Please check your data format and try again'],
+            'patterns': [],
+            'anomalies': [],
+            'recommendations': [],
+            'risks': ['Analysis incomplete'],
+            'opportunities': [],
+            'confidence_score': 0.0
+        }), 500
+
+@mvp.route('/ai/report-suggestions', methods=['POST'])
+def ai_report_suggestions():
+    """
+    Generate AI-powered suggestions for report content based on data
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided for suggestions'
+            }), 400
+        
+        report_type = data.get('report_type', 'general')
+        report_data = data.get('data', data)
+        
+        logger.info(f"AI report suggestions requested for type: {report_type}")
+        
+        result = ai_service.generate_report_suggestions(report_data, report_type)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Error in AI report suggestions: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'suggestions': {}
+        }), 500
+
+@mvp.route('/ai/optimize-template', methods=['POST'])
+def ai_optimize_template():
+    """
+    Use AI to analyze and optimize document templates
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('template_content'):
+            return jsonify({
+                'success': False,
+                'error': 'Template content is required'
+            }), 400
+        
+        template_content = data.get('template_content', '')
+        placeholders = data.get('placeholders', [])
+        template_type = data.get('template_type', 'general')
+        
+        logger.info(f"AI template optimization requested for type: {template_type}")
+        
+        result = ai_service.optimize_template(template_content, placeholders, template_type)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Error in AI template optimization: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'optimization': {}
+        }), 500
+
+@mvp.route('/ai/validate-data', methods=['POST'])
+def ai_validate_data():
+    """
+    AI-powered data quality validation and suggestions
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided for validation'
+            }), 400
+        
+        validation_data = data.get('data', data)
+        
+        logger.info("AI data validation requested")
+        
+        result = ai_service.validate_data_quality(validation_data)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Error in AI data validation: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'validation': {
+                'overall_quality_score': 0.0,
+                'data_readiness': 'unknown',
+                'issues_found': []
+            }
+        }), 500
+
+@mvp.route('/ai/smart-placeholders', methods=['POST'])
+def ai_smart_placeholders():
+    """
+    Generate intelligent placeholder suggestions based on context and industry
+    """
+    try:
+        data = request.get_json()
+        
+        context = data.get('context', 'general') if data else 'general'
+        industry = data.get('industry', 'general') if data else 'general'
+        
+        logger.info(f"AI placeholder suggestions requested for context: {context}, industry: {industry}")
+        
+        result = ai_service.generate_smart_placeholders(context, industry)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Error generating smart placeholders: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'placeholders': {}
+        }), 500
+
+@mvp.route('/ai/health', methods=['GET'])
+def ai_health_check():
+    """
+    Check AI service health and API key status
+    """
+    try:
+        # Check if OpenAI API key is configured
+        openai_configured = bool(ai_service.openai_api_key and ai_service.openai_api_key.startswith('sk-'))
+        google_ai_configured = bool(ai_service.google_ai_api_key)
+        
+        return jsonify({
+            'success': True,
+            'status': 'healthy',
+            'services': {
+                'openai': {
+                    'configured': openai_configured,
+                    'status': 'ready' if openai_configured else 'not_configured'
+                },
+                'google_ai': {
+                    'configured': google_ai_configured,
+                    'status': 'ready' if google_ai_configured else 'not_configured'
+                }
+            },
+            'features_available': [
+                'data_analysis',
+                'report_suggestions',
+                'template_optimization',
+                'data_validation',
+                'smart_placeholders'
+            ]
         })
+        
+    except Exception as e:
+        logger.error(f"Error in AI health check: {str(e)}")
+        return jsonify({
+            'success': False,
+            'status': 'unhealthy',
+            'error': str(e)
+        }), 500
 
 @mvp.route('/templates/<template_name>/placeholders', methods=['GET'])
 def extract_placeholders_from_stored(template_name):
@@ -350,32 +564,64 @@ def list_templates():
 
 @mvp.route('/generate-report', methods=['POST'])
 def generate_report():
-    data = request.get_json()
-    template_filename = data.get('templateFilename')
-    context = data.get('data', {})
-    
-    if not template_filename or not context:
-        return jsonify({'error': 'Missing template filename or data'}), 400
-    
-    template_path = os.path.join(TEMPLATE_DIR, template_filename)
-    if not os.path.isfile(template_path):
-        return jsonify({'error': 'Template not found'}), 404
-    
     try:
+        data = request.get_json()
+        current_app.logger.debug(f"Received data: {data}")
+        
+        template_filename = data.get('templateFilename')
+        context = data.get('data', {})
+        
+        current_app.logger.debug(f"Template filename: {template_filename}")
+        current_app.logger.debug(f"Context data: {context}")
+        
+        if not template_filename or not context:
+            return jsonify({'error': 'Missing template filename or data'}), 400
+        
+        template_path = os.path.join(TEMPLATE_DIR, template_filename)
+        current_app.logger.debug(f"Template path: {template_path}")
+        
+        if not os.path.isfile(template_path):
+            return jsonify({'error': 'Template not found'}), 404
+        
         # Generate unique output filename
         output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../static/generated'))
         os.makedirs(output_dir, exist_ok=True)
         output_filename = f"report_{uuid.uuid4().hex}.docx"
         output_path = os.path.join(output_dir, output_filename)
         
+        current_app.logger.debug(f"Output path: {output_path}")
+        
         # Fill template using docxtpl
         from docxtpl import DocxTemplate
+        current_app.logger.debug("Creating DocxTemplate instance")
         doc = DocxTemplate(template_path)
-        doc.render(context)
+        
+        # Transform flat context data to nested structure
+        nested_context = {}
+        for key, value in context.items():
+            if '.' in key:
+                parts = key.split('.')
+                current = nested_context
+                for part in parts[:-1]:
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
+                current[parts[-1]] = value
+            else:
+                nested_context[key] = value
+        
+        current_app.logger.debug(f"Nested context: {nested_context}")
+        
+        current_app.logger.debug("Rendering template with context")
+        doc.render(nested_context)
+        
+        current_app.logger.debug("Saving rendered document")
         doc.save(output_path)
         
         # Create download URL
         download_url = f"/mvp/static/generated/{output_filename}"
+        
+        current_app.logger.debug(f"Report generated successfully: {download_url}")
         
         return jsonify({
             'downloadUrl': download_url,
@@ -385,6 +631,7 @@ def generate_report():
         })
         
     except Exception as e:
+        current_app.logger.error(f"Error generating report: {str(e)}", exc_info=True)
         return jsonify({
             'error': f'Failed to generate report: {str(e)}',
             'status': 'error'
