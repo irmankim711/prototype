@@ -161,7 +161,7 @@ export const formBuilderAPI = {
 
   // Get a specific form
   getForm: async (formId: number) => {
-    const response = await api.get(`/api/forms/${formId}`);
+    const response = await api.get(`/forms/${formId}`);
     return response.data;
   },
 
@@ -173,7 +173,7 @@ export const formBuilderAPI = {
     is_active?: boolean;
     is_public?: boolean;
   }) => {
-    const response = await api.post("/api/forms/", formData);
+    const response = await api.post("/forms/", formData);
     return response.data;
   },
 
@@ -188,19 +188,19 @@ export const formBuilderAPI = {
       is_public: boolean;
     }>
   ) => {
-    const response = await api.put(`/api/forms/${formId}`, formData);
+    const response = await api.put(`/forms/${formId}`, formData);
     return response.data;
   },
 
   // Delete a form (soft delete)
   deleteForm: async (formId: number) => {
-    const response = await api.delete(`/api/forms/${formId}`);
+    const response = await api.delete(`/forms/${formId}`);
     return response.data;
   },
 
   // Get available field types
   getFieldTypes: async (): Promise<FormBuilderConfig> => {
-    const response = await api.get("/api/forms/field-types");
+    const response = await api.get("/forms/field-types");
     return response.data;
   },
 
@@ -212,7 +212,7 @@ export const formBuilderAPI = {
       email?: string;
     }
   ) => {
-    const response = await api.post(`/api/forms/${formId}/submissions`, data);
+    const response = await api.post(`/forms/${formId}/submissions`, data);
     return response.data;
   },
 
@@ -227,7 +227,7 @@ export const formBuilderAPI = {
       date_to?: string;
     }
   ) => {
-    const response = await api.get(`/api/forms/${formId}/submissions`, {
+    const response = await api.get(`/forms/${formId}/submissions`, {
       params,
     });
     return response.data;
@@ -236,7 +236,7 @@ export const formBuilderAPI = {
   // Update submission status
   updateSubmissionStatus: async (submissionId: number, status: string) => {
     const response = await api.put(
-      `/api/forms/submissions/${submissionId}/status`,
+      `/forms/submissions/${submissionId}/status`,
       {
         status,
       }
@@ -258,14 +258,14 @@ export const formBuilderAPI = {
       foreground_color?: string;
     }
   ) => {
-    const response = await api.post(`/api/forms/${formId}/qr-codes`, qrData);
+    const response = await api.post(`/forms/${formId}/qr-codes`, qrData);
     return response.data;
   },
 
   getFormQRCodes: async (
     formId: number
   ): Promise<{ qr_codes: FormQRCode[]; count: number }> => {
-    const response = await api.get(`/api/forms/${formId}/qr-codes`);
+    const response = await api.get(`/forms/${formId}/qr-codes`);
     return response.data;
   },
 
@@ -283,20 +283,17 @@ export const formBuilderAPI = {
       foreground_color?: string;
     }
   ) => {
-    const response = await api.put(
-      `/api/forms/${formId}/qr-codes/${qrId}`,
-      qrData
-    );
+    const response = await api.put(`/forms/${formId}/qr-codes/${qrId}`, qrData);
     return response.data;
   },
 
   deleteFormQRCode: async (formId: number, qrId: number) => {
-    const response = await api.delete(`/api/forms/${formId}/qr-codes/${qrId}`);
+    const response = await api.delete(`/forms/${formId}/qr-codes/${qrId}`);
     return response.data;
   },
 
   trackQRScan: async (qrId: number) => {
-    const response = await api.post(`/api/forms/qr/${qrId}/scan`);
+    const response = await api.post(`/forms/qr/${qrId}/scan`);
     return response.data;
   },
 
@@ -314,7 +311,7 @@ export const formBuilderAPI = {
     formId: number,
     format: "json" | "csv" | "xlsx" = "json"
   ) => {
-    const response = await api.get(`/api/forms/${formId}/export`, {
+    const response = await api.get(`/forms/${formId}/export`, {
       params: { format },
       responseType: format === "json" ? "json" : "blob",
     });

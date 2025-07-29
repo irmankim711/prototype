@@ -11,6 +11,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.units import inch
 from app.services.ai_service import ai_service
+from app.services.template_optimizer import TemplateOptimizerService
 import logging
 
 # Set up logging
@@ -149,6 +150,204 @@ def ai_optimize_template():
             'optimization': {}
         }), 500
 
+@mvp.route('/ai/optimize-template-with-excel', methods=['POST'])
+def ai_optimize_template_with_excel():
+    """
+    Enhanced template optimization using Excel data for comprehensive analysis and mapping.
+    Extracts all data from Excel files and maps to template placeholders.
+    """
+    try:
+        # Check if files are present
+        if 'template_file' not in request.files and 'excel_file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'Both template and Excel files are required'
+            }), 400
+        
+        template_file = request.files.get('template_file')
+        excel_file = request.files.get('excel_file')
+        
+        if not template_file or not excel_file:
+            return jsonify({
+                'success': False,
+                'error': 'Both template and Excel files must be provided'
+            }), 400
+        
+        # Save files temporarily
+        import tempfile
+        temp_dir = tempfile.mkdtemp()
+        
+        template_path = os.path.join(temp_dir, 'template.tex')
+        excel_path = os.path.join(temp_dir, 'data.xlsx')
+        
+        template_file.save(template_path)
+        excel_file.save(excel_path)
+        
+        # Read template content
+        with open(template_path, 'r', encoding='utf-8') as f:
+            template_content = f.read()
+        
+        # Initialize template optimizer
+        optimizer = TemplateOptimizerService()
+        
+        # Optimize template with Excel data
+        result = optimizer.optimize_template_with_excel(template_content, excel_path)
+        
+        # Clean up temporary files
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'template_analysis': result['placeholders'],
+                'data_extraction': result['data_analysis'],
+                'context': result['enhanced_context'],
+                'missing_fields': result['missing_fields'],
+                'optimizations': result['optimizations'],
+                'message': 'Template optimized successfully with Excel data'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result['error']
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"Error in enhanced template optimization: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': 'Failed to optimize template with Excel data'
+        }), 500
+
+@mvp.route('/templates/generate-with-excel', methods=['POST'])
+def generate_report_with_excel():
+    """
+    Generate report using template and Excel data with intelligent mapping.
+    """
+    try:
+        # Check for required files
+        if 'template_file' not in request.files or 'excel_file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'Both template and Excel files are required'
+            }), 400
+        
+        template_file = request.files['template_file']
+        excel_file = request.files['excel_file']
+        
+        # Save files temporarily
+        import tempfile
+        temp_dir = tempfile.mkdtemp()
+        
+        template_filename = template_file.filename or 'template.tex'
+        template_path = os.path.join(temp_dir, f'template{os.path.splitext(template_filename)[1]}')
+        excel_path = os.path.join(temp_dir, 'data.xlsx')
+        
+        template_file.save(template_path)
+        excel_file.save(excel_path)
+        
+        # Determine template type
+        filename = template_file.filename or 'template.tex'
+        file_ext = os.path.splitext(filename)[1].lower()
+        
+        # Initialize optimizer and extract data
+        optimizer = TemplateOptimizerService()
+        
+        # Read template content
+        with open(template_path, 'r', encoding='utf-8') as f:
+            template_content = f.read()
+        
+        # Get optimized context
+        optimization_result = optimizer.optimize_template_with_excel(template_content, excel_path)
+        
+        if not optimization_result['success']:
+            return jsonify({
+                'success': False,
+                'error': f"Data extraction failed: {optimization_result['error']}"
+            }), 500
+        
+        context = optimization_result['enhanced_context']
+        
+        # Generate output file
+        output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../static/generated'))
+        os.makedirs(output_dir, exist_ok=True)
+        
+        if file_ext == '.tex':
+            # LaTeX template processing
+            output_filename = f"report_{uuid.uuid4().hex}.pdf"
+            output_path = os.path.join(output_dir, output_filename)
+            
+            # Use Jinja2 to render LaTeX
+            from jinja2 import Template
+            template = Template(template_content)
+            rendered_latex = template.render(context)
+            
+            # Save rendered LaTeX for debugging
+            latex_output_path = os.path.join(output_dir, f"debug_{uuid.uuid4().hex}.tex")
+            with open(latex_output_path, 'w', encoding='utf-8') as f:
+                f.write(rendered_latex)
+            
+            # For now, return the rendered LaTeX content
+            # In production, you would compile this to PDF
+            download_url = f"/mvp/static/generated/{os.path.basename(latex_output_path)}"
+            
+            # Clean up temporary files
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            
+            return jsonify({
+                'success': True,
+                'downloadUrl': download_url,
+                'message': 'Report generated successfully with Excel data!',
+                'filename': os.path.basename(latex_output_path),
+                'context_used': context,
+                'optimizations': optimization_result.get('optimizations', {}),
+                'missing_fields': optimization_result.get('missing_fields', [])
+            })
+            
+        elif file_ext == '.docx':
+            # Word template processing
+            output_filename = f"report_{uuid.uuid4().hex}.docx"
+            output_path = os.path.join(output_dir, output_filename)
+            
+            # Use docxtpl for Word templates
+            from docxtpl import DocxTemplate
+            doc = DocxTemplate(template_path)
+            doc.render(context)
+            doc.save(output_path)
+            
+            download_url = f"/mvp/static/generated/{output_filename}"
+            
+            # Clean up temporary files
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            
+            return jsonify({
+                'success': True,
+                'downloadUrl': download_url,
+                'message': 'Report generated successfully with Excel data!',
+                'filename': output_filename,
+                'context_used': context,
+                'optimizations': optimization_result.get('optimizations', {}),
+                'missing_fields': optimization_result.get('missing_fields', [])
+            })
+        
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Unsupported template format. Use .tex or .docx files.'
+            }), 400
+        
+    except Exception as e:
+        logger.error(f"Error generating report with Excel: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': 'Failed to generate report with Excel data'
+        }), 500
+
 @mvp.route('/ai/validate-data', methods=['POST'])
 def ai_validate_data():
     """
@@ -251,8 +450,9 @@ def ai_health_check():
 @mvp.route('/templates/<template_name>/placeholders', methods=['GET'])
 def extract_placeholders_from_stored(template_name):
     """
-    Returns a JSON list of unique placeholders found in the .docx template stored on the server.
-    Example: GET /mvp/templates/04-%20LAPORAN%20FU%20_%20PUNCAK%20ALAM.docx/placeholders
+    Returns a JSON list of unique placeholders found in templates stored on the server.
+    Supports both .docx and .tex files.
+    Example: GET /mvp/templates/Temp2.tex/placeholders
     """
     # Sanitize filename to prevent directory traversal
     safe_name = os.path.basename(template_name)
@@ -262,31 +462,74 @@ def extract_placeholders_from_stored(template_name):
         return jsonify({'error': 'Template not found'}), 404
 
     try:
-        # First try to open with python-docx to check if it's a valid Word document
-        doc = Document(template_path)
+        # Determine file type and handle accordingly
+        file_ext = os.path.splitext(safe_name)[1].lower()
         
-        # Extract placeholders manually from the document content
-        import re
-        placeholder_pattern = r'\{\{([^}]+)\}\}'
-        all_placeholders = set()
+        if file_ext == '.tex':
+            # Handle LaTeX templates
+            with open(template_path, 'r', encoding='utf-8') as f:
+                template_content = f.read()
+            
+            # Use the LaTeX template analyzer
+            from app.services.template_optimizer import LaTeXTemplateAnalyzer
+            analyzer = LaTeXTemplateAnalyzer()
+            placeholders_analysis = analyzer.extract_all_placeholders(template_content)
+            
+            # Flatten all placeholder types into a single list
+            all_placeholders = []
+            all_placeholders.extend(placeholders_analysis.get('simple', []))
+            all_placeholders.extend(placeholders_analysis.get('nested', []))
+            
+            # Add loop variables
+            for loop in placeholders_analysis.get('loops', []):
+                all_placeholders.append(f"#{loop['variable']}")
+                all_placeholders.extend(loop['inner_placeholders'])
+            
+            # Add table placeholders
+            for table in placeholders_analysis.get('tables', []):
+                all_placeholders.extend(table['placeholders'])
+            
+            return jsonify({
+                'placeholders': list(set(all_placeholders)),
+                'analysis': placeholders_analysis,
+                'file_type': 'latex',
+                'total_count': len(set(all_placeholders))
+            })
+            
+        elif file_ext == '.docx':
+            # Handle Word documents (existing logic)
+            doc = Document(template_path)
+            
+            # Extract placeholders manually from the document content
+            import re
+            placeholder_pattern = r'\{\{([^}]+)\}\}'
+            all_placeholders = set()
+            
+            for paragraph in doc.paragraphs:
+                if paragraph.text:
+                    placeholders = re.findall(placeholder_pattern, paragraph.text)
+                    all_placeholders.update(placeholders)
+            
+            # Also check table cells
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for paragraph in cell.paragraphs:
+                            if paragraph.text:
+                                placeholders = re.findall(placeholder_pattern, paragraph.text)
+                                all_placeholders.update(placeholders)
+            
+            return jsonify({
+                'placeholders': list(all_placeholders),
+                'file_type': 'word',
+                'total_count': len(all_placeholders)
+            })
         
-        for paragraph in doc.paragraphs:
-            if paragraph.text:
-                placeholders = re.findall(placeholder_pattern, paragraph.text)
-                all_placeholders.update(placeholders)
-        
-        # Also check table cells
-        for table in doc.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    for paragraph in cell.paragraphs:
-                        if paragraph.text:
-                            placeholders = re.findall(placeholder_pattern, paragraph.text)
-                            all_placeholders.update(placeholders)
-        
-        return jsonify({'placeholders': list(all_placeholders)})
+        else:
+            return jsonify({'error': f'Unsupported file type: {file_ext}'}), 400
         
     except Exception as e:
+        logger.error(f"Error extracting placeholders from {safe_name}: {str(e)}")
         return jsonify({'error': f'Failed to process template: {str(e)}'}), 500
 
 @mvp.route('/templates/<template_name>/content', methods=['GET'])
@@ -452,108 +695,212 @@ def generate_live_preview(template_name):
         logger.warning("No data provided for preview")
         return jsonify({'error': 'No data provided for preview'}), 400
 
-    try:
-        # Create a styled PDF that mimics the template using only reportlab
-        buffer = io.BytesIO()
-        pdf_doc = SimpleDocTemplate(buffer, pagesize=letter)
-        story = []
-        styles = getSampleStyleSheet()
-        
-        # Create custom styles to match template
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=16,
-            spaceAfter=20,
-            alignment=1  # Center alignment
-        )
-        
-        normal_style = ParagraphStyle(
-            'CustomNormal',
-            parent=styles['Normal'],
-            fontSize=12,
-            spaceAfter=12
-        )
-        
-        # Read the original template to understand structure
-        from docx import Document
-        doc_original = Document(template_path)
-        
-        # Process paragraphs with preserved formatting
-        for paragraph in doc_original.paragraphs:
-            if paragraph.text.strip():
-                # Replace placeholders with actual values
-                text = paragraph.text
-                for key, value in context.items():
-                    text = text.replace(f'{{{{{key}}}}}', str(value))
+    file_ext = os.path.splitext(safe_name)[1].lower()
+    if file_ext == '.docx':
+        try:
+            # Create a styled PDF that mimics the template using only reportlab
+            buffer = io.BytesIO()
+            pdf_doc = SimpleDocTemplate(buffer, pagesize=letter)
+            story = []
+            styles = getSampleStyleSheet()
+            
+            # Create custom styles to match template
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=16,
+                spaceAfter=20,
+                alignment=1  # Center alignment
+            )
+            
+            normal_style = ParagraphStyle(
+                'CustomNormal',
+                parent=styles['Normal'],
+                fontSize=12,
+                spaceAfter=12
+            )
+            
+            # Read the original template to understand structure
+            from docx import Document
+            doc_original = Document(template_path)
+            
+            # Process paragraphs with preserved formatting
+            for paragraph in doc_original.paragraphs:
+                if paragraph.text.strip():
+                    # Replace placeholders with actual values
+                    text = paragraph.text
+                    for key, value in context.items():
+                        text = text.replace(f'{{{{{key}}}}}', str(value))
+                    
+                    if text.strip():
+                        # Determine style based on paragraph properties
+                        if paragraph.style and hasattr(paragraph.style, 'name') and paragraph.style.name and paragraph.style.name.startswith('Heading'):
+                            p = Paragraph(text, title_style)
+                        else:
+                            p = Paragraph(text, normal_style)
+                        story.append(p)
+            
+            # Process tables with preserved structure
+            for table in doc_original.tables:
+                from reportlab.platypus import Table, TableStyle
+                from reportlab.lib import colors
                 
-                if text.strip():
-                    # Determine style based on paragraph properties
-                    if paragraph.style and hasattr(paragraph.style, 'name') and paragraph.style.name and paragraph.style.name.startswith('Heading'):
-                        p = Paragraph(text, title_style)
-                    else:
-                        p = Paragraph(text, normal_style)
-                    story.append(p)
-        
-        # Process tables with preserved structure
-        for table in doc_original.tables:
-            from reportlab.platypus import Table, TableStyle
-            from reportlab.lib import colors
+                table_data = []
+                for row in table.rows:
+                    row_data = []
+                    for cell in row.cells:
+                        cell_text = ''
+                        for paragraph in cell.paragraphs:
+                            if paragraph.text.strip():
+                                text = paragraph.text
+                                for key, value in context.items():
+                                    text = text.replace(f'{{{{{key}}}}}', str(value))
+                                cell_text += text + ' '
+                        row_data.append(cell_text.strip())
+                    table_data.append(row_data)
+                
+                if table_data:
+                    pdf_table = Table(table_data)
+                    pdf_table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, 0), 14),
+                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+                        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                        ('FONTSIZE', (0, 1), (-1, -1), 12),
+                        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                    ]))
+                    story.append(pdf_table)
+                    story.append(Spacer(1, 20))
             
-            table_data = []
-            for row in table.rows:
-                row_data = []
-                for cell in row.cells:
-                    cell_text = ''
-                    for paragraph in cell.paragraphs:
-                        if paragraph.text.strip():
-                            text = paragraph.text
-                            for key, value in context.items():
-                                text = text.replace(f'{{{{{key}}}}}', str(value))
-                            cell_text += text + ' '
-                    row_data.append(cell_text.strip())
-                table_data.append(row_data)
+            pdf_doc.build(story)
+            buffer.seek(0)
             
-            if table_data:
-                pdf_table = Table(table_data)
-                pdf_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 14),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                    ('FONTSIZE', (0, 1), (-1, -1), 12),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
-                ]))
-                story.append(pdf_table)
-                story.append(Spacer(1, 20))
-        
-        pdf_doc.build(story)
-        buffer.seek(0)
-        
-        # Convert to base64 for frontend display
-        pdf_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
-        
-        logger.info("Successfully generated PDF preview using fallback method")
-        
-        return jsonify({
-            'preview': f'data:application/pdf;base64,{pdf_base64}',
-            'filename': f'preview_{uuid.uuid4().hex}.pdf'
-        })
-        
-    except Exception as e:
-        logger.error(f"Failed to generate preview: {str(e)}")
-        return jsonify({'error': f'Failed to generate preview: {str(e)}'}), 500
+            # Convert to base64 for frontend display
+            pdf_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            
+            logger.info("Successfully generated PDF preview using fallback method")
+            
+            return jsonify({
+                'preview': f'data:application/pdf;base64,{pdf_base64}',
+                'filename': f'preview_{uuid.uuid4().hex}.pdf'
+            })
+            
+        except Exception as e:
+            logger.error(f"Failed to generate preview: {str(e)}")
+            return jsonify({'error': f'Failed to generate preview: {str(e)}'}), 500
+    elif file_ext == '.tex':
+        try:
+            logger.info("Processing LaTeX template for preview")
+            
+            # Read LaTeX template
+            with open(template_path, 'r', encoding='utf-8') as f:
+                latex_content = f.read()
+            
+            logger.info(f"LaTeX template content length: {len(latex_content)}")
+            logger.info(f"Context received: {list(context.keys()) if isinstance(context, dict) else type(context)}")
+            
+            # Import template converter
+            from app.services.template_converter import TemplateConverter
+            
+            # Analyze and convert template syntax if needed
+            syntax_type = TemplateConverter.analyze_template_syntax(latex_content)
+            logger.info(f"Detected template syntax: {syntax_type}")
+            
+            if syntax_type in ['mustache', 'mixed']:
+                logger.info("Converting Mustache syntax to Jinja2")
+                latex_content = TemplateConverter.mustache_to_jinja2(latex_content)
+                context = TemplateConverter.prepare_context_for_mustache_conversion(context)
+            
+            # Transform flat context data to nested structure
+            nested_context = {}
+            for key, value in context.items():
+                if '.' in key:
+                    parts = key.split('.')
+                    current = nested_context
+                    for part in parts[:-1]:
+                        if part not in current:
+                            current[part] = {}
+                        current = current[part]
+                    current[parts[-1]] = value
+                else:
+                    nested_context[key] = value
+            
+            logger.info(f"Nested context created: {list(nested_context.keys())}")
+            
+            # Use Jinja2 to render LaTeX with nested data and loops
+            from jinja2 import Template, DebugUndefined
+            
+            # Use DebugUndefined to catch missing variables
+            template = Template(latex_content, undefined=DebugUndefined)
+            
+            try:
+                rendered_latex = template.render(nested_context)
+                logger.info(f"LaTeX template rendered successfully. Length: {len(rendered_latex)}")
+            except Exception as render_error:
+                logger.error(f"Template rendering error: {str(render_error)}")
+                # Try with a comprehensive safe context generated from template
+                logger.info("Generating safe context from template placeholders")
+                
+                safe_context = TemplateConverter.generate_safe_context_from_template(latex_content)
+                
+                # Merge user context with safe defaults
+                def deep_merge(base, user):
+                    for key, value in user.items():
+                        if key in base:
+                            if isinstance(base[key], dict) and isinstance(value, dict):
+                                deep_merge(base[key], value)
+                            else:
+                                base[key] = value
+                        else:
+                            base[key] = value
+                    return base
+                
+                final_context = deep_merge(safe_context, nested_context)
+                
+                template_safe = Template(latex_content)
+                rendered_latex = template_safe.render(final_context)
+                logger.info("LaTeX template rendered with comprehensive safe defaults")
+            
+            # Create output directory if it doesn't exist
+            output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../static/generated'))
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Save rendered LaTeX file for download
+            latex_filename = f'preview_{uuid.uuid4().hex}.tex'
+            latex_path = os.path.join(output_dir, latex_filename)
+            with open(latex_path, 'w', encoding='utf-8') as f:
+                f.write(rendered_latex)
+            
+            logger.info(f"LaTeX preview file saved: {latex_filename}")
+            
+            return jsonify({
+                'success': True,
+                'preview_type': 'latex',
+                'download_url': f"/mvp/static/generated/{latex_filename}",
+                'filename': latex_filename,
+                'content_preview': rendered_latex[:1000] + "..." if len(rendered_latex) > 1000 else rendered_latex,
+                'message': 'LaTeX preview generated successfully'
+            })
+                
+        except Exception as latex_error:
+            logger.error(f"Failed to process LaTeX template: {str(latex_error)}", exc_info=True)
+            return jsonify({
+                'error': f'Failed to generate LaTeX preview: {str(latex_error)}',
+                'preview_type': 'error'
+            }), 500
+    else:
+        return jsonify({'error': 'Unsupported template format for preview'}), 400
 
 @mvp.route('/templates/list', methods=['GET'])
 def list_templates():
     files = []
     for fname in os.listdir(TEMPLATE_DIR):
-        if fname.lower().endswith('.docx'):
+        if fname.lower().endswith(('.docx', '.tex')):
             files.append({
                 'id': fname,
                 'name': os.path.splitext(fname)[0],
@@ -586,49 +933,96 @@ def generate_report():
         # Generate unique output filename
         output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../static/generated'))
         os.makedirs(output_dir, exist_ok=True)
-        output_filename = f"report_{uuid.uuid4().hex}.docx"
-        output_path = os.path.join(output_dir, output_filename)
         
-        current_app.logger.debug(f"Output path: {output_path}")
-        
-        # Fill template using docxtpl
-        from docxtpl import DocxTemplate
-        current_app.logger.debug("Creating DocxTemplate instance")
-        doc = DocxTemplate(template_path)
-        
-        # Transform flat context data to nested structure
-        nested_context = {}
-        for key, value in context.items():
-            if '.' in key:
-                parts = key.split('.')
-                current = nested_context
-                for part in parts[:-1]:
-                    if part not in current:
-                        current[part] = {}
-                    current = current[part]
-                current[parts[-1]] = value
-            else:
-                nested_context[key] = value
-        
-        current_app.logger.debug(f"Nested context: {nested_context}")
-        
-        current_app.logger.debug("Rendering template with context")
-        doc.render(nested_context)
-        
-        current_app.logger.debug("Saving rendered document")
-        doc.save(output_path)
-        
-        # Create download URL
-        download_url = f"/mvp/static/generated/{output_filename}"
-        
-        current_app.logger.debug(f"Report generated successfully: {download_url}")
-        
-        return jsonify({
-            'downloadUrl': download_url,
-            'message': f'Report generated successfully! File: {output_filename}',
-            'filename': output_filename,
-            'status': 'success'
-        })
+        # Determine file type and handle accordingly
+        file_ext = os.path.splitext(template_filename)[1].lower()
+        if file_ext == '.docx':
+            output_filename = f"report_{uuid.uuid4().hex}.docx"
+            output_path = os.path.join(output_dir, output_filename)
+            
+            current_app.logger.debug(f"Output path: {output_path}")
+            
+            # Fill template using docxtpl
+            from docxtpl import DocxTemplate
+            current_app.logger.debug("Creating DocxTemplate instance")
+            doc = DocxTemplate(template_path)
+            
+            # Transform flat context data to nested structure
+            nested_context = {}
+            for key, value in context.items():
+                if '.' in key:
+                    parts = key.split('.')
+                    current = nested_context
+                    for part in parts[:-1]:
+                        if part not in current:
+                            current[part] = {}
+                        current = current[part]
+                    current[parts[-1]] = value
+                else:
+                    nested_context[key] = value
+            
+            current_app.logger.debug(f"Nested context: {nested_context}")
+            
+            current_app.logger.debug("Rendering template with context")
+            doc.render(nested_context)
+            
+            current_app.logger.debug("Saving rendered document")
+            doc.save(output_path)
+            
+            # Create download URL
+            download_url = f"/mvp/static/generated/{output_filename}"
+            
+            current_app.logger.debug(f"Report generated successfully: {download_url}")
+            
+            return jsonify({
+                'downloadUrl': download_url,
+                'message': f'Report generated successfully! File: {output_filename}',
+                'filename': output_filename,
+                'status': 'success'
+            })
+        elif file_ext == '.tex':
+            output_filename = f"report_{uuid.uuid4().hex}.pdf"
+            output_path = os.path.join(output_dir, output_filename)
+            
+            # Read LaTeX template
+            with open(template_path, 'r', encoding='utf-8') as f:
+                latex_content = f.read()
+            
+            # Transform flat context data to nested structure
+            nested_context = {}
+            for key, value in context.items():
+                if '.' in key:
+                    parts = key.split('.')
+                    current = nested_context
+                    for part in parts[:-1]:
+                        if part not in current:
+                            current[part] = {}
+                        current = current[part]
+                    current[parts[-1]] = value
+                else:
+                    nested_context[key] = value
+            
+            # Use Jinja2 to render LaTeX with nested data and loops
+            from jinja2 import Template
+            template = Template(latex_content)
+            rendered_latex = template.render(nested_context)
+            
+            # Save rendered LaTeX file (PDF compilation would require LaTeX installation)
+            latex_output_path = os.path.join(output_dir, f"report_{uuid.uuid4().hex}.tex")
+            with open(latex_output_path, 'w', encoding='utf-8') as f:
+                f.write(rendered_latex)
+            
+            # Create download URL for the LaTeX file
+            download_url = f"/mvp/static/generated/{os.path.basename(latex_output_path)}"
+            
+            return jsonify({
+                'downloadUrl': download_url,
+                'message': f'Report generated successfully! File: {output_filename}',
+                'filename': output_filename,
+                'status': 'success'
+            })
+        else:
+            return jsonify({'error': 'Unsupported template format'}), 400
         
     except Exception as e:
         current_app.logger.error(f"Error generating report: {str(e)}", exc_info=True)

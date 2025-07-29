@@ -12,7 +12,9 @@ import uuid
 import qrcode
 import io
 import base64
+import os
 from werkzeug.exceptions import BadRequest, Unauthorized, NotFound
+from ..services.form_automation import FormAutomationService
 import logging
 
 forms_bp = Blueprint('forms', __name__)
@@ -871,3 +873,342 @@ def track_qr_scan(qr_id):
     except Exception as e:
         current_app.logger.error(f"Error in track_qr_scan: {str(e)}")
         return jsonify({'error': 'Failed to track scan'}), 500
+
+
+# =============================================================================
+# FORM AUTOMATION ENDPOINTS - Complete Form-to-Excel-to-Report Workflow
+# =============================================================================
+
+@forms_bp.route('/automation/create-from-template', methods=['POST'])
+@jwt_required()
+def create_form_from_template():
+    """
+    Create a dynamic form from a template file
+    POST /api/forms/automation/create-from-template
+    """
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        # Check if template file is uploaded
+        if 'template_file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'Template file is required'
+            }), 400
+        
+        template_file = request.files['template_file']
+        form_title = request.form.get('form_title', '')
+        
+        if not template_file.filename:
+            return jsonify({
+                'success': False,
+                'error': 'No template file selected'
+            }), 400
+        
+        # Save template temporarily
+        import tempfile
+        temp_dir = tempfile.mkdtemp()
+        template_path = os.path.join(temp_dir, template_file.filename)
+        template_file.save(template_path)
+        
+        # Create form using automation service
+        automation_service = FormAutomationService()
+        result = automation_service.create_form_from_template(template_path, form_title)
+        
+        # Clean up temporary file
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        
+        if result['success']:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        current_app.logger.error(f"Error creating form from template: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@forms_bp.route('/automation/export-to-excel/<int:form_id>', methods=['POST'])
+@jwt_required()
+def export_form_to_excel(form_id):
+    """
+    Export form submissions to formatted Excel file
+    POST /api/forms/automation/export-to-excel/{form_id}
+    """
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        # Check if form exists and user has permission
+        form = Form.query.get_or_404(form_id)
+        
+        # Get options from request
+        data = request.get_json() or {}
+        include_analytics = data.get('include_analytics', True)
+        custom_filename = data.get('filename')
+        
+        # Export using automation service
+        automation_service = FormAutomationService()
+        result = automation_service.export_form_data_to_excel(
+            form_id, 
+            output_path=custom_filename,
+            include_analytics=include_analytics
+        )
+        
+        if result['success']:
+            # Return download URL
+            download_url = f"/api/forms/automation/download/{os.path.basename(result['file_path'])}"
+            result['download_url'] = download_url
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        current_app.logger.error(f"Error exporting form to Excel: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@forms_bp.route('/automation/generate-report', methods=['POST'])
+@jwt_required()
+def generate_automated_report():
+    """
+    Generate report from Excel data using template
+    POST /api/forms/automation/generate-report
+    """
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        # Check for required files
+        if 'excel_file' not in request.files or 'template_file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'Both Excel data file and template file are required'
+            }), 400
+        
+        excel_file = request.files['excel_file']
+        template_file = request.files['template_file']
+        
+        # Save files temporarily
+        import tempfile
+        temp_dir = tempfile.mkdtemp()
+        
+        excel_path = os.path.join(temp_dir, excel_file.filename)
+        template_path = os.path.join(temp_dir, template_file.filename)
+        
+        excel_file.save(excel_path)
+        template_file.save(template_path)
+        
+        # Generate report using automation service
+        automation_service = FormAutomationService()
+        result = automation_service.generate_report_from_excel(excel_path, template_path)
+        
+        # Clean up temporary files
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        
+        if result['success']:
+            # Return download URL
+            download_url = f"/api/forms/automation/download/{os.path.basename(result['report_path'])}"
+            result['download_url'] = download_url
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        current_app.logger.error(f"Error generating automated report: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@forms_bp.route('/automation/create-workflow', methods=['POST'])
+@jwt_required()
+def create_automated_workflow():
+    """
+    Create complete automated workflow: Template → Form → Excel → Report
+    POST /api/forms/automation/create-workflow
+    """
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        # Check for template file
+        if 'template_file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'Template file is required to create workflow'
+            }), 400
+        
+        template_file = request.files['template_file']
+        workflow_name = request.form.get('workflow_name', f"Workflow - {template_file.filename}")
+        
+        # Save template temporarily
+        import tempfile
+        temp_dir = tempfile.mkdtemp()
+        template_path = os.path.join(temp_dir, template_file.filename)
+        template_file.save(template_path)
+        
+        # Create workflow using automation service
+        automation_service = FormAutomationService()
+        result = automation_service.create_automated_workflow(template_path, workflow_name)
+        
+        # If successful, create the actual form in database
+        if result['success']:
+            form_schema = result['form_schema']
+            
+            # Create form record
+            new_form = Form(
+                title=result['workflow_name'],
+                description=f"Automated form created from template: {template_file.filename}",
+                schema=form_schema,
+                is_active=True,
+                is_public=True,  # Make public for easy access
+                creator_id=user.id
+            )
+            
+            db.session.add(new_form)
+            db.session.commit()
+            
+            # Add form ID to result
+            result['form_id'] = new_form.id
+            result['form_url'] = f"/forms/{new_form.id}"
+            result['qr_code_available'] = True
+        
+        # Clean up temporary file
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        
+        if result['success']:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        current_app.logger.error(f"Error creating automated workflow: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@forms_bp.route('/automation/workflow-status/<int:form_id>', methods=['GET'])
+@jwt_required()
+def get_workflow_status(form_id):
+    """
+    Get the status of an automated workflow
+    GET /api/forms/automation/workflow-status/{form_id}
+    """
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        # Get form and its submissions
+        form = Form.query.get_or_404(form_id)
+        submissions = FormSubmission.query.filter_by(form_id=form_id).all()
+        
+        # Calculate workflow status
+        workflow_status = {
+            'form_id': form_id,
+            'form_title': form.title,
+            'created_at': form.created_at.isoformat(),
+            'is_active': form.is_active,
+            'total_submissions': len(submissions),
+            'steps': [
+                {
+                    'step': 1,
+                    'name': 'Form Creation',
+                    'status': 'completed',
+                    'completion_date': form.created_at.isoformat()
+                },
+                {
+                    'step': 2,
+                    'name': 'Data Collection',
+                    'status': 'completed' if submissions else 'in_progress',
+                    'submissions_count': len(submissions),
+                    'last_submission': submissions[-1].submitted_at.isoformat() if submissions else None
+                },
+                {
+                    'step': 3,
+                    'name': 'Excel Export',
+                    'status': 'ready' if submissions else 'waiting',
+                    'action_url': f"/api/forms/automation/export-to-excel/{form_id}" if submissions else None
+                },
+                {
+                    'step': 4,
+                    'name': 'Report Generation',
+                    'status': 'ready' if submissions else 'waiting',
+                    'action_url': "/api/forms/automation/generate-report" if submissions else None
+                }
+            ],
+            'next_actions': []
+        }
+        
+        # Determine next actions
+        if not submissions:
+            workflow_status['next_actions'].append({
+                'action': 'Share form to collect data',
+                'url': f"/forms/{form_id}",
+                'description': 'Share this form URL to start collecting submissions'
+            })
+        else:
+            workflow_status['next_actions'].extend([
+                {
+                    'action': 'Export to Excel',
+                    'url': f"/api/forms/automation/export-to-excel/{form_id}",
+                    'description': 'Export collected data to formatted Excel file'
+                },
+                {
+                    'action': 'Generate Report',
+                    'url': "/api/forms/automation/generate-report",
+                    'description': 'Generate final report using template and collected data'
+                }
+            ])
+        
+        return jsonify(workflow_status), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting workflow status: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@forms_bp.route('/automation/download/<filename>', methods=['GET'])
+def download_generated_file(filename):
+    """
+    Download generated files (Excel exports, reports, etc.)
+    GET /api/forms/automation/download/{filename}
+    """
+    try:
+        # Check in exports directory
+        exports_dir = os.path.join(os.path.dirname(__file__), '../../static/exports')
+        exports_path = os.path.join(exports_dir, filename)
+        
+        if os.path.exists(exports_path):
+            from flask import send_file
+            return send_file(exports_path, as_attachment=True)
+        
+        # Check in generated directory
+        generated_dir = os.path.join(os.path.dirname(__file__), '../../static/generated')
+        generated_path = os.path.join(generated_dir, filename)
+        
+        if os.path.exists(generated_path):
+            from flask import send_file
+            return send_file(generated_path, as_attachment=True)
+        
+        return jsonify({'error': 'File not found'}), 404
+        
+    except Exception as e:
+        current_app.logger.error(f"Error downloading file: {str(e)}")
+        return jsonify({'error': 'Download failed'}), 500
