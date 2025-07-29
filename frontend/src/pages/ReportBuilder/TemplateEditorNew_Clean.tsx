@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Box,
+  Paper,
   Typography,
   Button,
   TextField,
@@ -10,6 +11,12 @@ import {
   Chip,
   List,
   ListItem,
+  ListItemText,
+  ListItemIcon,
+  Divider,
+  IconButton,
+  Menu,
+  MenuItem,
 } from "@mui/material";
 import {
   Refresh as RefreshIcon,
@@ -19,6 +26,7 @@ import {
   Edit as EditIcon,
   Save as SaveIcon,
   Add as AddIcon,
+  MoreVert as MoreVertIcon,
 } from "@mui/icons-material";
 import { fetchTemplateContent, generateLivePreview } from "../../services/api";
 
@@ -49,10 +57,6 @@ export default function TemplateEditor({
   const [selectedSuggestion, setSelectedSuggestion] = useState<number | null>(
     null
   );
-
-  // Log props for debugging
-  console.log("TemplateEditor props:", { templateName, data, isGenerating });
-  console.log("Component state:", { editedData, livePreview, editableContent });
 
   const [aiSuggestions] = useState([
     {
@@ -126,60 +130,17 @@ export default function TemplateEditor({
     onDataChange(editedData);
   }, [editedData, onDataChange]);
 
-  // Don't auto-initialize editable content - let user choose their mode
-
   const handleGeneratePreview = async () => {
-    console.log("handleGeneratePreview called");
-    console.log("templateName:", templateName);
-    console.log("editedData:", editedData);
-    console.log("editableContent:", editableContent);
-
-    if (!templateName) {
-      setPreviewError("No template selected");
-      console.log("Error: No template selected");
-      return;
-    }
-
-    // If we have editable content, use that for preview
-    if (editableContent) {
-      setLivePreview(null); // Clear iframe preview when using editable content
-      console.log("Using editable content, clearing iframe preview");
-      return;
-    }
-
-    // Otherwise generate preview from field data
-    if (Object.keys(editedData).length === 0) {
-      setPreviewError("No data available for preview");
-      console.log("Error: No data available for preview");
-      return;
-    }
+    if (!templateName || Object.keys(editedData).length === 0) return;
 
     setIsGeneratingPreview(true);
     setPreviewError(null);
-    console.log("Starting preview generation...");
 
     try {
-      const result = await generateLivePreview(templateName, editedData);
-      console.log("Preview result:", result);
-      // Handle both string and object responses from the API
-      const previewUrl = typeof result === "string" ? result : result.preview;
-
-      // Ensure PDF data URL is properly formatted
-      const formattedPreviewUrl = previewUrl.startsWith("data:")
-        ? previewUrl
-        : `data:application/pdf;base64,${previewUrl}`;
-
-      console.log(
-        "Setting livePreview with URL length:",
-        formattedPreviewUrl.length
-      );
-      setLivePreview(formattedPreviewUrl);
-      setEditableContent(""); // Clear editable content when showing iframe preview
-    } catch (error: unknown) {
-      console.error("Preview generation error:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to generate preview";
-      setPreviewError(errorMessage);
+      const preview = await generateLivePreview(templateName, editedData);
+      setLivePreview(preview);
+    } catch (error: any) {
+      setPreviewError(error.message || "Failed to generate preview");
     } finally {
       setIsGeneratingPreview(false);
     }
@@ -203,7 +164,7 @@ export default function TemplateEditor({
   };
 
   // Handle suggestion selection
-  const handleSuggestionSelect = (suggestion: (typeof aiSuggestions)[0]) => {
+  const handleSuggestionSelect = (suggestion: any) => {
     setSelectedSuggestion(suggestion.id);
     setEditableContent(suggestion.content);
   };
@@ -227,10 +188,13 @@ export default function TemplateEditor({
   }
 
   return (
-    <>
+    <Box sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>
       {/* Header */}
       <Box
         sx={{
+          p: 2,
+          borderBottom: "1px solid #e0e0e0",
+          backgroundColor: "#fafafa",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
@@ -245,27 +209,12 @@ export default function TemplateEditor({
         </Typography>
         <Box sx={{ display: "flex", gap: 1 }}>
           <Button
-            variant={editableContent ? "contained" : "outlined"}
-            startIcon={<EditIcon />}
-            onClick={() => {
-              if (!editableContent) {
-                setEditableContent(`# ${templateName} Report
-
-Welcome to your report template. Start editing...`);
-                setLivePreview(null);
-              }
-            }}
-            size="small"
-          >
-            Edit Mode
-          </Button>
-          <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
             onClick={handleGeneratePreview}
             disabled={isGeneratingPreview}
           >
-            {isGeneratingPreview ? "Generating..." : "API Preview"}
+            {isGeneratingPreview ? "Generating..." : "Refresh Preview"}
           </Button>
           <Button
             variant="contained"
@@ -279,23 +228,26 @@ Welcome to your report template. Start editing...`);
       </Box>
 
       {/* Main Content Area */}
-      <Grid
-        container
-        sx={{ height: "100vh", margin: 0, width: "100%", padding: 0 }}
-      >
+      <Grid container sx={{ flex: 1, height: "calc(100vh - 80px)" }}>
         {/* Left Panel - AI Suggestions */}
         <Grid
           item
           xs={12}
           md={5}
           sx={{
+            borderRight: "1px solid #e0e0e0",
             display: "flex",
             flexDirection: "column",
             height: "100%",
-            padding: 0,
           }}
         >
-          <Box sx={{}}>
+          <Box
+            sx={{
+              p: 3,
+              borderBottom: "1px solid #e0e0e0",
+              backgroundColor: "#f8f9fa",
+            }}
+          >
             <Typography
               variant="h6"
               sx={{ fontWeight: 600, color: "#1976d2", mb: 1 }}
@@ -313,6 +265,7 @@ Welcome to your report template. Start editing...`);
             sx={{
               flex: 1,
               overflow: "auto",
+              p: 2,
             }}
           >
             <List sx={{ p: 0 }}>
@@ -325,11 +278,25 @@ Welcome to your report template. Start editing...`);
                     p: 0,
                     mb: 2,
                     cursor: "pointer",
+                    border:
+                      selectedSuggestion === suggestion.id
+                        ? "2px solid #1976d2"
+                        : "1px solid #e0e0e0",
+                    borderRadius: 2,
+                    backgroundColor:
+                      selectedSuggestion === suggestion.id
+                        ? "#f3f7ff"
+                        : "white",
                     transition: "all 0.2s ease",
+                    "&:hover": {
+                      backgroundColor: "#f8f9fa",
+                      transform: "translateY(-1px)",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                    },
                   }}
                   onClick={() => handleSuggestionSelect(suggestion)}
                 >
-                  <Box sx={{}}>
+                  <Box sx={{ p: 2 }}>
                     <Box
                       sx={{
                         display: "flex",
@@ -347,12 +314,12 @@ Welcome to your report template. Start editing...`);
                       <Chip
                         label={suggestion.type.toUpperCase()}
                         size="small"
+                        variant="outlined"
                         sx={{
                           fontSize: "0.7rem",
                           height: 20,
-                          backgroundColor: "rgba(25, 118, 210, 0.15)",
+                          borderColor: "#1976d2",
                           color: "#1976d2",
-                          border: "none",
                         }}
                       />
                     </Box>
@@ -363,7 +330,14 @@ Welcome to your report template. Start editing...`);
                     >
                       {suggestion.description}
                     </Typography>
-                    <Box sx={{}}>
+                    <Box
+                      sx={{
+                        p: 1.5,
+                        backgroundColor: "rgba(25, 118, 210, 0.08)",
+                        borderRadius: 1,
+                        borderLeft: "3px solid #1976d2",
+                      }}
+                    >
                       <Typography
                         variant="body2"
                         sx={{ fontStyle: "italic", lineHeight: 1.4 }}
@@ -402,6 +376,9 @@ Welcome to your report template. Start editing...`);
         >
           <Box
             sx={{
+              p: 3,
+              borderBottom: "1px solid #e0e0e0",
+              backgroundColor: "#f8f9fa",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
@@ -448,16 +425,24 @@ Welcome to your report template. Start editing...`);
               </Alert>
             )}
 
-            <Box
+            <Paper
+              elevation={0}
               sx={{
+                p: 3,
+                border: "1px solid #e0e0e0",
+                borderRadius: 2,
                 minHeight: "500px",
+                backgroundColor: "#fafafa",
                 position: "relative",
               }}
             >
               <Typography
                 variant="h6"
                 sx={{
+                  mb: 3,
                   color: "#1976d2",
+                  borderBottom: "2px solid #e0e0e0",
+                  pb: 1,
                 }}
               >
                 {templateName || "Report Preview"}
@@ -473,17 +458,18 @@ Welcome to your report template. Start editing...`);
                   variant="outlined"
                   placeholder="Start typing or add AI suggestions..."
                   sx={{
+                    backgroundColor: "white",
                     "& .MuiOutlinedInput-root": {
                       fontSize: "0.95rem",
                       lineHeight: 1.6,
                       "& fieldset": {
-                        border: "none",
+                        borderColor: "#e0e0e0",
                       },
                       "&:hover fieldset": {
-                        border: "none",
+                        borderColor: "#1976d2",
                       },
                       "&.Mui-focused fieldset": {
-                        border: "none",
+                        borderColor: "#1976d2",
                       },
                     },
                   }}
@@ -496,6 +482,7 @@ Welcome to your report template. Start editing...`);
                     width: "100%",
                     height: "500px",
                     border: "none",
+                    borderRadius: 1,
                     backgroundColor: "white",
                   }}
                   title="Template Preview"
@@ -516,34 +503,24 @@ Welcome to your report template. Start editing...`);
                     sx={{ fontSize: 64, mb: 2, color: "#e0e0e0" }}
                   />
                   <Typography variant="h6" sx={{ mb: 1 }}>
-                    Choose Your Editing Mode
+                    Start Building Your Report
                   </Typography>
                   <Typography variant="body2" sx={{ mb: 3, maxWidth: 400 }}>
-                    Click "Edit Mode" to write content directly, or "API
-                    Preview" to generate a preview from your uploaded data. You
-                    can also select AI suggestions from the left panel.
+                    Select AI suggestions from the left panel to add content, or
+                    click "Refresh Preview" to see your template with current
+                    data.
                   </Typography>
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <Button
-                      variant="contained"
-                      startIcon={<EditIcon />}
-                      onClick={() =>
-                        setEditableContent(
-                          `# ${templateName} Report\n\nStart writing your report content here...`
-                        )
-                      }
-                    >
-                      Start Editing
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      startIcon={<RefreshIcon />}
-                      onClick={handleGeneratePreview}
-                      disabled={Object.keys(editedData).length === 0}
-                    >
-                      API Preview
-                    </Button>
-                  </Box>
+                  <Button
+                    variant="contained"
+                    startIcon={<LightbulbIcon />}
+                    onClick={() =>
+                      setEditableContent(
+                        "Click to start editing your report content..."
+                      )
+                    }
+                  >
+                    Start Editing
+                  </Button>
                 </Box>
               ) : (
                 <Box
@@ -560,10 +537,10 @@ Welcome to your report template. Start editing...`);
                   </Typography>
                 </Box>
               )}
-            </Box>
+            </Paper>
           </Box>
         </Grid>
       </Grid>
-    </>
+    </Box>
   );
 }

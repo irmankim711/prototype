@@ -246,6 +246,34 @@ export const fetchRecentReports = async (): Promise<Report[]> => {
   return data;
 };
 
+export const fetchReportsHistory = async (
+  page: number = 1,
+  per_page: number = 20,
+  status?: string,
+  search?: string
+): Promise<{
+  reports: Report[];
+  pagination: {
+    page: number;
+    pages: number;
+    per_page: number;
+    total: number;
+    has_next: boolean;
+    has_prev: boolean;
+  };
+}> => {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    per_page: per_page.toString(),
+  });
+
+  if (status) params.append("status", status);
+  if (search) params.append("search", search);
+
+  const { data } = await api.get(`/reports/history?${params.toString()}`);
+  return data;
+};
+
 export const fetchReportStats = async (): Promise<ReportStats> => {
   const { data } = await api.get("/reports/stats");
   return data;
@@ -359,9 +387,7 @@ export const fetchFiles = async (
     total: number;
   };
 }> => {
-  const { data } = await api.get(
-    `/files/?page=${page}&per_page=${perPage}`
-  );
+  const { data } = await api.get(`/files/?page=${page}&per_page=${perPage}`);
   return data;
 };
 
@@ -500,20 +526,25 @@ export const generateReport = async (
 };
 
 // Download generated report
-export const downloadReport = async (downloadUrl: string, filename?: string): Promise<void> => {
+export const downloadReport = async (
+  downloadUrl: string,
+  filename?: string
+): Promise<void> => {
   try {
     // If downloadUrl is relative, make it absolute
-    const fullUrl = downloadUrl.startsWith('http') ? downloadUrl : `${API_BASE_URL}${downloadUrl}`;
-    
+    const fullUrl = downloadUrl.startsWith("http")
+      ? downloadUrl
+      : `${API_BASE_URL}${downloadUrl}`;
+
     // Fetch the file
     const response = await fetch(fullUrl);
     if (!response.ok) {
       throw new Error(`Download failed: ${response.statusText}`);
     }
-    
+
     // Get the blob
     const blob = await response.blob();
-    
+
     // Create download link
     const link = document.createElement("a");
     const url = window.URL.createObjectURL(blob);
@@ -521,12 +552,12 @@ export const downloadReport = async (downloadUrl: string, filename?: string): Pr
     link.download = filename || "generated_report.docx";
     document.body.appendChild(link);
     link.click();
-    
+
     // Cleanup
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
   } catch (error) {
-    console.error('Download failed:', error);
+    console.error("Download failed:", error);
     throw error;
   }
 };
