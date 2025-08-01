@@ -50,6 +50,21 @@ def require_role(required_role):
 
 def get_current_user():
     """Helper function to get current authenticated user."""
+    from .models import User, UserRole, Permission
+    
+    user_id = get_jwt_identity()
+    
+    # Handle bypass user for development
+    if user_id == 'bypass-user':
+        # Create a mock user object for bypass mode
+        bypass_user = User()
+        bypass_user.id = 999999  # Special ID for bypass user
+        bypass_user.email = 'bypass@test.com'
+        bypass_user.username = 'Bypass User'
+        bypass_user.is_active = True
+        bypass_user.role = UserRole.ADMIN  # Give admin privileges for testing
+        return bypass_user
+    
     user_id = get_current_user_id()
     if user_id:
         return User.query.get(user_id)

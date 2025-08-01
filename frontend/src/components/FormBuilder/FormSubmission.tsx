@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import React, { useState, useEffect } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Box,
   Typography,
@@ -25,8 +25,11 @@ import {
   Divider,
   Chip,
   IconButton,
-  Tooltip
-} from '@mui/material';
+  Tooltip,
+  Select,
+  MenuItem,
+  InputLabel,
+} from "@mui/material";
 import {
   Send,
   CheckCircle,
@@ -47,9 +50,14 @@ import {
   AttachFile,
   ArrowDropDown,
   RadioButtonChecked,
-  CheckBox
-} from '@mui/icons-material';
-import { formBuilderAPI, type Form, type FormField, formBuilderUtils } from '../../services/formBuilder';
+  CheckBox,
+} from "@mui/icons-material";
+import {
+  formBuilderAPI,
+  type Form,
+  type FormField,
+  formBuilderUtils,
+} from "../../services/formBuilder";
 
 interface FormSubmissionProps {
   formId: number;
@@ -61,40 +69,56 @@ interface FormData {
   [key: string]: any;
 }
 
-export default function FormSubmission({ formId, onSuccess, onError }: FormSubmissionProps) {
+export default function FormSubmission({
+  formId,
+  onSuccess,
+  onError,
+}: FormSubmissionProps) {
   const [formData, setFormData] = useState<FormData>({});
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [activeStep, setActiveStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' | 'warning' | 'info' });
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success" as "success" | "error" | "warning" | "info",
+  });
 
   // Fetch form data
-  const { data: form, isLoading, error } = useQuery({
-    queryKey: ['form', formId],
+  const {
+    data: form,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["form", formId],
     queryFn: () => formBuilderAPI.getForm(formId),
-    enabled: !!formId
+    enabled: !!formId,
   });
 
   // Submit form mutation
   const submitMutation = useMutation({
-    mutationFn: (data: { data: FormData; email?: string }) => 
+    mutationFn: (data: { data: FormData; email?: string }) =>
       formBuilderAPI.submitForm(formId, data),
     onSuccess: (data) => {
-      setSnackbar({ open: true, message: 'Form submitted successfully!', severity: 'success' });
+      setSnackbar({
+        open: true,
+        message: "Form submitted successfully!",
+        severity: "success",
+      });
       onSuccess?.(data.submission_id);
     },
     onError: (error: any) => {
-      const message = error.response?.data?.error || 'Failed to submit form';
-      setSnackbar({ open: true, message, severity: 'error' });
+      const message = error.response?.data?.error || "Failed to submit form";
+      setSnackbar({ open: true, message, severity: "error" });
       onError?.(message);
-    }
+    },
   });
 
   // Initialize form data with default values
   useEffect(() => {
     if (form?.schema?.fields) {
       const initialData: FormData = {};
-      form.schema.fields.forEach(field => {
+      form.schema.fields.forEach((field) => {
         if (field.defaultValue !== undefined) {
           initialData[field.id] = field.defaultValue;
         }
@@ -107,65 +131,89 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
   const validateForm = (): boolean => {
     const newErrors: { [key: string]: string } = {};
 
-    form?.schema?.fields.forEach(field => {
+    form?.schema?.fields.forEach((field) => {
       const value = formData[field.id];
 
       // Check required fields
-      if (field.required && (value === undefined || value === null || value === '')) {
+      if (
+        field.required &&
+        (value === undefined || value === null || value === "")
+      ) {
         newErrors[field.id] = `${field.label} is required`;
         return;
       }
 
       // Skip validation for empty optional fields
-      if (value === undefined || value === null || value === '') {
+      if (value === undefined || value === null || value === "") {
         return;
       }
 
       // Type-specific validation
       switch (field.type) {
-        case 'email':
-          const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        case "email":
+          const emailPattern =
+            /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
           if (!emailPattern.test(String(value))) {
-            newErrors[field.id] = 'Please enter a valid email address';
+            newErrors[field.id] = "Please enter a valid email address";
           }
           break;
 
-        case 'number':
+        case "number":
           const numValue = Number(value);
           if (isNaN(numValue)) {
-            newErrors[field.id] = 'Please enter a valid number';
+            newErrors[field.id] = "Please enter a valid number";
           } else {
-            if (field.validation?.min !== undefined && numValue < field.validation.min) {
-              newErrors[field.id] = `Value must be at least ${field.validation.min}`;
+            if (
+              field.validation?.min !== undefined &&
+              numValue < field.validation.min
+            ) {
+              newErrors[
+                field.id
+              ] = `Value must be at least ${field.validation.min}`;
             }
-            if (field.validation?.max !== undefined && numValue > field.validation.max) {
-              newErrors[field.id] = `Value must be at most ${field.validation.max}`;
+            if (
+              field.validation?.max !== undefined &&
+              numValue > field.validation.max
+            ) {
+              newErrors[
+                field.id
+              ] = `Value must be at most ${field.validation.max}`;
             }
           }
           break;
 
-        case 'text':
-        case 'textarea':
+        case "text":
+        case "textarea":
           const textValue = String(value);
-          if (field.validation?.minLength && textValue.length < field.validation.minLength) {
-            newErrors[field.id] = `Must be at least ${field.validation.minLength} characters`;
+          if (
+            field.validation?.minLength &&
+            textValue.length < field.validation.minLength
+          ) {
+            newErrors[
+              field.id
+            ] = `Must be at least ${field.validation.minLength} characters`;
           }
-          if (field.validation?.maxLength && textValue.length > field.validation.maxLength) {
-            newErrors[field.id] = `Must be at most ${field.validation.maxLength} characters`;
+          if (
+            field.validation?.maxLength &&
+            textValue.length > field.validation.maxLength
+          ) {
+            newErrors[
+              field.id
+            ] = `Must be at most ${field.validation.maxLength} characters`;
           }
           break;
 
-        case 'select':
-        case 'radio':
+        case "select":
+        case "radio":
           if (field.options && !field.options.includes(String(value))) {
-            newErrors[field.id] = 'Please select a valid option';
+            newErrors[field.id] = "Please select a valid option";
           }
           break;
 
-        case 'rating':
+        case "rating":
           const ratingValue = Number(value);
           if (isNaN(ratingValue) || ratingValue < 1 || ratingValue > 5) {
-            newErrors[field.id] = 'Please select a rating between 1 and 5';
+            newErrors[field.id] = "Please select a rating between 1 and 5";
           }
           break;
       }
@@ -177,18 +225,22 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
 
   // Handle field value change
   const handleFieldChange = (fieldId: string, value: any) => {
-    setFormData(prev => ({ ...prev, [fieldId]: value }));
-    
+    setFormData((prev) => ({ ...prev, [fieldId]: value }));
+
     // Clear error for this field
     if (errors[fieldId]) {
-      setErrors(prev => ({ ...prev, [fieldId]: '' }));
+      setErrors((prev) => ({ ...prev, [fieldId]: "" }));
     }
   };
 
   // Handle form submission
   const handleSubmit = async () => {
     if (!validateForm()) {
-      setSnackbar({ open: true, message: 'Please fix the errors before submitting', severity: 'error' });
+      setSnackbar({
+        open: true,
+        message: "Please fix the errors before submitting",
+        severity: "error",
+      });
       return;
     }
 
@@ -217,7 +269,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
       phone: <Phone />,
       url: <Link />,
       rating: <Star />,
-      location: <LocationOn />
+      location: <LocationOn />,
     };
     return icons[type] || <TextFields />;
   };
@@ -229,12 +281,12 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
     const hasError = !!error;
 
     switch (field.type) {
-      case 'text':
+      case "text":
         return (
           <TextField
             label={field.label}
             placeholder={field.placeholder}
-            value={value || ''}
+            value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
@@ -242,18 +294,18 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             helperText={error}
             required={field.required}
             InputProps={{
-              startAdornment: getFieldIcon(field.type)
+              startAdornment: getFieldIcon(field.type),
             }}
             autoComplete="on"
           />
         );
 
-      case 'textarea':
+      case "textarea":
         return (
           <TextField
             label={field.label}
             placeholder={field.placeholder}
-            value={value || ''}
+            value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
@@ -263,18 +315,18 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             helperText={error}
             required={field.required}
             InputProps={{
-              startAdornment: getFieldIcon(field.type)
+              startAdornment: getFieldIcon(field.type),
             }}
             autoComplete="on"
           />
         );
 
-      case 'email':
+      case "email":
         return (
           <TextField
             label={field.label}
             placeholder={field.placeholder}
-            value={value || ''}
+            value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
@@ -283,18 +335,18 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             helperText={error}
             required={field.required}
             InputProps={{
-              startAdornment: getFieldIcon(field.type)
+              startAdornment: getFieldIcon(field.type),
             }}
             autoComplete="email"
           />
         );
 
-      case 'number':
+      case "number":
         return (
           <TextField
             label={field.label}
             placeholder={field.placeholder}
-            value={value || ''}
+            value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
@@ -303,33 +355,49 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             helperText={error}
             required={field.required}
             InputProps={{
-              startAdornment: getFieldIcon(field.type)
+              startAdornment: getFieldIcon(field.type),
             }}
             autoComplete="off"
           />
         );
 
-      case 'select':
+      case "select":
         return (
-          <FormControl fullWidth margin="normal" error={hasError} required={field.required}>
+          <FormControl
+            fullWidth
+            margin="normal"
+            error={hasError}
+            required={field.required}
+          >
             <InputLabel>{field.label}</InputLabel>
             <Select
-              value={value || ''}
+              value={value || ""}
               onChange={(e) => handleFieldChange(field.id, e.target.value)}
               label={field.label}
               startAdornment={getFieldIcon(field.type)}
             >
               {field.options?.map((option) => (
-                <MenuItem key={option} value={option}>{option}</MenuItem>
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
               ))}
             </Select>
-            {error && <Typography variant="caption" color="error">{error}</Typography>}
+            {error && (
+              <Typography variant="caption" color="error">
+                {error}
+              </Typography>
+            )}
           </FormControl>
         );
 
-      case 'radio':
+      case "radio":
         return (
-          <FormControl component="fieldset" margin="normal" error={hasError} required={field.required}>
+          <FormControl
+            component="fieldset"
+            margin="normal"
+            error={hasError}
+            required={field.required}
+          >
             <FormLabel component="legend">
               <Box display="flex" alignItems="center" gap={1}>
                 {getFieldIcon(field.type)}
@@ -337,7 +405,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
               </Box>
             </FormLabel>
             <RadioGroup
-              value={value || ''}
+              value={value || ""}
               onChange={(e) => handleFieldChange(field.id, e.target.value)}
             >
               {field.options?.map((option) => (
@@ -349,13 +417,22 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
                 />
               ))}
             </RadioGroup>
-            {error && <Typography variant="caption" color="error">{error}</Typography>}
+            {error && (
+              <Typography variant="caption" color="error">
+                {error}
+              </Typography>
+            )}
           </FormControl>
         );
 
-      case 'checkbox':
+      case "checkbox":
         return (
-          <FormControl component="fieldset" margin="normal" error={hasError} required={field.required}>
+          <FormControl
+            component="fieldset"
+            margin="normal"
+            error={hasError}
+            required={field.required}
+          >
             <FormLabel component="legend">
               <Box display="flex" alignItems="center" gap={1}>
                 {getFieldIcon(field.type)}
@@ -368,12 +445,14 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
                   key={option}
                   control={
                     <Checkbox
-                      checked={Array.isArray(value) ? value.includes(option) : false}
+                      checked={
+                        Array.isArray(value) ? value.includes(option) : false
+                      }
                       onChange={(e) => {
                         const currentValue = Array.isArray(value) ? value : [];
                         const newValue = e.target.checked
                           ? [...currentValue, option]
-                          : currentValue.filter(v => v !== option);
+                          : currentValue.filter((v) => v !== option);
                         handleFieldChange(field.id, newValue);
                       }}
                     />
@@ -382,16 +461,20 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
                 />
               ))}
             </FormGroup>
-            {error && <Typography variant="caption" color="error">{error}</Typography>}
+            {error && (
+              <Typography variant="caption" color="error">
+                {error}
+              </Typography>
+            )}
           </FormControl>
         );
 
-      case 'date':
+      case "date":
         return (
           <TextField
             label={field.label}
             placeholder={field.placeholder}
-            value={value || ''}
+            value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
@@ -400,18 +483,18 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             helperText={error}
             required={field.required}
             InputProps={{
-              startAdornment: getFieldIcon(field.type)
+              startAdornment: getFieldIcon(field.type),
             }}
             autoComplete="bday"
           />
         );
 
-      case 'time':
+      case "time":
         return (
           <TextField
             label={field.label}
             placeholder={field.placeholder}
-            value={value || ''}
+            value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
@@ -420,18 +503,18 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             helperText={error}
             required={field.required}
             InputProps={{
-              startAdornment: getFieldIcon(field.type)
+              startAdornment: getFieldIcon(field.type),
             }}
             autoComplete="off"
           />
         );
 
-      case 'datetime':
+      case "datetime":
         return (
           <TextField
             label={field.label}
             placeholder={field.placeholder}
-            value={value || ''}
+            value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
@@ -440,18 +523,18 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             helperText={error}
             required={field.required}
             InputProps={{
-              startAdornment: getFieldIcon(field.type)
+              startAdornment: getFieldIcon(field.type),
             }}
             autoComplete="off"
           />
         );
 
-      case 'phone':
+      case "phone":
         return (
           <TextField
             label={field.label}
             placeholder={field.placeholder}
-            value={value || ''}
+            value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
@@ -460,18 +543,18 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             helperText={error}
             required={field.required}
             InputProps={{
-              startAdornment: getFieldIcon(field.type)
+              startAdornment: getFieldIcon(field.type),
             }}
             autoComplete="tel"
           />
         );
 
-      case 'url':
+      case "url":
         return (
           <TextField
             label={field.label}
             placeholder={field.placeholder}
-            value={value || ''}
+            value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
@@ -480,20 +563,22 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             helperText={error}
             required={field.required}
             InputProps={{
-              startAdornment: getFieldIcon(field.type)
+              startAdornment: getFieldIcon(field.type),
             }}
             autoComplete="url"
           />
         );
 
-      case 'rating':
+      case "rating":
         return (
           <Box margin="normal">
             <Typography component="legend" gutterBottom>
               <Box display="flex" alignItems="center" gap={1}>
                 {getFieldIcon(field.type)}
                 {field.label}
-                {field.required && <Chip label="Required" size="small" color="primary" />}
+                {field.required && (
+                  <Chip label="Required" size="small" color="primary" />
+                )}
               </Box>
             </Typography>
             <Rating
@@ -501,11 +586,15 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
               onChange={(_, newValue) => handleFieldChange(field.id, newValue)}
               size="large"
             />
-            {error && <Typography variant="caption" color="error">{error}</Typography>}
+            {error && (
+              <Typography variant="caption" color="error">
+                {error}
+              </Typography>
+            )}
           </Box>
         );
 
-      case 'file':
+      case "file":
         return (
           <TextField
             label={field.label}
@@ -517,7 +606,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             helperText={error}
             required={field.required}
             InputProps={{
-              startAdornment: getFieldIcon(field.type)
+              startAdornment: getFieldIcon(field.type),
             }}
             onChange={(e) => {
               const file = (e.target as HTMLInputElement).files?.[0];
@@ -531,7 +620,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
           <TextField
             label={field.label}
             placeholder={field.placeholder}
-            value={value || ''}
+            value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
@@ -539,7 +628,7 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
             helperText={error}
             required={field.required}
             InputProps={{
-              startAdornment: getFieldIcon(field.type)
+              startAdornment: getFieldIcon(field.type),
             }}
             autoComplete="on"
           />
@@ -549,7 +638,12 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
 
   if (isLoading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="400px"
+      >
         <CircularProgress />
       </Box>
     );
@@ -557,7 +651,12 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
 
   if (error) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="400px"
+      >
         <Alert severity="error">Failed to load form. Please try again.</Alert>
       </Box>
     );
@@ -565,17 +664,26 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
 
   if (!form) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="400px"
+      >
         <Alert severity="warning">Form not found.</Alert>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto', p: 3 }}>
+    <Box sx={{ maxWidth: 800, mx: "auto", p: 3 }}>
       {/* Form Header */}
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h4" gutterBottom sx={{ fontWeight: 600, color: '#1e3a8a' }}>
+        <Typography
+          variant="h4"
+          gutterBottom
+          sx={{ fontWeight: 600, color: "#1e3a8a" }}
+        >
           {form.title}
         </Typography>
         {form.description && (
@@ -584,16 +692,16 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
           </Typography>
         )}
         <Box display="flex" gap={1} flexWrap="wrap">
-          <Chip 
-            label={form.is_public ? 'Public Form' : 'Private Form'} 
-            color={form.is_public ? 'success' : 'default'} 
-            size="small" 
+          <Chip
+            label={form.is_public ? "Public Form" : "Private Form"}
+            color={form.is_public ? "success" : "default"}
+            size="small"
           />
           {form.statistics && (
-            <Chip 
-              label={`${form.statistics.total_submissions} submissions`} 
-              color="primary" 
-              size="small" 
+            <Chip
+              label={`${form.statistics.total_submissions} submissions`}
+              color="primary"
+              size="small"
             />
           )}
         </Box>
@@ -604,14 +712,27 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
         <Typography variant="h6" gutterBottom>
           Please fill out the form below
         </Typography>
-        
-        <Box component="form" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+
+        <Box
+          component="form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit();
+          }}
+        >
           {form.schema?.fields.map((field, index) => (
             <Box key={field.id} sx={{ mb: 3 }}>
               {renderField(field)}
               {field.helpText && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                  <Help fontSize="small" sx={{ mr: 0.5, verticalAlign: 'middle' }} />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ mt: 1, display: "block" }}
+                >
+                  <Help
+                    fontSize="small"
+                    sx={{ mr: 0.5, verticalAlign: "middle" }}
+                  />
                   {field.helpText}
                 </Typography>
               )}
@@ -619,16 +740,18 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
           ))}
 
           {/* Submit Button */}
-          <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+          <Box sx={{ mt: 4, display: "flex", justifyContent: "center" }}>
             <Button
               type="submit"
               variant="contained"
               size="large"
-              startIcon={isSubmitting ? <CircularProgress size={20} /> : <Send />}
+              startIcon={
+                isSubmitting ? <CircularProgress size={20} /> : <Send />
+              }
               disabled={isSubmitting}
               sx={{ minWidth: 200 }}
             >
-              {isSubmitting ? 'Submitting...' : 'Submit Form'}
+              {isSubmitting ? "Submitting..." : "Submit Form"}
             </Button>
           </Box>
         </Box>
@@ -640,10 +763,13 @@ export default function FormSubmission({ formId, onSuccess, onError }: FormSubmi
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
       >
-        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+        <Alert
+          severity={snackbar.severity}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+        >
           {snackbar.message}
         </Alert>
       </Snackbar>
     </Box>
   );
-} 
+}

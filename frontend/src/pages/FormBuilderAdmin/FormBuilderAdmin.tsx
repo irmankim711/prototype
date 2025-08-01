@@ -1,6 +1,7 @@
-import React, { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import React, { useState, useContext } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { formBuilderAPI, type Form } from "../../services/formBuilder";
+import { AuthContext } from "../../context/AuthContext";
 import {
   Box,
   Typography,
@@ -15,7 +16,6 @@ import {
   DialogActions,
   Alert,
   Snackbar,
-  Chip,
   IconButton,
   TextField,
   Tabs,
@@ -33,19 +33,15 @@ import {
   Edit,
   Share,
   QrCode,
-  Visibility,
   Analytics,
-  Settings,
-  Public,
   Launch,
   Storage,
-  MoreVert,
-  Dashboard,
-  ViewList,
+  Settings,
 } from "@mui/icons-material";
 
 import FormBuilder from "../../components/FormBuilder/FormBuilder";
 import SimpleQRGenerator from "../../components/forms/SimpleQRGenerator";
+import FormStatusManager from "../../components/FormStatusManager/FormStatusManager";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -78,7 +74,16 @@ interface ExternalForm {
 }
 
 export default function FormBuilderAdmin() {
-  const [tabValue, setTabValue] = useState(0);
+  // Authentication context
+  const { user, accessToken, login } = useContext(AuthContext);
+
+  // Authentication state for login form
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState("");
+
+  const [tabValue, setTabValue] = useState(0); // Default to External Forms tab (was My Forms)
   const [editingFormId, setEditingFormId] = useState<number | null>(null);
   const [showFormBuilder, setShowFormBuilder] = useState(false);
 
@@ -99,7 +104,20 @@ export default function FormBuilderAdmin() {
   // External forms stored in localStorage
   const [externalForms, setExternalForms] = useState<ExternalForm[]>(() => {
     const saved = localStorage.getItem("externalForms");
-    return saved ? JSON.parse(saved) : [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Convert createdAt strings back to Date objects
+        return parsed.map((form: Omit<ExternalForm, 'createdAt'> & { createdAt: string }) => ({
+          ...form,
+          createdAt: new Date(form.createdAt)
+        }));
+      } catch (error) {
+        console.error("Error parsing external forms from localStorage:", error);
+        return [];
+      }
+    }
+    return [];
   });
 
   // Notification state
@@ -109,12 +127,14 @@ export default function FormBuilderAdmin() {
     severity: "success" as "success" | "error" | "warning" | "info",
   });
 
-  const [page] = useState(1);
+  // Commented out unused variables from My Forms functionality
+  // const [page] = useState(1);
 
   // QR Code state
   const [showQRGenerator, setShowQRGenerator] = useState(false);
 
-  // Fetch forms data
+  // Commented out My Forms query - no longer needed since we commented out My Forms tab
+  /*
   const {
     data: formsData,
     isLoading: formsLoading,
@@ -127,6 +147,7 @@ export default function FormBuilderAdmin() {
   });
 
   const forms = formsData?.forms || [];
+  */
 
   // Delete form mutation
   const deleteMutation = useMutation({
@@ -137,7 +158,7 @@ export default function FormBuilderAdmin() {
         message: "Form deleted successfully!",
         severity: "success",
       });
-      refetch();
+      // refetch(); // Commented out since My Forms query is disabled
     },
     onError: () => {
       setSnackbar({
@@ -173,16 +194,20 @@ export default function FormBuilderAdmin() {
     }
   };
 
+  // Commented out unused My Forms functions
+  /*
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, form: Form) => {
     setAnchorEl(event.currentTarget);
     setSelectedForm(form);
   };
+  */
 
   const handleMenuClose = () => {
     setAnchorEl(null);
     setSelectedForm(null);
   };
 
+  // This function is not used with My Forms but let's keep it for potential future use
   const handleShareForm = (form: Form) => {
     const url = `${window.location.origin}/forms/${form.id}`;
     setShareUrl(url);
@@ -257,7 +282,7 @@ export default function FormBuilderAdmin() {
   const handleFormSaved = () => {
     setShowFormBuilder(false);
     setEditingFormId(null);
-    refetch();
+    // refetch(); // Commented out since My Forms query is disabled
     setSnackbar({
       open: true,
       message: "Form saved successfully!",
@@ -265,16 +290,92 @@ export default function FormBuilderAdmin() {
     });
   };
 
-  // QR Code handlers
+  // QR Code handlers - commented out unused function
+  /*
   const handleGenerateQR = (form: Form) => {
     setSelectedForm(form);
     setShowQRGenerator(true);
   };
+  */
 
   const handleCloseQRGenerator = () => {
     setShowQRGenerator(false);
     setSelectedForm(null);
   };
+
+  // Handle login form submission
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    setLoginError("");
+
+    try {
+      await login(loginEmail, loginPassword);
+      setLoginEmail("");
+      setLoginPassword("");
+    } catch (error) {
+      setLoginError("Login failed. Please check your credentials.");
+      console.error("Login error:", error);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // Show login form if user is not authenticated
+  if (!user || !accessToken) {
+    return (
+      <Box sx={{ width: "100%", typography: "body1" }}>
+        <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
+          <Typography variant="h4" component="h1" sx={{ mb: 2 }}>
+            Form Builder Dashboard
+          </Typography>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Please log in to access the Form Builder Dashboard
+          </Alert>
+        </Box>
+
+        <Paper sx={{ p: 3, maxWidth: 400, mx: "auto", mt: 4 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Login to Continue
+          </Typography>
+          {loginError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {loginError}
+            </Alert>
+          )}
+          <form onSubmit={handleLogin}>
+            <TextField
+              fullWidth
+              label="Email"
+              type="email"
+              value={loginEmail}
+              onChange={(e) => setLoginEmail(e.target.value)}
+              margin="normal"
+              required
+            />
+            <TextField
+              fullWidth
+              label="Password"
+              type="password"
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              margin="normal"
+              required
+            />
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              disabled={loginLoading}
+              sx={{ mt: 2 }}
+            >
+              {loginLoading ? "Logging in..." : "Login"}
+            </Button>
+          </form>
+        </Paper>
+      </Box>
+    );
+  }
 
   if (showFormBuilder) {
     return (
@@ -315,6 +416,8 @@ export default function FormBuilderAdmin() {
         </Box>
 
         <Tabs value={tabValue} onChange={handleTabChange}>
+          {/* COMMENTED OUT - My Forms Tab */}
+          {/*
           <Tab
             label={
               <Badge badgeContent={forms.length} color="primary">
@@ -325,6 +428,7 @@ export default function FormBuilderAdmin() {
               </Badge>
             }
           />
+          */}
           <Tab
             label={
               <Badge badgeContent={externalForms.length} color="secondary">
@@ -343,10 +447,19 @@ export default function FormBuilderAdmin() {
               </Box>
             }
           />
+          <Tab
+            label={
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Settings />
+                Form Status
+              </Box>
+            }
+          />
         </Tabs>
       </Box>
 
-      {/* My Forms Tab */}
+      {/* COMMENTED OUT - My Forms Tab Content */}
+      {/*
       <TabPanel value={tabValue} index={0}>
         {formsLoading ? (
           <Typography>Loading forms...</Typography>
@@ -471,9 +584,10 @@ export default function FormBuilderAdmin() {
           </Grid>
         )}
       </TabPanel>
+      */}
 
       {/* External Forms Tab */}
-      <TabPanel value={tabValue} index={1}>
+      <TabPanel value={tabValue} index={0}>
         <Box
           sx={{
             mb: 3,
@@ -583,49 +697,11 @@ export default function FormBuilderAdmin() {
       </TabPanel>
 
       {/* Analytics Tab */}
-      <TabPanel value={tabValue} index={2}>
+      <TabPanel value={tabValue} index={1}>
         <Typography variant="h6" gutterBottom>
           Form Analytics
         </Typography>
         <Grid container spacing={3}>
-          <Grid item xs={12} md={6} lg={3}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary" gutterBottom>
-                  Total Forms
-                </Typography>
-                <Typography variant="h4">{forms.length}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6} lg={3}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary" gutterBottom>
-                  Total Submissions
-                </Typography>
-                <Typography variant="h4">
-                  {forms.reduce(
-                    (sum: number, form: Form) =>
-                      sum + (form.submission_count || 0),
-                    0
-                  )}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6} lg={3}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary" gutterBottom>
-                  Active Forms
-                </Typography>
-                <Typography variant="h4">
-                  {forms.filter((form: Form) => form.is_active).length}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
           <Grid item xs={12} md={6} lg={3}>
             <Card>
               <CardContent>
@@ -636,7 +712,46 @@ export default function FormBuilderAdmin() {
               </CardContent>
             </Card>
           </Grid>
+          <Grid item xs={12} md={6} lg={3}>
+            <Card>
+              <CardContent>
+                <Typography color="text.secondary" gutterBottom>
+                  Forms with QR Codes
+                </Typography>
+                <Typography variant="h4">
+                  {externalForms.filter((form) => form.qrCode).length}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6} lg={3}>
+            <Card>
+              <CardContent>
+                <Typography color="text.secondary" gutterBottom>
+                  Forms with Descriptions
+                </Typography>
+                <Typography variant="h4">
+                  {externalForms.filter((form) => form.description).length}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6} lg={3}>
+            <Card>
+              <CardContent>
+                <Typography color="text.secondary" gutterBottom>
+                  Total Created
+                </Typography>
+                <Typography variant="h4">{externalForms.length}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
+      </TabPanel>
+
+      {/* Form Status Management Tab */}
+      <TabPanel value={tabValue} index={2}>
+        <FormStatusManager externalForms={externalForms} />
       </TabPanel>
 
       {/* Action Menu */}
@@ -772,10 +887,12 @@ export default function FormBuilderAdmin() {
       {/* QR Code Generator Modal */}
       {showQRGenerator && selectedForm && (
         <SimpleQRGenerator
-          formId={selectedForm.id}
           formTitle={selectedForm.title}
+          targetUrl={
+            selectedForm.external_url ||
+            `${window.location.origin}/forms/${selectedForm.id}`
+          }
           onClose={handleCloseQRGenerator}
-          defaultUrl={selectedForm.external_url}
         />
       )}
 

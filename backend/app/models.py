@@ -197,3 +197,58 @@ class File(db.Model):
     
     # Relationships
     uploader = db.relationship('User', backref='uploaded_files')
+
+# Quick Access Authentication Model
+class QuickAccessToken(db.Model):
+    __tablename__ = 'quick_access_tokens'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(100), unique=True, nullable=False)
+    email = db.Column(db.String(120), nullable=False)
+    phone = db.Column(db.String(20))
+    name = db.Column(db.String(100))
+    access_type = db.Column(db.String(20), default='form_access')  # form_access, event_invite, etc.
+    
+    # OTP fields
+    otp_code = db.Column(db.String(6))
+    otp_expires_at = db.Column(db.DateTime)
+    otp_verified = db.Column(db.Boolean, default=False)
+    
+    # Access control
+    is_active = db.Column(db.Boolean, default=True)
+    expires_at = db.Column(db.DateTime)
+    max_uses = db.Column(db.Integer, default=5)  # Maximum number of form submissions
+    current_uses = db.Column(db.Integer, default=0)
+    
+    # Metadata
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_used = db.Column(db.DateTime)
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.Text)
+    
+    # Allowed forms (JSON array of form IDs)
+    allowed_forms = db.Column(db.JSON)  # ["1", "2", "3"] or null for all public forms
+    
+    def is_valid(self):
+        """Check if token is still valid"""
+        if not self.is_active:
+            return False
+        if self.expires_at and self.expires_at < datetime.utcnow():
+            return False
+        if self.max_uses and self.current_uses >= self.max_uses:
+            return False
+        return True
+    
+    def can_access_form(self, form_id):
+        """Check if token can access specific form"""
+        if not self.is_valid():
+            return False
+        if not self.allowed_forms:  # null means access to all public forms
+            return True
+        return str(form_id) in self.allowed_forms
+    
+    def use_token(self):
+        """Mark token as used"""
+        self.current_uses += 1
+        self.last_used = datetime.utcnow()
+        db.session.commit()

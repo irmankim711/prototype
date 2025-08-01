@@ -38,7 +38,7 @@ import {
   Timeline,
   Analytics,
   CloudUpload,
-  Integration,
+  Hub,
   ArrowForward,
   PlayArrow,
 } from "@mui/icons-material";

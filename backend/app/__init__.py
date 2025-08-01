@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -44,7 +44,7 @@ def create_app(config_name=None):
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 3600))  # 1 hour
     app.config['JWT_REFRESH_TOKEN_EXPIRES'] = int(os.getenv('JWT_REFRESH_TOKEN_EXPIRES', 2592000))  # 30 days
     # JWT Cookie configuration
-    app.config['JWT_TOKEN_LOCATION'] = ['cookies']
+    app.config['JWT_TOKEN_LOCATION'] = ['cookies', 'headers']
     app.config['JWT_ACCESS_COOKIE_PATH'] = '/'
     app.config['JWT_REFRESH_COOKIE_PATH'] = '/api/auth/refresh'
     app.config['JWT_COOKIE_CSRF_PROTECT'] = False  # For development only! Enable and handle CSRF in production.
@@ -63,14 +63,29 @@ def create_app(config_name=None):
         'max_overflow': int(os.getenv('DB_MAX_OVERFLOW', 20))
     }
     
-    # CORS Configuration
+    # CORS Configuration - Enhanced for preflight handling
     CORS(app, 
          resources={
-             r"/api/*": {"origins": ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"]}
+             r"/api/*": {
+                 "origins": ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "http://localhost:5174"],
+                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                 "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+                 "expose_headers": ["Content-Type", "Authorization"],
+                 "supports_credentials": True
+             }
          },
-         supports_credentials=True,
-         allow_headers=["Content-Type", "Authorization"],
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+         supports_credentials=True)
+    
+    # Add explicit OPTIONS handling for preflight requests
+    @app.before_request
+    def handle_preflight():
+        if request.method == "OPTIONS":
+            response = make_response()
+            response.headers.add("Access-Control-Allow-Origin", request.headers.get('Origin', '*'))
+            response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization,X-Requested-With")
+            response.headers.add('Access-Control-Allow-Methods', "GET,PUT,POST,DELETE,OPTIONS")
+            response.headers.add('Access-Control-Allow-Credentials', 'true')
+            return response
     
     # Initialize extensions
     db.init_app(app)
@@ -232,17 +247,23 @@ def register_blueprints(app):
     from .routes.dashboard import dashboard_bp
     from .routes.users import users_bp
     from .routes.forms import forms_bp
+    from .routes.admin_forms import admin_forms_bp
     from .routes.files import files_bp
     from .routes.mvp import mvp
     from .routes.api import api
+    from .routes.quick_auth import quick_auth_bp
+    from .public_routes import public_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
     app.register_blueprint(users_bp, url_prefix='/api/users')
     app.register_blueprint(forms_bp, url_prefix='/api/forms')
+    app.register_blueprint(admin_forms_bp, url_prefix='/api/admin/forms')
     app.register_blueprint(files_bp, url_prefix='/api/files')
     app.register_blueprint(mvp, url_prefix='/api/mvp')
     app.register_blueprint(api, url_prefix='/api')
+    app.register_blueprint(quick_auth_bp, url_prefix='/api/quick-auth')
+    app.register_blueprint(public_bp, url_prefix='/api/public')
 
 def main():
     app = create_app()
