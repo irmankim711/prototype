@@ -17,6 +17,7 @@ import "./styles/enhancedDashboard.css";
 // Import pages
 import LandingPageEnhanced from "./pages/LandingPage/LandingPageEnhanced";
 import Dashboard from "./pages/Dashboard/Dashboard";
+import PublicForms from "./pages/PublicForms/PublicForms";
 
 import Submission from "./pages/Submission/Submission";
 import ReportBuilder from "./pages/ReportBuilder/ReportBuilder";
@@ -33,9 +34,11 @@ const queryClient = new QueryClient();
 
 function AppLayout() {
   const location = useLocation();
-  // Sidebar is visible on all pages except landing page and about us page
+  // Sidebar is visible on all pages except landing page, about us page, and public forms
   const showSidebar =
-    location.pathname !== "/" && location.pathname !== "/about";
+    location.pathname !== "/" &&
+    location.pathname !== "/about" &&
+    location.pathname !== "/forms/public";
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
@@ -47,6 +50,7 @@ function AppLayout() {
         <Routes>
           <Route path="/" element={<LandingPageEnhanced />} />
           <Route path="/about" element={<AboutUs />} />
+          <Route path="/forms/public" element={<PublicForms />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route
             path="/dashboard-enhanced"

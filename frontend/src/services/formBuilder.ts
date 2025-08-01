@@ -118,7 +118,7 @@ export interface FormBuilderConfig {
   categories: Record<string, string[]>;
 }
 
-// API Base URL
+// API Base URL - Using relative path since Vite proxy handles routing to backend
 const API_BASE_URL = "/api";
 
 // Create axios instance with auth
@@ -196,6 +196,43 @@ export const formBuilderAPI = {
   deleteForm: async (formId: number) => {
     const response = await api.delete(`/forms/${formId}`);
     return response.data;
+  },
+
+  // Toggle form status (admin only)
+  toggleFormStatus: async (
+    formId: number,
+    data: {
+      is_public?: boolean;
+      is_active?: boolean;
+    }
+  ) => {
+    const response = await api.patch(
+      `/forms/admin/toggle-status/${formId}`,
+      data
+    );
+    return response.data;
+  },
+
+  // Get public forms (no authentication required)
+  getPublicForms: async () => {
+    // Use a separate axios instance without auth for public endpoint
+    const publicResponse = await axios.get("/forms/public", {
+      baseURL: API_BASE_URL,
+      timeout: 10000,
+    });
+
+    // Extract forms array from API response
+    const responseData = publicResponse.data;
+    if (
+      responseData &&
+      responseData.success &&
+      Array.isArray(responseData.forms)
+    ) {
+      return responseData.forms;
+    }
+
+    // Fallback: return empty array if response structure is unexpected
+    return [];
   },
 
   // Get available field types
@@ -541,6 +578,12 @@ export const formBuilderUtils = {
       title: `${formData.title} (Copy)`,
       submission_count: 0,
     };
+  },
+
+  // User Profile Management
+  getUserProfile: async () => {
+    const response = await api.get("/users/profile");
+    return response.data;
   },
 };
 

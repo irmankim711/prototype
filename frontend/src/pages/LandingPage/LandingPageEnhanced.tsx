@@ -25,6 +25,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { login, register } from "../../services/api";
 import React from "react";
+import GoogleSignInButton from "../../components/GoogleSignInButton";
 import {
   AutoAwesome,
   Security,
@@ -55,6 +56,21 @@ const fadeInUp = keyframes`
   from { transform: translateY(50px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 `;
+
+// TypeScript declarations for Google Sign-In
+declare global {
+  interface Window {
+    google: {
+      accounts: {
+        id: {
+          initialize: (config: any) => void;
+          prompt: (callback?: any) => void;
+          renderButton: (element: HTMLElement, config: any) => void;
+        };
+      };
+    };
+  }
+}
 
 // Enhanced styled components
 const StyledAppBar = styled(AppBar)(() => ({
@@ -286,6 +302,7 @@ export default function LandingPageEnhanced() {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [showLogin, setShowLogin] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
+  const [showQuickAccess, setShowQuickAccess] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
@@ -297,6 +314,15 @@ export default function LandingPageEnhanced() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  // Quick Access states
+  const [quickAccessPhone, setQuickAccessPhone] = useState("");
+  const [quickAccessOtp, setQuickAccessOtp] = useState("");
+  const [quickAccessToken, setQuickAccessToken] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [quickAccessLoading, setQuickAccessLoading] = useState(false);
+  const [quickAccessError, setQuickAccessError] = useState("");
+  const [useGoogleAuth, setUseGoogleAuth] = useState(false);
 
   // Refs for scroll animations
   const featuresRef = useRef<HTMLDivElement>(null);
@@ -325,6 +351,12 @@ export default function LandingPageEnhanced() {
   const handleBackToHome = () => {
     setShowLogin(false);
     setShowSignup(false);
+    setShowQuickAccess(false);
+    setOtpSent(false);
+    setQuickAccessError("");
+    setQuickAccessPhone("");
+    setQuickAccessOtp("");
+    setUseGoogleAuth(false);
   };
 
   const handleAboutUs = () => {
@@ -384,6 +416,121 @@ export default function LandingPageEnhanced() {
     } finally {
       setSignupLoading(false);
     }
+  };
+
+  // Quick Access handlers
+  const handleShowQuickAccess = () => {
+    setShowQuickAccess(true);
+    setShowLogin(false);
+    setShowSignup(false);
+  };
+
+  const handleQuickAccessWithPhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setQuickAccessLoading(true);
+    setQuickAccessError("");
+
+    try {
+      const response = await fetch(
+        "http://localhost:5000/api/quick-auth/request-otp",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: quickAccessPhone }),
+        }
+      );
+
+      const data = await response.json();
+      if (response.ok) {
+        setOtpSent(true);
+        setQuickAccessToken(data.token_id); // Store token_id for verification
+        setQuickAccessError("");
+      } else {
+        setQuickAccessError(data.error || data.msg || "Failed to send OTP");
+      }
+    } catch (error) {
+      setQuickAccessError("Network error. Please try again.");
+    } finally {
+      setQuickAccessLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setQuickAccessLoading(true);
+    setQuickAccessError("");
+
+    try {
+      const response = await fetch(
+        "http://localhost:5000/api/quick-auth/verify-otp",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token_id: quickAccessToken, // Use stored token_id
+            otp_code: quickAccessOtp, // Use otp_code instead of otp
+          }),
+        }
+      );
+
+      const data = await response.json();
+      if (response.ok) {
+        console.log("OTP verification successful:", data);
+        console.log("Saving token to localStorage:", data.access_token);
+        localStorage.setItem("quickAccessToken", data.access_token);
+
+        // Verify token was saved
+        const savedToken = localStorage.getItem("quickAccessToken");
+        console.log("Token saved successfully:", !!savedToken);
+
+        console.log("Navigating to /forms/public");
+        navigate("/forms/public");
+      } else {
+        console.error("OTP verification failed:", data);
+        setQuickAccessError(data.error || data.msg || "Invalid OTP");
+      }
+    } catch (error) {
+      setQuickAccessError("Network error. Please try again.");
+    } finally {
+      setQuickAccessLoading(false);
+    }
+  };
+
+  const handleGoogleSignInSuccess = async (credential: string) => {
+    setQuickAccessLoading(true);
+    setQuickAccessError("");
+
+    try {
+      // Send the credential to our backend
+      const apiResponse = await fetch(
+        "http://localhost:5000/api/quick-auth/google-signin",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            googleToken: credential,
+          }),
+        }
+      );
+
+      const data = await apiResponse.json();
+      if (apiResponse.ok) {
+        localStorage.setItem("quickAccessToken", data.access_token);
+        navigate("/forms/public");
+      } else {
+        setQuickAccessError(data.error || data.msg || "Google Sign-In failed");
+      }
+    } catch (error) {
+      console.error("Google Sign-In error:", error);
+      setQuickAccessError("Network error. Please try again.");
+    } finally {
+      setQuickAccessLoading(false);
+    }
+  };
+
+  const handleGoogleSignInError = (error: string) => {
+    setQuickAccessError(error);
+    setQuickAccessLoading(false);
   };
 
   // Modal state
@@ -482,7 +629,7 @@ export default function LandingPageEnhanced() {
           >
             StratoSys
           </Typography>
-          {!showLogin && !showSignup && (
+          {!showLogin && !showSignup && !showQuickAccess && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <NavButton onClick={() => scrollToSection(featuresRef)}>
                 Features
@@ -494,13 +641,27 @@ export default function LandingPageEnhanced() {
                 Pricing
               </NavButton>
               <NavButton onClick={handleAboutUs}>About Us</NavButton>
-              <NavButton onClick={handleShowLogin}>Login</NavButton>
+              <NavButton onClick={handleShowLogin}>Admin Login</NavButton>
+              <NavButton
+                onClick={handleShowQuickAccess}
+                sx={{
+                  backgroundColor: alpha("#10B981", 0.1),
+                  color: "#10B981",
+                  border: "1px solid #10B981",
+                  "&:hover": {
+                    backgroundColor: alpha("#10B981", 0.2),
+                    transform: "translateY(-2px)",
+                  },
+                }}
+              >
+                Quick Access
+              </NavButton>
               <RegisterButton onClick={handleShowSignup}>
                 Get Started Free
               </RegisterButton>
             </Box>
           )}
-          {(showLogin || showSignup) && (
+          {(showLogin || showSignup || showQuickAccess) && (
             <NavButton onClick={handleBackToHome}>Back to Home</NavButton>
           )}
         </StyledToolbar>
@@ -599,6 +760,219 @@ export default function LandingPageEnhanced() {
                   sx={{ color: "#6366f1", fontWeight: 600 }}
                 >
                   Sign up
+                </Button>
+              </Typography>
+            </LoginCard>
+          </Fade>
+        </Container>
+      )}
+
+      {/* Quick Access Form */}
+      {showQuickAccess && (
+        <Container maxWidth="lg" sx={{ py: 8, mt: 8 }}>
+          <Fade in={showQuickAccess} timeout={800}>
+            <LoginCard>
+              <Typography
+                variant="h4"
+                align="center"
+                sx={{
+                  mb: 4,
+                  fontWeight: 700,
+                  background:
+                    "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+                  backgroundClip: "text",
+                  color: "transparent",
+                }}
+              >
+                Quick Access
+              </Typography>
+              <Typography
+                variant="body1"
+                align="center"
+                color="textSecondary"
+                sx={{ mb: 4 }}
+              >
+                Choose your preferred access method
+              </Typography>
+
+              {quickAccessError && (
+                <Alert severity="error" sx={{ mb: 3, borderRadius: "12px" }}>
+                  {quickAccessError}
+                </Alert>
+              )}
+
+              {/* Google Sign-In Option */}
+              <Box sx={{ mb: 3, display: "flex", justifyContent: "center" }}>
+                <GoogleSignInButton
+                  onSuccess={handleGoogleSignInSuccess}
+                  onError={handleGoogleSignInError}
+                  disabled={quickAccessLoading}
+                />
+              </Box>
+
+              <Divider sx={{ my: 3 }}>
+                <Typography variant="body2" color="textSecondary">
+                  OR
+                </Typography>
+              </Divider>
+
+              {/* Phone Number Option */}
+              {!otpSent ? (
+                <Box component="form" onSubmit={handleQuickAccessWithPhone}>
+                  <StyledTextField
+                    fullWidth
+                    label="Phone Number"
+                    type="tel"
+                    value={quickAccessPhone}
+                    onChange={(e) => setQuickAccessPhone(e.target.value)}
+                    required
+                    sx={{ mb: 3 }}
+                    placeholder="+60 123456 7890"
+                    helperText="We'll send you a verification code via SMS"
+                  />
+                  <Button
+                    type="submit"
+                    fullWidth
+                    variant="contained"
+                    disabled={quickAccessLoading}
+                    sx={{
+                      py: 2,
+                      mb: 2,
+                      borderRadius: "12px",
+                      background:
+                        "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+                      fontSize: "1.1rem",
+                      fontWeight: 600,
+                      boxShadow: "0 8px 25px rgba(16, 185, 129, 0.3)",
+                      transition: "all 0.3s ease",
+                      "&:hover": {
+                        background:
+                          "linear-gradient(135deg, #059669 0%, #047857 100%)",
+                        transform: "translateY(-2px)",
+                        boxShadow: "0 12px 35px rgba(16, 185, 129, 0.4)",
+                      },
+                    }}
+                  >
+                    {quickAccessLoading ? (
+                      <CircularProgress size={24} color="inherit" />
+                    ) : (
+                      "Send SMS Code"
+                    )}
+                  </Button>
+                </Box>
+              ) : (
+                <Box component="form" onSubmit={handleVerifyOtp}>
+                  <Typography
+                    variant="body2"
+                    color="textSecondary"
+                    sx={{ mb: 2, textAlign: "center" }}
+                  >
+                    Enter the verification code sent to {quickAccessPhone}
+                  </Typography>
+                  <StyledTextField
+                    fullWidth
+                    label="Verification Code"
+                    value={quickAccessOtp}
+                    onChange={(e) => setQuickAccessOtp(e.target.value)}
+                    required
+                    sx={{ mb: 3 }}
+                    placeholder="Enter 6-digit code"
+                  />
+                  <Button
+                    type="submit"
+                    fullWidth
+                    variant="contained"
+                    disabled={quickAccessLoading}
+                    sx={{
+                      py: 2,
+                      mb: 2,
+                      borderRadius: "12px",
+                      background:
+                        "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+                      fontSize: "1.1rem",
+                      fontWeight: 600,
+                      boxShadow: "0 8px 25px rgba(16, 185, 129, 0.3)",
+                      transition: "all 0.3s ease",
+                      "&:hover": {
+                        background:
+                          "linear-gradient(135deg, #059669 0%, #047857 100%)",
+                        transform: "translateY(-2px)",
+                        boxShadow: "0 12px 35px rgba(16, 185, 129, 0.4)",
+                      },
+                    }}
+                  >
+                    {quickAccessLoading ? (
+                      <CircularProgress size={24} color="inherit" />
+                    ) : (
+                      "Verify & Access Forms"
+                    )}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setOtpSent(false);
+                      setQuickAccessOtp("");
+                      setQuickAccessError("");
+                    }}
+                    fullWidth
+                    variant="text"
+                    sx={{ color: "#10B981", fontWeight: 600 }}
+                  >
+                    Try Different Number
+                  </Button>
+                </Box>
+              )}
+
+              {/* Development Bypass Button */}
+              <Divider sx={{ my: 3 }}>
+                <Typography variant="body2" color="textSecondary">
+                  DEVELOPMENT
+                </Typography>
+              </Divider>
+
+              <Button
+                onClick={() => {
+                  // Store a dummy token for bypass
+                  localStorage.setItem("quickAccessToken", "dev-bypass-token");
+                  localStorage.setItem(
+                    "quickAccessUser",
+                    JSON.stringify({
+                      name: "Development User",
+                      email: "dev@example.com",
+                      access_type: "bypass",
+                    })
+                  );
+                  console.log("Development bypass: Navigating to public forms");
+                  navigate("/forms/public");
+                }}
+                fullWidth
+                variant="outlined"
+                sx={{
+                  py: 2,
+                  mb: 3,
+                  borderRadius: "12px",
+                  border: "2px solid #f59e0b",
+                  color: "#f59e0b",
+                  fontSize: "1.1rem",
+                  fontWeight: 600,
+                  transition: "all 0.3s ease",
+                  "&:hover": {
+                    background: "#fef3c7",
+                    borderColor: "#d97706",
+                    color: "#d97706",
+                  },
+                }}
+              >
+                🚀 Skip Authentication (Dev Mode)
+              </Button>
+
+              <Divider sx={{ my: 3 }} />
+              <Typography align="center" color="textSecondary">
+                Need full admin access?{" "}
+                <Button
+                  onClick={handleShowLogin}
+                  sx={{ color: "#6366f1", fontWeight: 600 }}
+                >
+                  Admin Login
                 </Button>
               </Typography>
             </LoginCard>

@@ -25,6 +25,7 @@ cryptography>=41.0.0
 
 # Email and Communication
 sendgrid>=6.10.0
+twilio>=8.0.0
 
 # Google Services
 google-cloud-storage>=2.10.0

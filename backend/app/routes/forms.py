@@ -5,8 +5,9 @@ from flask_limiter import Limiter
 from datetime import datetime
 from sqlalchemy import desc, func
 from sqlalchemy.exc import SQLAlchemyError
-from ..models import db, Form, FormSubmission, Permission, User, FormQRCode
+from ..models import db, Form, FormSubmission, Permission, User, FormQRCode, QuickAccessToken
 from ..decorators import require_permission, get_current_user_id, get_current_user
+from .quick_auth import check_quick_access_permission
 import json
 import uuid
 import qrcode
@@ -237,6 +238,9 @@ def get_forms():
     """Get all forms for the current user with pagination and filtering."""
     try:
         user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+            
         page = request.args.get('page', 1, type=int)
         per_page = min(request.args.get('per_page', 10, type=int), 100)
         show_all = request.args.get('show_all', 'false').lower() == 'true'
@@ -303,6 +307,9 @@ def get_form(form_id):
     """Get a specific form with detailed information."""
     try:
         user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+            
         form = Form.query.get_or_404(form_id)
         
         # Check permissions
@@ -337,11 +344,14 @@ def get_form(form_id):
 
 @forms_bp.route('/', methods=['POST'])
 @jwt_required()
-@limiter.limit("20 per hour")
+@limiter.limit("10 per hour")
 def create_form():
-    """Create a new form with validation."""
+    """Create a new form with validation and QR code generation."""
     try:
         user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+            
         data = request.get_json()
         
         if not data:
@@ -404,6 +414,9 @@ def update_form(form_id):
     """Update a form with validation."""
     try:
         user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+            
         form = Form.query.get_or_404(form_id)
         
         # Check permissions
@@ -469,6 +482,9 @@ def delete_form(form_id):
     """Delete a form (soft delete)."""
     try:
         user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+            
         form = Form.query.get_or_404(form_id)
         
         # Check permissions
@@ -570,6 +586,9 @@ def get_form_submissions(form_id):
     """Get submissions for a form with filtering and pagination."""
     try:
         user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+            
         form = Form.query.get_or_404(form_id)
         
         # Check permissions
@@ -639,6 +658,9 @@ def update_submission_status(submission_id):
     """Update submission status."""
     try:
         user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+            
         submission = FormSubmission.query.get_or_404(submission_id)
         form = submission.form
         
@@ -689,15 +711,15 @@ def generate_qr_code(url, size=200, error_correction='M', border=4, bg_color='#F
     try:
         # Map error correction levels
         error_levels = {
-            'L': qrcode.constants.ERROR_CORRECT_L,
-            'M': qrcode.constants.ERROR_CORRECT_M,
-            'Q': qrcode.constants.ERROR_CORRECT_Q,
-            'H': qrcode.constants.ERROR_CORRECT_H,
+            'L': 1,  # ~7% error correction
+            'M': 0,  # ~15% error correction  
+            'Q': 3,  # ~25% error correction
+            'H': 2,  # ~30% error correction
         }
         
         qr = qrcode.QRCode(
             version=1,
-            error_correction=error_levels.get(error_correction, qrcode.constants.ERROR_CORRECT_M),
+            error_correction=error_levels.get(error_correction, 0),  # Default to M
             box_size=max(1, size // 25),  # Calculate box size based on desired total size
             border=border,
         )
@@ -714,7 +736,7 @@ def generate_qr_code(url, size=200, error_correction='M', border=4, bg_color='#F
         
         # Convert to base64
         buffer = io.BytesIO()
-        img.save(buffer, format='PNG')
+        img.save(buffer, 'PNG')  # Format as positional argument
         img_str = base64.b64encode(buffer.getvalue()).decode()
         
         return f"data:image/png;base64,{img_str}"
@@ -1002,6 +1024,10 @@ def generate_automated_report():
         import tempfile
         temp_dir = tempfile.mkdtemp()
         
+        # Check for valid filenames
+        if not excel_file.filename or not template_file.filename:
+            return jsonify({'error': 'Invalid file names'}), 400
+        
         excel_path = os.path.join(temp_dir, excel_file.filename)
         template_path = os.path.join(temp_dir, template_file.filename)
         
@@ -1052,6 +1078,10 @@ def create_automated_workflow():
         
         template_file = request.files['template_file']
         workflow_name = request.form.get('workflow_name', f"Workflow - {template_file.filename}")
+        
+        # Check for valid filename
+        if not template_file.filename:
+            return jsonify({'error': 'Invalid template file name'}), 400
         
         # Save template temporarily
         import tempfile
@@ -1212,3 +1242,422 @@ def download_generated_file(filename):
     except Exception as e:
         current_app.logger.error(f"Error downloading file: {str(e)}")
         return jsonify({'error': 'Download failed'}), 500
+
+# ========================================
+# QUICK ACCESS / PUBLIC FORM ROUTES
+# ========================================
+
+@forms_bp.route('/public/<int:form_id>', methods=['GET'])
+@limiter.limit("100 per hour")
+def get_public_form(form_id):
+    """Get a public form for quick access users (no auth required)"""
+    try:
+        # Find public form
+        form = Form.query.filter_by(id=form_id, is_public=True, is_active=True).first()
+        
+        if not form:
+            return jsonify({'error': 'Form not found or not publicly accessible'}), 404
+        
+        # Prepare form data for public access
+        form_data = {
+            'id': form.id,
+            'title': form.title,
+            'description': form.description,
+            'schema': form.schema,
+            'created_at': form.created_at.isoformat() if form.created_at else None,
+            'creator_name': form.creator.username if form.creator else 'System',
+            'submission_count': FormSubmission.query.filter_by(form_id=form.id).count(),
+            'access_type': 'public'
+        }
+        
+        return jsonify(form_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting public form: {str(e)}")
+        return jsonify({'error': 'Failed to retrieve form'}), 500
+
+@forms_bp.route('/quick-access/<int:form_id>', methods=['GET'])
+@jwt_required()
+@limiter.limit("200 per hour")
+def get_form_quick_access(form_id):
+    """Get form with quick access authentication"""
+    try:
+        # Check if user has quick access permission
+        has_access, token_record = check_quick_access_permission(form_id)
+        
+        if not has_access:
+            # Fall back to regular user authentication
+            user = get_current_user()
+            if not user:
+                return jsonify({'error': 'Authentication required'}), 401
+            
+            form = Form.query.get_or_404(form_id)
+            
+            # Check regular permissions
+            if not form.is_public and form.creator_id != user.id and not user.has_permission(Permission.VIEW_USERS):
+                return jsonify({'error': 'Access denied'}), 403
+        if has_access:
+            # Quick access user
+            form = Form.query.get_or_404(form_id)
+            
+            # Check if form is accessible for quick access
+            if not form.is_public and (not token_record or not token_record.can_access_form(form_id)):
+                return jsonify({'error': 'Form not accessible with current access level'}), 403
+        
+        # Prepare form data
+        form_data = {
+            'id': form.id,
+            'title': form.title,
+            'description': form.description,
+            'schema': form.schema,
+            'created_at': form.created_at.isoformat() if form.created_at else None,
+            'access_type': 'quick_access' if has_access else 'regular'
+        }
+        
+        return jsonify(form_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting form with quick access: {str(e)}")
+        return jsonify({'error': 'Failed to retrieve form'}), 500
+
+@forms_bp.route('/quick-access/<int:form_id>/submit', methods=['POST'])
+@jwt_required()
+@limiter.limit("50 per hour")
+def submit_form_quick_access(form_id):
+    """Submit form with quick access authentication"""
+    try:
+        # Check authentication type
+        has_quick_access, token_record = check_quick_access_permission(form_id)
+        
+        if has_quick_access and token_record:
+            # Quick access submission
+            form = Form.query.get_or_404(form_id)
+            
+            if not token_record.can_access_form(form_id):
+                return jsonify({'error': 'Form not accessible with current access level'}), 403
+            
+            # Use token for submission
+            token_record.use_token()
+            submitter_data = {
+                'submitter_id': None,
+                'submitter_email': token_record.email,
+                'submitter_name': token_record.name,
+                'submission_source': 'quick_access'
+            }
+        else:
+            # Regular user submission
+            user = get_current_user()
+            if not user:
+                return jsonify({'error': 'Authentication required'}), 401
+            
+            form = Form.query.get_or_404(form_id)
+            submitter_data = {
+                'submitter_id': user.id,
+                'submitter_email': user.email,
+                'submitter_name': user.full_name,
+                'submission_source': 'web'
+            }
+        
+        data = request.get_json()
+        
+        if not data or 'data' not in data:
+            return jsonify({'error': 'Form data is required'}), 400
+        
+        # Create submission
+        submission = FormSubmission(
+            form_id=form.id,
+            data=json.dumps(data['data']),
+            submitter_id=submitter_data['submitter_id'],
+            submitter_email=submitter_data['submitter_email'],
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', ''),
+            submission_source=submitter_data['submission_source']
+        )
+        
+        db.session.add(submission)
+        db.session.commit()
+        
+        current_app.logger.info(
+            f"Form {form_id} submitted via {submitter_data['submission_source']} "
+            f"by {submitter_data['submitter_email']}"
+        )
+        
+        return jsonify({
+            'message': 'Form submitted successfully',
+            'submission_id': submission.id,
+            'timestamp': submission.submitted_at.isoformat(),
+            'access_type': 'quick_access' if has_quick_access else 'regular'
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error submitting form: {str(e)}")
+        return jsonify({'error': 'Failed to submit form'}), 500
+
+@forms_bp.route('/public/list', methods=['GET'])
+@limiter.limit("200 per hour")
+def list_public_forms():
+    """List all public forms (no authentication required)"""
+    try:
+        # Debug logging for tracing
+        current_app.logger.info("Starting list_public_forms request")
+        
+        # Defensive parameter parsing with defaults
+        page = max(1, request.args.get('page', 1, type=int))
+        per_page = min(max(1, request.args.get('per_page', 10, type=int)), 50)
+        search = request.args.get('search', '').strip()
+        
+        current_app.logger.debug(f"Query params - page: {page}, per_page: {per_page}, search: '{search}'")
+        
+        # Build query for public forms with defensive checks
+        try:
+            query = Form.query.filter_by(is_public=True, is_active=True)
+            current_app.logger.debug("Base query created successfully")
+        except Exception as query_error:
+            current_app.logger.error(f"Failed to create base query: {str(query_error)}")
+            return jsonify({'error': 'Database query failed', 'forms': []}), 500
+        
+        # Apply search filter if provided
+        if search:
+            try:
+                query = query.filter(
+                    db.or_(
+                        Form.title.ilike(f'%{search}%'),
+                        Form.description.ilike(f'%{search}%')
+                    )
+                )
+                current_app.logger.debug(f"Search filter applied for: '{search}'")
+            except Exception as search_error:
+                current_app.logger.warning(f"Search filter failed, ignoring: {str(search_error)}")
+                # Continue without search filter rather than fail completely
+        
+        # Paginate results with error handling
+        try:
+            forms = query.order_by(desc(Form.created_at)).paginate(
+                page=page, per_page=per_page, error_out=False
+            )
+            current_app.logger.debug(f"Pagination successful - found {forms.total} total forms")
+        except Exception as paginate_error:
+            current_app.logger.error(f"Pagination failed: {str(paginate_error)}")
+            return jsonify({'error': 'Failed to paginate results', 'forms': []}), 500
+        
+        # Defensive form data processing
+        forms_data = []
+        for form in forms.items if forms.items else []:
+            try:
+                # Defensive checks for form attributes
+                form_id = getattr(form, 'id', None)
+                if form_id is None:
+                    current_app.logger.warning("Skipping form with no ID")
+                    continue
+                
+                # Safe attribute access with defaults
+                title = getattr(form, 'title', '') or 'Untitled Form'
+                description = getattr(form, 'description', '') or ''
+                created_at = getattr(form, 'created_at', None)
+                
+                # Safe creator access with defensive programming
+                creator = getattr(form, 'creator', None)
+                creator_name = 'System'  # Default fallback
+                if creator is not None:
+                    creator_name = getattr(creator, 'username', None) or \
+                                 getattr(creator, 'full_name', None) or \
+                                 getattr(creator, 'email', None) or \
+                                 'Unknown User'
+                
+                # Safe submission count with defensive query
+                submission_count = 0
+                try:
+                    submission_count = FormSubmission.query.filter_by(form_id=form_id).count()
+                except Exception as count_error:
+                    current_app.logger.warning(f"Failed to count submissions for form {form_id}: {str(count_error)}")
+                    submission_count = 0  # Default to 0 if count fails
+                
+                # Build form data dict with safe values
+                form_data = {
+                    'id': form_id,
+                    'title': title,
+                    'description': description,
+                    'created_at': created_at.isoformat() if created_at else None,
+                    'submission_count': submission_count,
+                    'creator_name': creator_name
+                }
+                
+                forms_data.append(form_data)
+                current_app.logger.debug(f"Processed form {form_id}: {title}")
+                
+            except Exception as form_error:
+                current_app.logger.error(f"Error processing individual form: {str(form_error)}")
+                # Continue processing other forms instead of failing completely
+                continue
+        
+        # Build response with defensive checks
+        response_data = {
+            'forms': forms_data,
+            'pagination': {
+                'page': getattr(forms, 'page', page),
+                'per_page': getattr(forms, 'per_page', per_page),
+                'total': getattr(forms, 'total', 0),
+                'pages': getattr(forms, 'pages', 1),
+                'has_next': getattr(forms, 'has_next', False),
+                'has_prev': getattr(forms, 'has_prev', False)
+            }
+        }
+        
+        current_app.logger.info(f"Successfully returned {len(forms_data)} public forms")
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        # Comprehensive error logging
+        current_app.logger.error(f"Critical error in list_public_forms: {str(e)}", exc_info=True)
+        
+        # Return safe fallback response
+        return jsonify({
+            'error': 'Failed to retrieve forms', 
+            'forms': [],
+            'pagination': {
+                'page': 1,
+                'per_page': 10,
+                'total': 0,
+                'pages': 0,
+                'has_next': False,
+                'has_prev': False
+            }
+        }), 500
+
+# ========================================
+# FRONTEND PUBLIC FORMS API
+# ========================================
+
+@forms_bp.route('/public', methods=['GET'])
+@limiter.limit("200 per hour")
+def get_public_forms_for_frontend():
+    """Get public and active forms for the frontend public forms page"""
+    try:
+        current_app.logger.info("Fetching public forms for frontend")
+        
+        # Query only public AND active forms
+        forms_query = Form.query.filter_by(
+            is_public=True, 
+            is_active=True
+        ).order_by(desc(Form.updated_at))
+        
+        forms = forms_query.all()
+        current_app.logger.debug(f"Found {len(forms)} public active forms")
+        
+        forms_data = []
+        for form in forms:
+            try:
+                # Safe field access with defaults
+                creator_name = 'System'
+                if form.creator:
+                    creator_name = getattr(form.creator, 'username', None) or \
+                                 getattr(form.creator, 'full_name', None) or \
+                                 'Unknown'
+                
+                # Count submissions safely
+                submission_count = 0
+                try:
+                    submission_count = FormSubmission.query.filter_by(form_id=form.id).count()
+                except Exception:
+                    submission_count = 0
+                
+                # Calculate field count from schema
+                field_count = 0
+                if form.schema and isinstance(form.schema, dict):
+                    fields = form.schema.get('fields', [])
+                    field_count = len(fields) if isinstance(fields, list) else 0
+                
+                form_data = {
+                    'id': form.id,
+                    'title': form.title or 'Untitled Form',
+                    'description': form.description or '',
+                    'created_at': form.created_at.isoformat() if form.created_at else None,
+                    'updated_at': form.updated_at.isoformat() if form.updated_at else None,
+                    'creator_name': creator_name,
+                    'submission_count': submission_count,
+                    'field_count': field_count,
+                    'has_external_url': bool(form.external_url),
+                    'external_url': form.external_url,
+                    'is_public': form.is_public,
+                    'is_active': form.is_active,
+                    'view_count': getattr(form, 'view_count', 0) or 0
+                }
+                
+                forms_data.append(form_data)
+                
+            except Exception as form_error:
+                current_app.logger.warning(f"Error processing form {form.id}: {str(form_error)}")
+                continue
+        
+        response_data = {
+            'success': True,
+            'forms': forms_data,
+            'total': len(forms_data),
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        current_app.logger.info(f"Successfully returned {len(forms_data)} public forms")
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in get_public_forms_for_frontend: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to retrieve public forms',
+            'forms': [],
+            'total': 0
+        }), 500
+
+@forms_bp.route('/admin/toggle-status/<int:form_id>', methods=['PATCH'])
+@jwt_required()
+@limiter.limit("50 per hour")
+def toggle_form_status(form_id):
+    """Toggle form's public or active status (Admin only)"""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        form = Form.query.get_or_404(form_id)
+        
+        # Check if user owns the form or is admin
+        if form.creator_id != user.id and not user.has_permission(Permission.MANAGE_USERS):
+            return jsonify({'error': 'Access denied'}), 403
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Update status fields
+        if 'is_public' in data:
+            form.is_public = bool(data['is_public'])
+        
+        if 'is_active' in data:
+            form.is_active = bool(data['is_active'])
+        
+        # Update timestamp
+        form.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        # Return updated form data
+        response_data = {
+            'success': True,
+            'message': 'Form status updated successfully',
+            'form': {
+                'id': form.id,
+                'title': form.title,
+                'is_public': form.is_public,
+                'is_active': form.is_active,
+                'updated_at': form.updated_at.isoformat()
+            }
+        }
+        
+        current_app.logger.info(f"Form {form_id} status updated by user {user.id}")
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error toggling form status: {str(e)}")
+        return jsonify({'success': False, 'error': 'Failed to update form status'}), 500
