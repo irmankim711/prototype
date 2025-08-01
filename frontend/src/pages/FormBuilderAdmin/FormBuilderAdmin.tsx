@@ -108,10 +108,12 @@ export default function FormBuilderAdmin() {
       try {
         const parsed = JSON.parse(saved);
         // Convert createdAt strings back to Date objects
-        return parsed.map((form: Omit<ExternalForm, 'createdAt'> & { createdAt: string }) => ({
-          ...form,
-          createdAt: new Date(form.createdAt)
-        }));
+        return parsed.map(
+          (form: Omit<ExternalForm, "createdAt"> & { createdAt: string }) => ({
+            ...form,
+            createdAt: new Date(form.createdAt),
+          })
+        );
       } catch (error) {
         console.error("Error parsing external forms from localStorage:", error);
         return [];

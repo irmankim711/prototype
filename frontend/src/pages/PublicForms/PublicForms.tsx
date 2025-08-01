@@ -217,21 +217,21 @@ export default function PublicForms() {
 
       // Handle the response format from our backend
       const apiFormsData = apiResponse.forms || [];
-      const apiForms: DisplayForm[] = Array.isArray(apiFormsData) 
+      const apiForms: DisplayForm[] = Array.isArray(apiFormsData)
         ? apiFormsData.map((form: PublicForm) => ({
             ...form,
-            is_external: false
+            is_external: false,
           }))
         : [];
 
       // Fetch external forms from localStorage
-      const storedExternalForms = localStorage.getItem('externalForms');
-      const externalForms: DisplayForm[] = storedExternalForms 
+      const storedExternalForms = localStorage.getItem("externalForms");
+      const externalForms: DisplayForm[] = storedExternalForms
         ? JSON.parse(storedExternalForms).map((form: ExternalForm) => {
             // Handle date parsing safely
             let createdAt: string;
             try {
-              if (typeof form.createdAt === 'string') {
+              if (typeof form.createdAt === "string") {
                 createdAt = form.createdAt;
               } else if (form.createdAt instanceof Date) {
                 createdAt = form.createdAt.toISOString();
@@ -239,28 +239,31 @@ export default function PublicForms() {
                 createdAt = new Date().toISOString();
               }
             } catch (dateError) {
-              console.warn('Date parsing error for external form:', dateError);
+              console.warn("Date parsing error for external form:", dateError);
               createdAt = new Date().toISOString();
             }
 
             return {
               id: form.id,
               title: form.title,
-              description: form.description || '',
+              description: form.description || "",
               external_url: form.url,
               is_external: true,
               is_active: true,
               is_public: true,
               created_at: createdAt,
-              creator_name: 'External',
+              creator_name: "External",
               submission_count: 0,
               field_count: 0,
-              view_count: 0
+              view_count: 0,
             };
           })
         : [];
 
-      console.log("PublicForms: External forms from localStorage:", externalForms);
+      console.log(
+        "PublicForms: External forms from localStorage:",
+        externalForms
+      );
 
       // Combine both sources
       const allForms = [...apiForms, ...externalForms];
@@ -656,7 +659,11 @@ export default function PublicForms() {
                       >
                         <Chip
                           icon={<AccessTime />}
-                          label={form.created_at ? new Date(form.created_at).toLocaleDateString() : 'N/A'}
+                          label={
+                            form.created_at
+                              ? new Date(form.created_at).toLocaleDateString()
+                              : "N/A"
+                          }
                           size="small"
                           sx={{
                             background: `linear-gradient(145deg, 
@@ -687,7 +694,11 @@ export default function PublicForms() {
                         {form.external_url && (
                           <Chip
                             icon={<OpenInNew />}
-                            label={form.is_external ? "External Form" : "External Link"}
+                            label={
+                              form.is_external
+                                ? "External Form"
+                                : "External Link"
+                            }
                             size="small"
                             sx={{
                               background: `linear-gradient(145deg, 

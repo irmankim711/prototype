@@ -1,9 +1,11 @@
 # 404 Error Resolution Guide
 
 ## 🔍 Problem Identified
+
 The frontend was receiving a **404 (Not Found)** error when trying to fetch public forms, indicating that the API endpoint couldn't be found.
 
 ## 🛠️ Root Cause Analysis
+
 The issue was related to **API endpoint configuration** between the frontend and backend:
 
 - **Frontend**: Running on `http://localhost:5174` (or `http://localhost:5173`)
@@ -13,6 +15,7 @@ The issue was related to **API endpoint configuration** between the frontend and
 ## ✅ Solutions Implemented
 
 ### 1. **Vite Proxy Configuration** (Already Present)
+
 ```typescript
 // vite.config.ts
 server: {
@@ -24,26 +27,33 @@ server: {
   },
 }
 ```
+
 This configuration should automatically route `/api/*` requests to the backend.
 
 ### 2. **API Configuration Options**
+
 Two approaches to fix the issue:
 
 #### Option A: Use Relative Paths (Recommended)
+
 ```typescript
 // frontend/src/services/formBuilder.ts
 const API_BASE_URL = "/api";
 ```
+
 This relies on the Vite proxy to route requests correctly.
 
 #### Option B: Use Absolute URLs
+
 ```typescript
 // frontend/src/services/formBuilder.ts
 const API_BASE_URL = "http://localhost:5000/api";
 ```
+
 This bypasses the proxy and calls the backend directly.
 
 ### 3. **Environment Configuration**
+
 ```bash
 # frontend/.env.development
 VITE_API_URL=http://localhost:5000/api
@@ -53,6 +63,7 @@ VITE_AUTH_API_URL=http://localhost:5000/api
 ## 🧪 Verification Steps
 
 ### Test Backend Endpoints (Confirmed Working ✅)
+
 ```bash
 # All these return 200 OK
 curl http://localhost:5000/api/forms/public
@@ -61,6 +72,7 @@ curl http://localhost:5000/health
 ```
 
 ### Test Frontend Proxy (Should Work ✅)
+
 ```bash
 # With Vite proxy, this should also work
 curl http://localhost:5173/api/forms/public
@@ -70,6 +82,7 @@ curl http://localhost:5174/api/forms/public
 ## 🔧 Troubleshooting Steps
 
 ### 1. Check Running Servers
+
 ```bash
 # Check if backend is running
 netstat -an | findstr :5000
@@ -80,22 +93,26 @@ netstat -an | findstr :5174
 ```
 
 ### 2. Verify Proxy in Browser
+
 Open browser developer tools → Network tab → Make a request → Check if:
+
 - Request URL shows `/api/forms/public`
 - It gets proxied to `localhost:5000`
 - Response is 200 OK
 
 ### 3. Clear Browser Cache
+
 - Hard refresh (Ctrl+F5)
 - Clear localStorage/sessionStorage
 - Restart browser
 
 ### 4. Restart Development Servers
+
 ```bash
 # Restart backend
 cd backend && python run.py
 
-# Restart frontend  
+# Restart frontend
 cd frontend && npm run dev
 ```
 

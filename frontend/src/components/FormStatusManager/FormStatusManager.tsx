@@ -94,7 +94,7 @@ export default function FormStatusManager({
 
           // Handle different response formats and convert to ExtendedForm
           const formsData = data.forms || data || [];
-          backendFormsData = Array.isArray(formsData) 
+          backendFormsData = Array.isArray(formsData)
             ? formsData.map((form: Form) => ({
                 id: form.id.toString(),
                 title: form.title,
@@ -120,9 +120,10 @@ export default function FormStatusManager({
         title: form.title,
         description: form.description,
         external_url: form.url,
-        created_at: form.createdAt instanceof Date 
-          ? form.createdAt.toISOString() 
-          : new Date(form.createdAt).toISOString(),
+        created_at:
+          form.createdAt instanceof Date
+            ? form.createdAt.toISOString()
+            : new Date(form.createdAt).toISOString(),
         is_external: true,
         is_public: true, // External forms are considered public since they have URLs
         is_active: true, // External forms are considered active
@@ -131,7 +132,6 @@ export default function FormStatusManager({
       // Combine backend and external forms
       const combined = [...backendFormsData, ...externalFormsData];
       setCombinedForms(combined);
-
     } catch (err) {
       console.error("Error in fetchForms:", err);
       if (err instanceof Error) {
@@ -158,7 +158,7 @@ export default function FormStatusManager({
       setUpdating(formId);
 
       // Check if this is an external form
-      if (formId.startsWith('external_')) {
+      if (formId.startsWith("external_")) {
         setError("Cannot toggle status for external forms");
         return;
       }
@@ -337,11 +337,13 @@ export default function FormStatusManager({
                       <Switch
                         checked={form.is_public}
                         onChange={(e) =>
-                          form.is_external ? undefined : toggleFormStatus(
-                            form.id,
-                            "is_public",
-                            e.target.checked
-                          )
+                          form.is_external
+                            ? undefined
+                            : toggleFormStatus(
+                                form.id,
+                                "is_public",
+                                e.target.checked
+                              )
                         }
                         disabled={updating === form.id || form.is_external}
                         color="primary"
@@ -359,7 +361,10 @@ export default function FormStatusManager({
                         Public
                         {form.is_external && (
                           <Tooltip title="External forms are always public">
-                            <Info fontSize="small" sx={{ color: 'text.secondary', ml: 0.5 }} />
+                            <Info
+                              fontSize="small"
+                              sx={{ color: "text.secondary", ml: 0.5 }}
+                            />
                           </Tooltip>
                         )}
                       </Box>
@@ -373,11 +378,13 @@ export default function FormStatusManager({
                       <Switch
                         checked={form.is_active}
                         onChange={(e) =>
-                          form.is_external ? undefined : toggleFormStatus(
-                            form.id,
-                            "is_active",
-                            e.target.checked
-                          )
+                          form.is_external
+                            ? undefined
+                            : toggleFormStatus(
+                                form.id,
+                                "is_active",
+                                e.target.checked
+                              )
                         }
                         disabled={updating === form.id || form.is_external}
                         color="success"
@@ -395,7 +402,10 @@ export default function FormStatusManager({
                         Active
                         {form.is_external && (
                           <Tooltip title="External forms are always active">
-                            <Info fontSize="small" sx={{ color: 'text.secondary', ml: 0.5 }} />
+                            <Info
+                              fontSize="small"
+                              sx={{ color: "text.secondary", ml: 0.5 }}
+                            />
                           </Tooltip>
                         )}
                       </Box>
@@ -409,12 +419,12 @@ export default function FormStatusManager({
                     <Typography variant="body2" color="text.secondary">
                       External URL:
                     </Typography>
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
-                        wordBreak: "break-all", 
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        wordBreak: "break-all",
                         fontSize: "0.85rem",
-                        color: "primary.main"
+                        color: "primary.main",
                       }}
                     >
                       {form.external_url}
@@ -430,7 +440,9 @@ export default function FormStatusManager({
                   }}
                 >
                   <Typography variant="caption" color="text.secondary">
-                    {form.is_external ? "External Form" : `${form.submission_count || 0} submissions`}
+                    {form.is_external
+                      ? "External Form"
+                      : `${form.submission_count || 0} submissions`}
                   </Typography>
                   <Box>
                     <Tooltip title="View Details">
@@ -446,17 +458,22 @@ export default function FormStatusManager({
                       <Tooltip title="Open External Form">
                         <IconButton
                           size="small"
-                          onClick={() => window.open(form.external_url, "_blank")}
+                          onClick={() =>
+                            window.open(form.external_url, "_blank")
+                          }
                         >
                           <OpenInNew />
                         </IconButton>
                       </Tooltip>
                     ) : (
-                      form.is_public && form.is_active && (
+                      form.is_public &&
+                      form.is_active && (
                         <Tooltip title="View Public Form">
                           <IconButton
                             size="small"
-                            onClick={() => window.open(`/public-forms`, "_blank")}
+                            onClick={() =>
+                              window.open(`/public-forms`, "_blank")
+                            }
                           >
                             <OpenInNew />
                           </IconButton>
@@ -523,11 +540,7 @@ export default function FormStatusManager({
                 <Typography variant="subtitle2">Status:</Typography>
                 <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
                   {selectedForm.is_external && (
-                    <Chip
-                      label="External"
-                      color="info"
-                      size="small"
-                    />
+                    <Chip label="External" color="info" size="small" />
                   )}
                   <Chip
                     label={selectedForm.is_public ? "Public" : "Private"}
@@ -546,14 +559,16 @@ export default function FormStatusManager({
               {selectedForm.is_external && selectedForm.external_url && (
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="subtitle2">External URL:</Typography>
-                  <Typography 
-                    variant="body2" 
-                    sx={{ 
+                  <Typography
+                    variant="body2"
+                    sx={{
                       wordBreak: "break-all",
                       color: "primary.main",
-                      cursor: "pointer"
+                      cursor: "pointer",
                     }}
-                    onClick={() => window.open(selectedForm.external_url, "_blank")}
+                    onClick={() =>
+                      window.open(selectedForm.external_url, "_blank")
+                    }
                   >
                     {selectedForm.external_url}
                   </Typography>
@@ -569,13 +584,13 @@ export default function FormStatusManager({
                 )}
                 <Typography variant="body2">
                   Created:{" "}
-                  {selectedForm.created_at 
+                  {selectedForm.created_at
                     ? new Date(selectedForm.created_at).toLocaleDateString()
                     : "Unknown"}
                 </Typography>
                 <Typography variant="body2">
                   Last Updated:{" "}
-                  {selectedForm.updated_at 
+                  {selectedForm.updated_at
                     ? new Date(selectedForm.updated_at).toLocaleDateString()
                     : "Unknown"}
                 </Typography>
