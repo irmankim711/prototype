@@ -27,6 +27,7 @@ import {
   Description as TemplatesIcon,
   Logout as LogoutIcon,
   Person as PersonIcon,
+  AutoAwesome as AutomatedReportsIcon,
 } from "@mui/icons-material";
 import { AuthContext } from "../../context/AuthContext";
 

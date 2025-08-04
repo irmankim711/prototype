@@ -1,4 +1,4 @@
-import axios from "axios";
+import axiosInstance from "./axiosInstance";
 
 // Types for Form Builder
 export interface FormField {
@@ -121,33 +121,17 @@ export interface FormBuilderConfig {
 // API Base URL - Using relative path since Vite proxy handles routing to backend
 const API_BASE_URL = "/api";
 
-// Create axios instance with auth
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  withCredentials: true,
-});
+// Use the configured axios instance instead of creating a new one
+const api = axiosInstance;
 
-// Request interceptor to add auth token
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("accessToken");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Token getter function that can be set from outside
+let getAuthToken: () => string | null = () =>
+  localStorage.getItem("accessToken");
 
-// Response interceptor for error handling
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Handle token refresh or redirect to login
-      localStorage.removeItem("accessToken");
-      window.location.href = "/login";
-    }
-    return Promise.reject(error);
-  }
-);
+// Function to set the token getter (called from AuthContext)
+export const setTokenGetter = (getter: () => string | null) => {
+  getAuthToken = getter;
+};
 
 // Form Builder API Functions
 export const formBuilderAPI = {
@@ -216,7 +200,7 @@ export const formBuilderAPI = {
   // Get public forms (no authentication required)
   getPublicForms: async () => {
     // Use a separate axios instance without auth for public endpoint
-    const publicResponse = await axios.get("/forms/public", {
+    const publicResponse = await api.get("/forms/public", {
       baseURL: API_BASE_URL,
       timeout: 10000,
     });
@@ -352,6 +336,93 @@ export const formBuilderAPI = {
       params: { format },
       responseType: format === "json" ? "json" : "blob",
     });
+    return response.data;
+  },
+
+  // ========================================
+  // ACCESS CODE MANAGEMENT
+  // ========================================
+
+  // Create generic access code for multiple forms
+  createGenericAccessCode: async (accessCodeData: {
+    title: string;
+    description?: string;
+    expires_at?: string;
+    max_uses?: number;
+    allowed_form_ids: number[];
+    allowed_external_forms: Array<{
+      id?: string;
+      title: string;
+      url: string;
+      description?: string;
+      created_at?: string;
+    }>;
+  }) => {
+    const response = await api.post("/forms/access-codes", accessCodeData);
+    return response.data;
+  },
+
+  // Get all access codes
+  getAllAccessCodes: async () => {
+    const response = await api.get("/forms/access-codes");
+    return response.data;
+  },
+
+  // Get access codes for specific form
+  getAccessCodesForForm: async (formId: number) => {
+    const response = await api.get(`/forms/${formId}/access-codes`);
+    return response.data;
+  },
+
+  // Delete access code
+  deleteAccessCode: async (codeId: number) => {
+    const response = await api.delete(`/forms/access-codes/${codeId}`);
+    return response.data;
+  },
+
+  // Toggle access code status
+  toggleAccessCode: async (codeId: number) => {
+    const response = await api.patch(`/forms/access-codes/${codeId}/toggle`);
+    return response.data;
+  },
+
+  // ========================================
+  // PUBLIC ACCESS WITH CODES
+  // ========================================
+
+  // Verify access code and get accessible forms
+  verifyAccessCode: async (code: string) => {
+    const response = await api.post("/forms/public/verify-code", { code });
+    return response.data;
+  },
+
+  // Get accessible forms with current access code
+  getAccessibleForms: async (accessToken: string) => {
+    const response = await api.get("/forms/public/code-access/forms", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    return response.data;
+  },
+
+  // Get specific form with access code
+  getFormWithAccessCode: async (formId: number, accessToken: string) => {
+    const response = await api.get(`/forms/public/code-access/${formId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    return response.data;
+  },
+
+  // Submit form with access code
+  submitFormWithAccessCode: async (
+    formId: number,
+    formData: Record<string, unknown>,
+    accessToken: string
+  ) => {
+    const response = await api.post(
+      `/forms/public/code-access/${formId}/submit`,
+      { data: formData },
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
     return response.data;
   },
 };

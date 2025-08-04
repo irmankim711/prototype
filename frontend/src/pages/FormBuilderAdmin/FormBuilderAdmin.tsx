@@ -1,5 +1,5 @@
 import React, { useState, useContext } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { formBuilderAPI, type Form } from "../../services/formBuilder";
 import { AuthContext } from "../../context/AuthContext";
 import {
@@ -26,6 +26,9 @@ import {
   Menu,
   MenuItem,
   Badge,
+  Chip,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import {
   Add,
@@ -37,6 +40,9 @@ import {
   Launch,
   Storage,
   Settings,
+  VpnKey,
+  ContentCopy,
+  Info,
 } from "@mui/icons-material";
 
 import FormBuilder from "../../components/FormBuilder/FormBuilder";
@@ -73,9 +79,24 @@ interface ExternalForm {
   qrCode?: string;
 }
 
+interface AccessCode {
+  id: number;
+  code: string;
+  title: string;
+  description?: string;
+  expires_at: string;
+  max_uses: number;
+  current_uses: number;
+  is_active: boolean;
+  allowed_form_ids: number[];
+  allowed_external_forms: ExternalForm[];
+  accessible_forms_count: number;
+  access_url: string;
+}
+
 export default function FormBuilderAdmin() {
   // Authentication context
-  const { user, accessToken, login } = useContext(AuthContext);
+  const { user, accessToken, isLoading, login } = useContext(AuthContext);
 
   // Authentication state for login form
   const [loginEmail, setLoginEmail] = useState("");
@@ -90,8 +111,29 @@ export default function FormBuilderAdmin() {
   // Dialog states
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [externalFormDialogOpen, setExternalFormDialogOpen] = useState(false);
+  const [accessCodeDialogOpen, setAccessCodeDialogOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedForm, setSelectedForm] = useState<Form | null>(null);
+
+  // Access code management
+  const [accessCodes, setAccessCodes] = useState<AccessCode[]>([]);
+  const [selectedFormForCode, setSelectedFormForCode] = useState<Form | null>(
+    null
+  );
+  const [codeSettings, setCodeSettings] = useState({
+    expires_in_hours: 24,
+    max_uses: 1,
+  });
+
+  // Generic access code settings
+  const [genericCodeSettings, setGenericCodeSettings] = useState({
+    title: "",
+    description: "",
+    expires_in_hours: 24,
+    max_uses: 10,
+    selected_forms: [] as number[],
+    selected_external_forms: [] as ExternalForm[],
+  });
 
   // Form data states
   const [shareUrl, setShareUrl] = useState("");
@@ -131,12 +173,12 @@ export default function FormBuilderAdmin() {
 
   // Commented out unused variables from My Forms functionality
   // const [page] = useState(1);
+  const [page] = useState(1);
 
   // QR Code state
   const [showQRGenerator, setShowQRGenerator] = useState(false);
 
-  // Commented out My Forms query - no longer needed since we commented out My Forms tab
-  /*
+  // Forms query - needed for generic access codes
   const {
     data: formsData,
     isLoading: formsLoading,
@@ -149,7 +191,6 @@ export default function FormBuilderAdmin() {
   });
 
   const forms = formsData?.forms || [];
-  */
 
   // Delete form mutation
   const deleteMutation = useMutation({
@@ -224,6 +265,151 @@ export default function FormBuilderAdmin() {
       message: "Copied to clipboard!",
       severity: "success",
     });
+  };
+
+  // Access code handlers
+  const handleGenerateAccessCode = () => {
+    setAccessCodeDialogOpen(true);
+  };
+
+  const handleCreateGenericAccessCode = async () => {
+    if (!genericCodeSettings.title.trim()) {
+      setSnackbar({
+        open: true,
+        message: "Please enter a title for the access code",
+        severity: "error",
+      });
+      return;
+    }
+
+    if (
+      genericCodeSettings.selected_forms.length === 0 &&
+      genericCodeSettings.selected_external_forms.length === 0
+    ) {
+      setSnackbar({
+        open: true,
+        message: "Please select at least one form",
+        severity: "error",
+      });
+      return;
+    }
+
+    try {
+      const payload = {
+        title: genericCodeSettings.title,
+        description: genericCodeSettings.description,
+        expires_at: new Date(
+          Date.now() + genericCodeSettings.expires_in_hours * 60 * 60 * 1000
+        ).toISOString(),
+        max_uses: genericCodeSettings.max_uses,
+        allowed_form_ids: genericCodeSettings.selected_forms,
+        allowed_external_forms: genericCodeSettings.selected_external_forms,
+      };
+
+      const response = await formBuilderAPI.createGenericAccessCode(payload);
+
+      const newCode: AccessCode = {
+        id: response.access_code.id,
+        code: response.access_code.code,
+        title: response.access_code.title,
+        description: response.access_code.description,
+        expires_at: response.access_code.expires_at,
+        max_uses: response.access_code.max_uses,
+        current_uses: response.access_code.current_uses,
+        is_active: response.access_code.is_active,
+        allowed_form_ids: response.access_code.allowed_form_ids,
+        allowed_external_forms: response.access_code.allowed_external_forms,
+        accessible_forms_count: response.access_code.accessible_forms_count,
+        access_url: `${window.location.origin}/public-forms?code=${response.access_code.code}`,
+      };
+
+      setAccessCodes([...accessCodes, newCode]);
+      setAccessCodeDialogOpen(false);
+
+      // Reset form
+      setGenericCodeSettings({
+        title: "",
+        description: "",
+        expires_in_hours: 24,
+        max_uses: 10,
+        selected_forms: [],
+        selected_external_forms: [],
+      });
+
+      setSnackbar({
+        open: true,
+        message: `Access code ${newCode.code} generated successfully!`,
+        severity: "success",
+      });
+    } catch (error) {
+      console.error("Error creating access code:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to generate access code",
+        severity: "error",
+      });
+    }
+  };
+
+  // Legacy function - keeping for backward compatibility
+  const handleCreateAccessCode = async () => {
+    if (!selectedFormForCode) return;
+
+    try {
+      // Convert to generic access code format
+      const payload = {
+        title: `Access to ${selectedFormForCode.title}`,
+        description: `Generated access code for form: ${selectedFormForCode.title}`,
+        expires_at: new Date(
+          Date.now() + codeSettings.expires_in_hours * 60 * 60 * 1000
+        ).toISOString(),
+        max_uses: codeSettings.max_uses,
+        allowed_form_ids: [selectedFormForCode.id],
+        allowed_external_forms: [],
+      };
+
+      const response = await formBuilderAPI.createGenericAccessCode(payload);
+
+      const newCode: AccessCode = {
+        id: response.access_code.id,
+        code: response.access_code.code,
+        title: response.access_code.title,
+        description: response.access_code.description,
+        expires_at: response.access_code.expires_at,
+        max_uses: response.access_code.max_uses,
+        current_uses: response.access_code.current_uses,
+        is_active: response.access_code.is_active,
+        allowed_form_ids: response.access_code.allowed_form_ids,
+        allowed_external_forms: response.access_code.allowed_external_forms,
+        accessible_forms_count: response.access_code.accessible_forms_count,
+        access_url: `${window.location.origin}/public-forms?code=${response.access_code.code}`,
+      };
+
+      setAccessCodes([...accessCodes, newCode]);
+      setAccessCodeDialogOpen(false);
+      setSelectedFormForCode(null);
+      setSnackbar({
+        open: true,
+        message: `Access code ${newCode.code} generated successfully!`,
+        severity: "success",
+      });
+    } catch (error) {
+      console.error("Error creating access code:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to generate access code",
+        severity: "error",
+      });
+    }
+  };
+
+  const generateRandomCode = (): string => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let result = "";
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
   };
 
   const handleAddExternalForm = () => {
@@ -322,6 +508,22 @@ export default function FormBuilderAdmin() {
       setLoginLoading(false);
     }
   };
+
+  // Show loading while authentication is being checked
+  if (isLoading) {
+    return (
+      <Box sx={{ width: "100%", typography: "body1" }}>
+        <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
+          <Typography variant="h4" component="h1" sx={{ mb: 2 }}>
+            Form Builder Dashboard
+          </Typography>
+        </Box>
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+          <Typography>Loading...</Typography>
+        </Box>
+      </Box>
+    );
+  }
 
   // Show login form if user is not authenticated
   if (!user || !accessToken) {
@@ -455,6 +657,16 @@ export default function FormBuilderAdmin() {
                 <Settings />
                 Form Status
               </Box>
+            }
+          />
+          <Tab
+            label={
+              <Badge badgeContent={accessCodes.length} color="info">
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <VpnKey />
+                  Access Codes
+                </Box>
+              </Badge>
             }
           />
         </Tabs>
@@ -756,6 +968,150 @@ export default function FormBuilderAdmin() {
         <FormStatusManager externalForms={externalForms} />
       </TabPanel>
 
+      {/* Access Codes Tab */}
+      <TabPanel value={tabValue} index={3}>
+        <Box
+          sx={{
+            mb: 3,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Typography variant="h6">Form Access Codes</Typography>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={handleGenerateAccessCode}
+          >
+            Generate Access Code
+          </Button>
+        </Box>
+
+        {accessCodes.length === 0 ? (
+          <Paper sx={{ p: 4, textAlign: "center" }}>
+            <VpnKey sx={{ fontSize: 64, color: "gray", mb: 2 }} />
+            <Typography variant="h6" gutterBottom>
+              No Access Codes Generated
+            </Typography>
+            <Typography color="text.secondary" paragraph>
+              Generate access codes to allow participants to access specific
+              forms.
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={handleGenerateAccessCode}
+            >
+              Generate Your First Code
+            </Button>
+          </Paper>
+        ) : (
+          <Grid container spacing={3}>
+            {accessCodes.map((accessCode) => (
+              <Grid item xs={12} md={6} lg={4} key={accessCode.id}>
+                <Card>
+                  <CardContent>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        mb: 2,
+                      }}
+                    >
+                      <Typography
+                        variant="h6"
+                        component="h2"
+                        sx={{ fontFamily: "monospace" }}
+                      >
+                        {accessCode.code}
+                      </Typography>
+                      <Chip
+                        label={accessCode.is_active ? "Active" : "Inactive"}
+                        color={accessCode.is_active ? "success" : "default"}
+                        size="small"
+                      />
+                    </Box>
+
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      {accessCode.description || "Generic access code"}
+                    </Typography>
+
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      Forms: {accessCode.accessible_forms_count}
+                    </Typography>
+
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      Uses: {accessCode.current_uses} / {accessCode.max_uses}
+                    </Typography>
+
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      Expires:{" "}
+                      {new Date(accessCode.expires_at).toLocaleString()}
+                    </Typography>
+
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={accessCode.access_url}
+                      InputProps={{
+                        readOnly: true,
+                        endAdornment: (
+                          <IconButton
+                            onClick={() =>
+                              handleCopyToClipboard(accessCode.access_url)
+                            }
+                          >
+                            <ContentCopy />
+                          </IconButton>
+                        ),
+                      }}
+                      sx={{ mt: 2 }}
+                    />
+                  </CardContent>
+
+                  <CardActions>
+                    <Button
+                      size="small"
+                      startIcon={<ContentCopy />}
+                      onClick={() => handleCopyToClipboard(accessCode.code)}
+                    >
+                      Copy Code
+                    </Button>
+                    <Button
+                      size="small"
+                      startIcon={<Share />}
+                      onClick={() =>
+                        handleCopyToClipboard(accessCode.access_url)
+                      }
+                    >
+                      Copy Link
+                    </Button>
+                  </CardActions>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        )}
+      </TabPanel>
+
       {/* Action Menu */}
       <Menu
         anchorEl={anchorEl}
@@ -872,6 +1228,193 @@ export default function FormBuilderAdmin() {
             }
           >
             Add Form
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Access Code Generation Dialog */}
+      <Dialog
+        open={accessCodeDialogOpen}
+        onClose={() => setAccessCodeDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Generate Generic Access Code</DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Generate a secure access code that participants can use to access
+            multiple selected forms (both internal and external).
+          </Alert>
+
+          <TextField
+            fullWidth
+            label="Access Code Title"
+            value={genericCodeSettings.title}
+            onChange={(e) =>
+              setGenericCodeSettings({
+                ...genericCodeSettings,
+                title: e.target.value,
+              })
+            }
+            margin="normal"
+            placeholder="e.g., Event Registration Forms"
+          />
+
+          <TextField
+            fullWidth
+            label="Description (Optional)"
+            value={genericCodeSettings.description}
+            onChange={(e) =>
+              setGenericCodeSettings({
+                ...genericCodeSettings,
+                description: e.target.value,
+              })
+            }
+            margin="normal"
+            multiline
+            rows={2}
+            placeholder="Brief description of what this access code provides"
+          />
+
+          <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+            Select Internal Forms:
+          </Typography>
+          <Box
+            sx={{
+              maxHeight: 200,
+              overflowY: "auto",
+              border: "1px solid #e0e0e0",
+              borderRadius: 1,
+              p: 1,
+            }}
+          >
+            {forms.map((form: Form) => (
+              <FormControlLabel
+                key={form.id}
+                control={
+                  <Checkbox
+                    checked={genericCodeSettings.selected_forms.includes(
+                      form.id
+                    )}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      const updatedForms = e.target.checked
+                        ? [...genericCodeSettings.selected_forms, form.id]
+                        : genericCodeSettings.selected_forms.filter(
+                            (id) => id !== form.id
+                          );
+                      setGenericCodeSettings({
+                        ...genericCodeSettings,
+                        selected_forms: updatedForms,
+                      });
+                    }}
+                  />
+                }
+                label={`${form.title} ${
+                  form.is_public ? "(Public)" : "(Private)"
+                }`}
+              />
+            ))}
+            {forms.length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                No forms available
+              </Typography>
+            )}
+          </Box>
+
+          <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+            Select External Forms:
+          </Typography>
+          <Box
+            sx={{
+              maxHeight: 200,
+              overflowY: "auto",
+              border: "1px solid #e0e0e0",
+              borderRadius: 1,
+              p: 1,
+            }}
+          >
+            {externalForms.map((extForm) => (
+              <FormControlLabel
+                key={extForm.id}
+                control={
+                  <Checkbox
+                    checked={genericCodeSettings.selected_external_forms.some(
+                      (f) => f.id === extForm.id
+                    )}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      const updatedExternalForms = e.target.checked
+                        ? [
+                            ...genericCodeSettings.selected_external_forms,
+                            extForm,
+                          ]
+                        : genericCodeSettings.selected_external_forms.filter(
+                            (f) => f.id !== extForm.id
+                          );
+                      setGenericCodeSettings({
+                        ...genericCodeSettings,
+                        selected_external_forms: updatedExternalForms,
+                      });
+                    }}
+                  />
+                }
+                label={extForm.title}
+              />
+            ))}
+            {externalForms.length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                No external forms available
+              </Typography>
+            )}
+          </Box>
+
+          <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+            Code Settings:
+          </Typography>
+
+          <TextField
+            fullWidth
+            label="Expires in Hours"
+            type="number"
+            value={genericCodeSettings.expires_in_hours}
+            onChange={(e) =>
+              setGenericCodeSettings({
+                ...genericCodeSettings,
+                expires_in_hours: parseInt(e.target.value) || 24,
+              })
+            }
+            margin="normal"
+            inputProps={{ min: 1, max: 168 }}
+            helperText="How long the access code will be valid (1-168 hours)"
+          />
+
+          <TextField
+            fullWidth
+            label="Maximum Uses"
+            type="number"
+            value={genericCodeSettings.max_uses}
+            onChange={(e) =>
+              setGenericCodeSettings({
+                ...genericCodeSettings,
+                max_uses: parseInt(e.target.value) || 10,
+              })
+            }
+            margin="normal"
+            inputProps={{ min: 1, max: 1000 }}
+            helperText="Maximum number of times this code can be used"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAccessCodeDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleCreateGenericAccessCode}
+            disabled={
+              !genericCodeSettings.title.trim() ||
+              (genericCodeSettings.selected_forms.length === 0 &&
+                genericCodeSettings.selected_external_forms.length === 0)
+            }
+          >
+            Generate Code
           </Button>
         </DialogActions>
       </Dialog>

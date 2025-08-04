@@ -64,3 +64,10 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* Custom utility classes */
+.required-asterisk {
+  color: #f44336;
+  font-weight: bold;
+  margin-left: 4px;
+}

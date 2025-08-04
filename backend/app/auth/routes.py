@@ -58,9 +58,22 @@ def login():
             }
         }), 200)
         
-        # Set cookies
-        resp.set_cookie("access_token_cookie", access_token, httponly=True, samesite="Lax")
-        resp.set_cookie("refresh_token", refresh_token, httponly=True, samesite="Lax", path="/api/auth/refresh")
+        # Set cookies with proper security settings
+        resp.set_cookie(
+            "access_token_cookie", 
+            access_token, 
+            httponly=True, 
+            secure=False,  # Set to True in production with HTTPS
+            samesite="Lax"
+        )
+        resp.set_cookie(
+            "refresh_token_cookie", 
+            refresh_token, 
+            httponly=True, 
+            secure=False,  # Set to True in production with HTTPS
+            samesite="Lax",
+            path="/api/auth/refresh"
+        )
         
         return resp
         
@@ -71,9 +84,39 @@ def login():
 @auth_bp.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True)
 def refresh():
-    current_user = get_jwt_identity()
-    new_token = create_access_token(identity=current_user)
-    return jsonify({"access_token": new_token})
+    try:
+        print(f"Refresh endpoint called")
+        print(f"Request cookies: {request.cookies}")
+        print(f"Request headers: {dict(request.headers)}")
+        
+        # Get refresh token from cookie - Flask-JWT-Extended handles this automatically
+        # when JWT_TOKEN_LOCATION includes 'cookies'
+        current_user = get_jwt_identity()
+        print(f"Current user from JWT: {current_user}")
+        
+        if not current_user:
+            print("No user identity found in refresh token")
+            return jsonify({"msg": "Invalid refresh token"}), 401
+        
+        # Create new access token
+        new_token = create_access_token(identity=current_user)
+        print(f"Generated new access token for user: {current_user}")
+        
+        return jsonify({"access_token": new_token}), 200
+        
+    except Exception as e:
+        print(f"Refresh error: {str(e)}")
+        print(f"Error type: {type(e)}")
+        
+        # Provide specific error messages
+        if "Missing Authorization Header" in str(e):
+            return jsonify({"msg": "No refresh token provided"}), 401
+        elif "token has expired" in str(e).lower():
+            return jsonify({"msg": "Refresh token expired"}), 401
+        elif "Invalid token" in str(e):
+            return jsonify({"msg": "Invalid refresh token"}), 401
+        else:
+            return jsonify({"msg": "Token refresh failed", "error": str(e)}), 401
 
 @auth_bp.route('/me', methods=['GET'])
 @jwt_required()

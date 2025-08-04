@@ -1,6 +1,7 @@
 import { createContext, useState, useEffect } from "react";
 import type { ReactNode } from "react";
-import axios from "axios";
+import axiosInstance from "../services/axiosInstance";
+import { setTokenGetter } from "../services/formBuilder";
 
 interface User {
   id: number;
@@ -19,6 +20,7 @@ interface AuthContextType {
   user: User | null;
   accessToken: string | null;
   userProfile: User | null;
+  isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   register: (data: {
@@ -37,23 +39,18 @@ export const AuthContext = createContext<AuthContextType>(
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [accessToken, setAccessToken] = useState<string | null>(() =>
     localStorage.getItem("accessToken")
   );
 
-  const api = axios.create({
-    baseURL: import.meta.env.VITE_AUTH_API_URL || "http://localhost:5000/api",
-    withCredentials: true,
-  });
+  // Set up token getter for formBuilder service
+  useEffect(() => {
+    setTokenGetter(() => accessToken);
+  }, [accessToken]);
 
-  api.interceptors.request.use((config) => {
-    // Always get the latest token from localStorage
-    const token = localStorage.getItem("accessToken");
-    if (token) config.headers["Authorization"] = `Bearer ${token}`;
-    return config;
-  });
-
-  let refreshPromise: Promise<unknown> | null = null;
+  // Use the configured axios instance
+  const api = axiosInstance;
 
   // Fetch user profile from backend
   const fetchUserProfile = async () => {
@@ -74,58 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!accessToken) return;
     await fetchUserProfile();
   };
-
-  api.interceptors.response.use(
-    (res) => res,
-    async (error) => {
-      const original = error.config;
-      if (
-        (error.response?.status === 401 || error.response?.status === 403) &&
-        !original._retry
-      ) {
-        original._retry = true;
-        if (!refreshPromise) {
-          refreshPromise = api
-            .post("/auth/refresh", {}, { withCredentials: true })
-            .then(({ data }) => {
-              setAccessToken(data.access_token);
-              localStorage.setItem("accessToken", data.access_token);
-              const decoded = JSON.parse(atob(data.access_token.split(".")[1]));
-              setUser(decoded);
-              return data.access_token;
-            })
-            .catch((err) => {
-              console.log("Token refresh failed in interceptor:", err.message);
-              setUser(null);
-              setAccessToken(null);
-              localStorage.removeItem("accessToken");
-
-              // Only redirect on auth errors, not network errors
-              if (
-                err.response?.status === 401 ||
-                err.response?.status === 403
-              ) {
-                console.log("Authentication failed - redirecting to login");
-                // In development, don't auto-redirect to allow debugging
-                // window.location.href = '/';
-              }
-              throw err;
-            })
-            .finally(() => {
-              refreshPromise = null;
-            });
-        }
-        try {
-          const newToken = await refreshPromise;
-          original.headers["Authorization"] = `Bearer ${newToken}`;
-          return api(original);
-        } catch (err) {
-          return Promise.reject(err);
-        }
-      }
-      return Promise.reject(error);
-    }
-  );
 
   async function login(email: string, password: string) {
     const { data } = await api.post(
@@ -178,72 +123,73 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // On mount, try to restore user from token in localStorage
-    const token = localStorage.getItem("accessToken");
-
-    if (token) {
+    const initializeAuth = async () => {
       try {
-        const decoded = JSON.parse(atob(token.split(".")[1]));
-        const currentTime = Date.now() / 1000;
+        const token = localStorage.getItem("accessToken");
 
-        if (decoded.exp && decoded.exp > currentTime) {
-          // Token is still valid
-          setAccessToken(token);
-          setUser(decoded);
-          console.log("Restored valid access token from localStorage");
+        if (token) {
+          try {
+            const decoded = JSON.parse(atob(token.split(".")[1]));
+            const currentTime = Date.now() / 1000;
+
+            if (decoded.exp && decoded.exp > currentTime) {
+              // Token is still valid
+              setAccessToken(token);
+              setUser(decoded);
+              console.log("Restored valid access token from localStorage");
+            } else {
+              // Token is expired, try to refresh
+              console.log("Access token expired, attempting refresh");
+              await refreshTokenSilently();
+            }
+          } catch (error) {
+            console.log(
+              "Invalid token in localStorage, clearing and trying refresh"
+            );
+            localStorage.removeItem("accessToken");
+            if (hasRefreshToken()) {
+              await refreshTokenSilently();
+            }
+          }
+        } else if (hasRefreshToken()) {
+          // No access token but we might have a refresh token in cookies
+          console.log("No access token found, attempting silent refresh");
+          await refreshTokenSilently();
         } else {
-          // Token is expired, try to refresh
-          console.log("Access token expired, attempting refresh");
-          refreshTokenSilently();
+          console.log("No tokens found, user needs to login");
         }
       } catch (error) {
-        console.log(
-          "Invalid token in localStorage, clearing and trying refresh"
-        );
-        localStorage.removeItem("accessToken");
-        if (hasRefreshToken()) {
-          refreshTokenSilently();
-        }
+        console.log("Error during auth initialization:", error);
+      } finally {
+        // Always set loading to false after initialization is complete
+        setIsLoading(false);
       }
-    } else if (hasRefreshToken()) {
-      // No access token but we might have a refresh token in cookies
-      console.log("No access token found, attempting silent refresh");
-      refreshTokenSilently();
-    } else {
-      console.log("No tokens found, user needs to login");
-    }
+    };
+
+    initializeAuth();
   }, []);
 
   const refreshTokenSilently = async () => {
     try {
+      console.log("Attempting to refresh token...");
       const { data } = await api.post(
         "/auth/refresh",
         {},
         { withCredentials: true }
       );
 
-      if (!data.access_token) {
+      if (data.access_token) {
+        setAccessToken(data.access_token);
+        localStorage.setItem("accessToken", data.access_token);
+
+        // Decode user from token
+        const decoded = JSON.parse(atob(data.access_token.split(".")[1]));
+        setUser(decoded);
+
+        console.log("Token refreshed successfully");
+      } else {
         throw new Error("No access token received");
       }
-
-      // Validate token structure
-      const tokenParts = data.access_token.split(".");
-      if (tokenParts.length !== 3) {
-        throw new Error("Invalid token format");
-      }
-
-      const decoded = JSON.parse(atob(tokenParts[1]));
-
-      // Check if token is not expired
-      const currentTime = Date.now() / 1000;
-      if (decoded.exp && decoded.exp <= currentTime) {
-        throw new Error("Received expired token");
-      }
-
-      setAccessToken(data.access_token);
-      localStorage.setItem("accessToken", data.access_token);
-      setUser(decoded);
-
-      console.log("Token refreshed successfully");
     } catch (error: any) {
       console.log("Silent refresh failed:", error.message);
 
@@ -252,12 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(null);
       localStorage.removeItem("accessToken");
 
-      // If it's a 401/403, the refresh token is invalid/expired
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        console.log("Refresh token expired - redirecting to login");
-        // Don't redirect immediately in development, just log
-        // window.location.href = '/';
-      }
+      // The interceptor will handle redirect logic
     }
   };
 
@@ -267,6 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         accessToken,
         userProfile,
+        isLoading,
         login,
         logout,
         register,
