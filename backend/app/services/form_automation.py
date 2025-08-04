@@ -45,10 +45,10 @@ class FormAutomationService:
         
     def create_form_from_template(self, template_path: str, form_title: str = None) -> Dict[str, Any]:
         """
-        Create a dynamic form based on template placeholders
+        Create a dynamic form based on template placeholders or Excel schema
         
         Args:
-            template_path: Path to the template file
+            template_path: Path to the template file (.xlsx, .html, .txt, etc.)
             form_title: Title for the generated form
             
         Returns:
@@ -57,6 +57,63 @@ class FormAutomationService:
         try:
             logger.info(f"Creating form from template: {template_path}")
             
+            # Check file extension to determine parsing method
+            file_ext = os.path.splitext(template_path)[1].lower()
+            
+            if file_ext == '.xlsx':
+                # Handle Excel template files
+                return self._create_form_from_excel_template(template_path, form_title)
+            else:
+                # Handle text-based templates (HTML, Jinja2, etc.)
+                return self._create_form_from_text_template(template_path, form_title)
+                
+        except Exception as e:
+            logger.error(f"Error creating form from template: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    def _create_form_from_excel_template(self, template_path: str, form_title: Optional[str] = None) -> Dict[str, Any]:
+        """Create form from Excel template with field definitions"""
+        try:
+            # Load Excel file
+            wb = openpyxl.load_workbook(template_path)
+            ws = wb.active
+            
+            fields = []
+            # Assume first row contains headers: Field Name, Field Type, Required
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if row[0]:  # Field name exists
+                    field_name = str(row[0]).strip()
+                    field_type = str(row[1]).strip() if row[1] else 'text'
+                    required = str(row[2]).strip().lower() == 'yes' if row[2] else False
+                    
+                    fields.append({
+                        'id': field_name.lower().replace(' ', '_').replace('-', '_'),
+                        'label': field_name,
+                        'type': field_type,
+                        'required': required
+                    })
+            
+            schema = {'fields': fields}
+            form_title = form_title or f"Form from {os.path.basename(template_path)}"
+            
+            return {
+                'success': True,
+                'form_title': form_title,
+                'form_schema': schema,
+                'template_path': template_path,
+                'detected_fields': len(fields),
+                'field_types': {field['type']: 1 for field in fields}
+            }
+            
+        except Exception as e:
+            raise Exception(f"Error parsing Excel template: {str(e)}")
+    
+    def _create_form_from_text_template(self, template_path: str, form_title: Optional[str] = None) -> Dict[str, Any]:
+        """Create form from text-based template with placeholders"""
+        try:
             # Read template content
             with open(template_path, 'r', encoding='utf-8') as f:
                 template_content = f.read()
@@ -67,6 +124,31 @@ class FormAutomationService:
             
             if syntax_type in ['mustache', 'mixed']:
                 template_content = TemplateConverter.mustache_to_jinja2(template_content)
+            
+            # Analyze template to extract required fields
+            placeholders = self._extract_form_fields_from_template(template_content)
+            
+            # Generate form schema
+            form_schema = self._generate_form_schema_from_placeholders(placeholders)
+            
+            # Set form title
+            if not form_title:
+                form_title = f"Data Collection Form - {os.path.basename(template_path)}"
+            
+            result = {
+                'success': True,
+                'form_title': form_title,
+                'form_schema': form_schema,
+                'template_path': template_path,
+                'detected_fields': len(placeholders),
+                'field_types': self._categorize_fields(placeholders)
+            }
+            
+            logger.info(f"Successfully created form schema with {len(placeholders)} fields")
+            return result
+            
+        except Exception as e:
+            raise Exception(f"Error parsing text template: {str(e)}")
             
             # Analyze template to extract required fields
             placeholders = self._extract_form_fields_from_template(template_content)
@@ -287,7 +369,7 @@ class FormAutomationService:
             categories[field_type] = categories.get(field_type, 0) + 1
         return categories
     
-    def export_form_data_to_excel(self, form_id: int, output_path: str = None, include_analytics: bool = True) -> Dict[str, Any]:
+    def export_form_data_to_excel(self, form_id: int, output_path: Optional[str] = None, include_analytics: bool = True) -> Dict[str, Any]:
         """
         Export form submission data to Excel with formatting and analytics
         
@@ -495,7 +577,7 @@ class FormAutomationService:
         
         return schema_data
     
-    def generate_report_from_excel(self, excel_path: str, template_path: str, output_path: str = None) -> Dict[str, Any]:
+    def generate_report_from_excel(self, excel_path: str, template_path: str, output_path: Optional[str] = None) -> Dict[str, Any]:
         """
         Generate report from Excel data using template
         

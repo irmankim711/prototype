@@ -5,7 +5,7 @@ from flask_limiter import Limiter
 from datetime import datetime
 from sqlalchemy import desc, func
 from sqlalchemy.exc import SQLAlchemyError
-from ..models import db, Form, FormSubmission, Permission, User, FormQRCode, QuickAccessToken
+from ..models import db, Form, FormSubmission, Permission, User, FormQRCode, QuickAccessToken, FormAccessCode
 from ..decorators import require_permission, get_current_user_id, get_current_user
 from .quick_auth import check_quick_access_permission
 import json
@@ -371,7 +371,7 @@ def create_form():
             return jsonify({'error': str(e)}), 400
         
         # Create form
-        form = Form(
+        form = Form(  # type: ignore
             title=data['title'].strip(),
             description=data.get('description', '').strip(),
             schema=data['schema'],
@@ -553,7 +553,7 @@ def submit_form(form_id):
             return jsonify({'error': 'Authentication required'}), 401
         
         # Create submission
-        submission = FormSubmission(
+        submission = FormSubmission(  # type: ignore
             form_id=form.id,
             data=data['data'],
             submitter_id=user_id,
@@ -732,7 +732,7 @@ def generate_qr_code(url, size=200, error_correction='M', border=4, bg_color='#F
         
         # Resize if needed
         if hasattr(img, 'resize'):
-            img = img.resize((size, size))
+            img = img.resize((size, size))  # type: ignore
         
         # Convert to base64
         buffer = io.BytesIO()
@@ -785,7 +785,7 @@ def create_form_qr_code(form_id):
         qr_code_data = generate_qr_code(external_url, **qr_settings)
         
         # Create QR code record
-        form_qr = FormQRCode(
+        form_qr = FormQRCode(  # type: ignore
             form_id=form.id,
             qr_code_data=qr_code_data,
             external_url=external_url,
@@ -1098,7 +1098,7 @@ def create_automated_workflow():
             form_schema = result['form_schema']
             
             # Create form record
-            new_form = Form(
+            new_form = Form(  # type: ignore
                 title=result['workflow_name'],
                 description=f"Automated form created from template: {template_file.filename}",
                 schema=form_schema,
@@ -1364,7 +1364,7 @@ def submit_form_quick_access(form_id):
             return jsonify({'error': 'Form data is required'}), 400
         
         # Create submission
-        submission = FormSubmission(
+        submission = FormSubmission(  # type: ignore
             form_id=form.id,
             data=json.dumps(data['data']),
             submitter_id=submitter_data['submitter_id'],
@@ -1661,3 +1661,377 @@ def toggle_form_status(form_id):
         db.session.rollback()
         current_app.logger.error(f"Error toggling form status: {str(e)}")
         return jsonify({'success': False, 'error': 'Failed to update form status'}), 500
+
+# ========================================
+# FORM ACCESS CODE ROUTES (GENERIC - MULTIPLE FORMS)
+# ========================================
+
+@forms_bp.route('/access-codes', methods=['POST'])
+@jwt_required()
+@limiter.limit("10 per hour")
+def create_generic_access_code():
+    """Create a new generic access code that can access multiple forms"""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+        
+        # Check if user has permission to create access codes
+        if not user.has_permission(Permission.MANAGE_USERS):
+            return jsonify({'error': 'Permission denied'}), 403
+        
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data.get('title'):
+            return jsonify({'error': 'Title is required'}), 400
+        
+        # Generate unique access code
+        import secrets
+        import string
+        def generate_code():
+            return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+        
+        code = generate_code()
+        # Ensure code is unique
+        while FormAccessCode.query.filter_by(code=code).first():
+            code = generate_code()
+        
+        # Validate form IDs if provided
+        allowed_form_ids = data.get('allowed_form_ids', [])
+        if allowed_form_ids:
+            # Check if all forms exist and user has access
+            forms = Form.query.filter(Form.id.in_(allowed_form_ids)).all()
+            found_ids = [f.id for f in forms]
+            invalid_ids = [fid for fid in allowed_form_ids if fid not in found_ids]
+            if invalid_ids:
+                return jsonify({'error': f'Invalid form IDs: {invalid_ids}'}), 400
+        
+        # Create access code
+        access_code = FormAccessCode()
+        access_code.code = code
+        access_code.title = data['title']
+        access_code.description = data.get('description', '')
+        access_code.created_by = user.id
+        access_code.expires_at = datetime.fromisoformat(data['expires_at']) if data.get('expires_at') else None
+        access_code.max_uses = data.get('max_uses')
+        access_code.is_active = True
+        access_code.allowed_form_ids = allowed_form_ids
+        access_code.allowed_external_forms = data.get('allowed_external_forms', [])
+        
+        db.session.add(access_code)
+        db.session.commit()
+        
+        current_app.logger.info(f"Generic access code {code} created by user {user.id}")
+        
+        return jsonify({
+            'message': 'Access code created successfully',
+            'access_code': access_code.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error creating access code: {str(e)}")
+        return jsonify({'error': 'Failed to create access code'}), 500
+
+@forms_bp.route('/access-codes', methods=['GET'])
+@jwt_required()
+@limiter.limit("100 per hour")
+def get_all_access_codes():
+    """Get all access codes created by the current user"""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+        
+        # Get access codes created by this user or all if admin
+        if user.has_permission(Permission.MANAGE_USERS):
+            access_codes = FormAccessCode.query.all()
+        else:
+            access_codes = FormAccessCode.query.filter_by(created_by=user.id).all()
+        
+        return jsonify({
+            'access_codes': [code.to_dict() for code in access_codes]
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting access codes: {str(e)}")
+        return jsonify({'error': 'Failed to get access codes'}), 500
+
+@forms_bp.route('/<int:form_id>/access-codes', methods=['GET'])
+@jwt_required()
+@limiter.limit("100 per hour")
+def get_access_codes_for_form(form_id):
+    """Get all access codes that can access a specific form"""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+        
+        # Check if user can view this form
+        form = Form.query.get_or_404(form_id)
+        if form.creator_id != user.id and not user.has_permission(Permission.VIEW_USERS):
+            return jsonify({'error': 'Permission denied'}), 403
+        
+        # Find access codes that include this form
+        access_codes = FormAccessCode.query.all()
+        relevant_codes = []
+        
+        for code in access_codes:
+            if code.allowed_form_ids and form_id in code.allowed_form_ids:
+                relevant_codes.append(code.to_dict())
+        
+        return jsonify({
+            'access_codes': relevant_codes
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting access codes for form: {str(e)}")
+        return jsonify({'error': 'Failed to get access codes'}), 500
+
+@forms_bp.route('/access-codes/<int:code_id>', methods=['DELETE'])
+@jwt_required()
+@limiter.limit("50 per hour")
+def delete_access_code(code_id):
+    """Delete an access code"""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+        
+        access_code = FormAccessCode.query.get_or_404(code_id)
+        
+        # Check permissions
+        if access_code.created_by != user.id and not user.has_permission(Permission.MANAGE_USERS):
+            return jsonify({'error': 'Permission denied'}), 403
+        
+        db.session.delete(access_code)
+        db.session.commit()
+        
+        current_app.logger.info(f"Access code {access_code.code} deleted by user {user.id}")
+        
+        return jsonify({'message': 'Access code deleted successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting access code: {str(e)}")
+        return jsonify({'error': 'Failed to delete access code'}), 500
+
+@forms_bp.route('/access-codes/<int:code_id>/toggle', methods=['PATCH'])
+@jwt_required()
+@limiter.limit("50 per hour")
+def toggle_access_code(code_id):
+    """Toggle access code active status"""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+        
+        access_code = FormAccessCode.query.get_or_404(code_id)
+        
+        # Check permissions
+        if access_code.created_by != user.id and not user.has_permission(Permission.MANAGE_USERS):
+            return jsonify({'error': 'Permission denied'}), 403
+        
+        access_code.is_active = not access_code.is_active
+        db.session.commit()
+        
+        status = "activated" if access_code.is_active else "deactivated"
+        current_app.logger.info(f"Access code {access_code.code} {status} by user {user.id}")
+        
+        return jsonify({
+            'message': f'Access code {status} successfully',
+            'access_code': access_code.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error toggling access code: {str(e)}")
+        return jsonify({'error': 'Failed to toggle access code'}), 500
+
+# ========================================
+# PUBLIC ACCESS WITH CODE ROUTES
+# ========================================
+
+@forms_bp.route('/public/verify-code', methods=['POST'])
+@limiter.limit("30 per hour")
+def verify_access_code():
+    """Verify access code and return accessible forms"""
+    try:
+        data = request.get_json()
+        code = data.get('code', '').strip().upper()
+        
+        if not code:
+            return jsonify({'error': 'Access code is required'}), 400
+        
+        # Find valid access code
+        access_code = FormAccessCode.query.filter_by(code=code).first()
+        
+        if not access_code or not access_code.is_valid():
+            return jsonify({'error': 'Invalid or expired access code'}), 400
+        
+        # Use the access code
+        access_code.use_code()
+        
+        from flask_jwt_extended import create_access_token
+        from datetime import timedelta
+        
+        # Create a temporary access token for this session
+        access_token = create_access_token(
+            identity=f"access_code:{access_code.id}",
+            expires_delta=timedelta(hours=4)  # 4 hour session
+        )
+        
+        # Get all accessible forms
+        accessible_forms = access_code.get_accessible_forms()
+        
+        current_app.logger.info(f"Access code {code} verified, granting access to {len(accessible_forms)} forms")
+        
+        return jsonify({
+            'message': 'Access code verified successfully',
+            'access_token': access_token,
+            'access_code_info': {
+                'title': access_code.title,
+                'description': access_code.description,
+                'expires_at': access_code.expires_at.isoformat() if access_code.expires_at else None
+            },
+            'accessible_forms': accessible_forms,
+            'expires_in': 14400  # 4 hours in seconds
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error verifying access code: {str(e)}")
+        return jsonify({'error': 'Failed to verify access code'}), 500
+
+@forms_bp.route('/public/code-access/forms', methods=['GET'])
+@jwt_required()
+@limiter.limit("100 per hour")
+def get_accessible_forms_with_code():
+    """Get all forms accessible with current access code"""
+    try:
+        # Verify this is an access code token
+        identity = get_jwt_identity()
+        if not identity or not identity.startswith('access_code:'):
+            return jsonify({'error': 'Invalid access token'}), 401
+        
+        access_code_id = identity.split(':')[1]
+        access_code = FormAccessCode.query.get(access_code_id)
+        
+        if not access_code or not access_code.is_valid():
+            return jsonify({'error': 'Access expired or invalid'}), 401
+        
+        # Get all accessible forms
+        accessible_forms = access_code.get_accessible_forms()
+        
+        return jsonify({
+            'accessible_forms': accessible_forms,
+            'access_code_info': {
+                'title': access_code.title,
+                'description': access_code.description
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting accessible forms: {str(e)}")
+        return jsonify({'error': 'Failed to retrieve forms'}), 500
+
+@forms_bp.route('/public/code-access/<int:form_id>', methods=['GET'])
+@jwt_required()
+@limiter.limit("100 per hour")
+def get_form_with_code_access(form_id):
+    """Get specific form with access code authentication"""
+    try:
+        # Verify this is an access code token
+        identity = get_jwt_identity()
+        if not identity or not identity.startswith('access_code:'):
+            return jsonify({'error': 'Invalid access token'}), 401
+        
+        access_code_id = identity.split(':')[1]
+        access_code = FormAccessCode.query.get(access_code_id)
+        
+        if not access_code or not access_code.is_valid():
+            return jsonify({'error': 'Access expired or invalid'}), 401
+        
+        # Verify the form is accessible with this code
+        if not access_code.can_access_form(form_id):
+            return jsonify({'error': 'Access code not valid for this form'}), 403
+        
+        form = Form.query.get_or_404(form_id)
+        
+        if not form.is_active:
+            return jsonify({'error': 'Form is not accessible'}), 400
+        
+        # Return form data
+        form_data = {
+            'id': form.id,
+            'title': form.title,
+            'description': form.description,
+            'schema': form.schema,
+            'created_at': form.created_at.isoformat() if form.created_at else None,
+            'access_type': 'access_code'
+        }
+        
+        return jsonify(form_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting form with code access: {str(e)}")
+        return jsonify({'error': 'Failed to retrieve form'}), 500
+
+@forms_bp.route('/public/code-access/<int:form_id>/submit', methods=['POST'])
+@jwt_required()
+@limiter.limit("30 per hour")
+def submit_form_with_code_access(form_id):
+    """Submit form with access code authentication"""
+    try:
+        # Verify this is an access code token
+        identity = get_jwt_identity()
+        if not identity or not identity.startswith('access_code:'):
+            return jsonify({'error': 'Invalid access token'}), 401
+        
+        access_code_id = identity.split(':')[1]
+        access_code = FormAccessCode.query.get(access_code_id)
+        
+        if not access_code or not access_code.is_valid():
+            return jsonify({'error': 'Access expired or invalid'}), 401
+        
+        # Verify the form is accessible with this code
+        if not access_code.can_access_form(form_id):
+            return jsonify({'error': 'Access code not valid for this form'}), 403
+        
+        form = Form.query.get_or_404(form_id)
+        
+        if not form.is_active:
+            return jsonify({'error': 'Form is not accessible'}), 400
+        
+        data = request.get_json()
+        
+        if not data or 'data' not in data:
+            return jsonify({'error': 'Form data is required'}), 400
+        
+        # Create submission
+        submission = FormSubmission(
+            form_id=form.id,
+            data=json.dumps(data['data']),
+            submitter_id=None,  # Anonymous submission
+            submitter_email=f"access_code_{access_code.code}@anonymous.local",
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', ''),
+            submission_source='access_code'
+        )
+        
+        db.session.add(submission)
+        db.session.commit()
+        
+        current_app.logger.info(f"Form {form_id} submitted via access code {access_code.code}")
+        
+        return jsonify({
+            'message': 'Form submitted successfully',
+            'submission_id': submission.id,
+            'timestamp': submission.submitted_at.isoformat(),
+            'access_type': 'access_code'
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error submitting form with code access: {str(e)}")
+        return jsonify({'error': 'Failed to submit form'}), 500

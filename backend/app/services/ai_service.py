@@ -35,6 +35,469 @@ class AIService:
         else:
             self.openai_client = openai.OpenAI(api_key=self.openai_api_key)
 
+    def analyze_form_data_with_ai(self, submissions_data: List[Dict[str, Any]], form_title: str) -> Dict[str, Any]:
+        """
+        Analyze form submission data using OpenAI to generate insights
+        
+        Args:
+            submissions_data: List of form submission data
+            form_title: Title of the form being analyzed
+            
+        Returns:
+            Dictionary containing AI analysis results
+        """
+        try:
+            if not submissions_data:
+                return {'insights': [], 'summary': 'No data to analyze', 'recommendations': []}
+            
+            # Prepare data summary for AI analysis
+            data_summary = self._prepare_form_data_summary(submissions_data)
+            
+            # Generate AI insights
+            insights = self._generate_form_insights(data_summary, form_title)
+            
+            # Generate summary
+            summary = self._generate_form_summary(data_summary, form_title)
+            
+            # Generate recommendations
+            recommendations = self._generate_form_recommendations(data_summary, form_title)
+            
+            # Identify trends
+            trends = self._identify_form_trends(submissions_data)
+            
+            # Generate key metrics
+            key_metrics = self._generate_form_metrics(submissions_data)
+            
+            return {
+                'insights': insights,
+                'summary': summary,
+                'recommendations': recommendations,
+                'trends': trends,
+                'key_metrics': key_metrics,
+                'analysis_timestamp': datetime.utcnow().isoformat(),
+                'total_submissions': len(submissions_data)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in form AI analysis: {e}")
+            return {
+                'insights': ['Error occurred during AI analysis'],
+                'summary': 'Analysis could not be completed due to an error',
+                'recommendations': ['Please check the data and try again'],
+                'error': str(e)
+            }
+
+    def _prepare_form_data_summary(self, submissions_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Prepare a summary of form data for AI analysis"""
+        import pandas as pd
+        
+        if not submissions_data:
+            return {}
+        
+        df = pd.DataFrame(submissions_data)
+        
+        summary = {
+            'total_responses': len(df),
+            'fields_analyzed': [],
+            'response_patterns': {},
+            'data_quality': {},
+            'temporal_patterns': {}
+        }
+        
+        # Analyze each field
+        for column in df.columns:
+            if column in ['submission_id', 'submitted_at', 'submitter_email']:
+                continue
+                
+            field_info = {
+                'field_name': column,
+                'data_type': str(df[column].dtype),
+                'completion_rate': (df[column].notna().sum() / len(df)) * 100,
+                'unique_values': df[column].nunique(),
+                'most_common': None,
+                'statistics': {}
+            }
+            
+            # For categorical data
+            if df[column].dtype == 'object':
+                value_counts = df[column].value_counts()
+                field_info['most_common'] = {
+                    'value': value_counts.index[0] if not value_counts.empty else None,
+                    'count': int(value_counts.iloc[0]) if not value_counts.empty else 0,
+                    'percentage': round((value_counts.iloc[0] / len(df)) * 100, 1) if not value_counts.empty else 0
+                }
+                field_info['categories'] = value_counts.head(10).to_dict()
+            
+            # For numeric data
+            elif pd.api.types.is_numeric_dtype(df[column]):
+                field_info['statistics'] = {
+                    'mean': float(df[column].mean()) if df[column].notna().any() else 0,
+                    'median': float(df[column].median()) if df[column].notna().any() else 0,
+                    'std': float(df[column].std()) if df[column].notna().any() else 0,
+                    'min': float(df[column].min()) if df[column].notna().any() else 0,
+                    'max': float(df[column].max()) if df[column].notna().any() else 0
+                }
+            
+            summary['fields_analyzed'].append(field_info)
+        
+        # Temporal analysis
+        if 'submitted_at' in df.columns:
+            df['submitted_at'] = pd.to_datetime(df['submitted_at'])
+            
+            # Group by date
+            daily_counts = df.groupby(df['submitted_at'].dt.date).size()
+            summary['temporal_patterns'] = {
+                'days_with_responses': len(daily_counts),
+                'avg_responses_per_day': float(daily_counts.mean()),
+                'peak_day': str(daily_counts.idxmax()) if not daily_counts.empty else None,
+                'peak_day_count': int(daily_counts.max()) if not daily_counts.empty else 0
+            }
+        
+        return summary
+
+    def _generate_form_insights(self, data_summary: Dict[str, Any], form_title: str) -> List[str]:
+        """Generate AI-powered insights from form data summary"""
+        try:
+            if not self.openai_api_key:
+                return ["OpenAI API key not configured - using basic analysis"]
+            
+            prompt = f"""
+            Analyze the following form submission data for "{form_title}" and provide 5-7 key insights:
+
+            Data Summary:
+            - Total responses: {data_summary.get('total_responses', 0)}
+            - Fields analyzed: {len(data_summary.get('fields_analyzed', []))}
+            
+            Field Details:
+            """
+            
+            for field in data_summary.get('fields_analyzed', [])[:10]:  # Limit to prevent token overflow
+                prompt += f"\n- {field['field_name']}: {field['completion_rate']:.1f}% completion rate"
+                if field.get('most_common'):
+                    prompt += f", most common: {field['most_common']['value']} ({field['most_common']['percentage']:.1f}%)"
+            
+            if data_summary.get('temporal_patterns'):
+                temporal = data_summary['temporal_patterns']
+                prompt += f"\n\nTemporal Patterns:\n- Responses over {temporal.get('days_with_responses', 0)} days"
+                prompt += f"\n- Peak day: {temporal.get('peak_day')} with {temporal.get('peak_day_count', 0)} responses"
+            
+            prompt += """\n\nProvide insights as a JSON array of strings. Focus on:
+            1. Response patterns and trends
+            2. Data quality observations
+            3. Notable findings in the responses
+            4. Completion rate analysis
+            5. Any significant patterns or anomalies
+            
+            Return only the JSON array, no additional text."""
+            
+            response = self.openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a data analyst expert who provides clear, actionable insights from form data."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=800,
+                temperature=0.7
+            )
+            
+            insights_text = response.choices[0].message.content
+            if not insights_text:
+                return self._generate_fallback_insights(data_summary)
+            
+            insights_text = insights_text.strip()
+            
+            # Parse JSON response
+            try:
+                insights = json.loads(insights_text)
+                return insights if isinstance(insights, list) else [insights_text]
+            except json.JSONDecodeError:
+                # Fallback to text parsing
+                return [line.strip() for line in insights_text.split('\n') if line.strip()]
+            
+        except Exception as e:
+            logger.error(f"Error generating form AI insights: {e}")
+            return self._generate_fallback_insights(data_summary)
+
+    def _generate_form_summary(self, data_summary: Dict[str, Any], form_title: str) -> str:
+        """Generate AI-powered summary of form responses"""
+        try:
+            if not self.openai_api_key:
+                return self._generate_fallback_summary(data_summary, form_title)
+            
+            prompt = f"""
+            Create a concise summary (2-3 paragraphs) of the form submission data for "{form_title}":
+
+            Total Responses: {data_summary.get('total_responses', 0)}
+            
+            Key Data Points:
+            """
+            
+            for field in data_summary.get('fields_analyzed', [])[:8]:
+                prompt += f"\n- {field['field_name']}: {field['completion_rate']:.1f}% completion"
+                if field.get('most_common'):
+                    prompt += f" (top response: {field['most_common']['value']})"
+            
+            prompt += """\n\nProvide a clear, professional summary that highlights:
+            1. Overall response volume and engagement
+            2. Key patterns in the data
+            3. Data quality and completeness
+            
+            Write in a business report style."""
+            
+            response = self.openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a professional business analyst creating executive summaries."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=600,
+                temperature=0.6
+            )
+            
+            content = response.choices[0].message.content
+            if not content:
+                return self._generate_fallback_summary(data_summary, form_title)
+            
+            return content.strip()
+            
+        except Exception as e:
+            logger.error(f"Error generating form AI summary: {e}")
+            return self._generate_fallback_summary(data_summary, form_title)
+
+    def _generate_form_recommendations(self, data_summary: Dict[str, Any], form_title: str) -> List[str]:
+        """Generate AI-powered recommendations for improving the form"""
+        try:
+            if not self.openai_api_key:
+                return self._generate_fallback_recommendations(data_summary)
+            
+            prompt = f"""
+            Based on the form data analysis for "{form_title}", provide 3-5 actionable recommendations:
+
+            Data Analysis:
+            - Total responses: {data_summary.get('total_responses', 0)}
+            
+            Field Completion Rates:
+            """
+            
+            for field in data_summary.get('fields_analyzed', []):
+                completion_rate = field['completion_rate']
+                prompt += f"\n- {field['field_name']}: {completion_rate:.1f}%"
+                if completion_rate < 80:
+                    prompt += " (LOW)"
+            
+            prompt += """\n\nProvide recommendations as a JSON array of strings. Focus on:
+            1. Improving form completion rates
+            2. Enhancing data quality
+            3. Optimizing user experience
+            4. Better data collection strategies
+            
+            Return only the JSON array, no additional text."""
+            
+            response = self.openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a UX/form optimization expert who provides actionable recommendations."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=600,
+                temperature=0.7
+            )
+            
+            content = response.choices[0].message.content
+            if not content:
+                return self._generate_fallback_recommendations(data_summary)
+            
+            recommendations_text = content.strip()
+            
+            try:
+                recommendations = json.loads(recommendations_text)
+                return recommendations if isinstance(recommendations, list) else [recommendations_text]
+            except json.JSONDecodeError:
+                return [line.strip() for line in recommendations_text.split('\n') if line.strip()]
+            
+        except Exception as e:
+            logger.error(f"Error generating form AI recommendations: {e}")
+            return self._generate_fallback_recommendations(data_summary)
+
+    def _identify_form_trends(self, submissions_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Identify trends in the form submission data"""
+        import pandas as pd
+        
+        trends = []
+        
+        if not submissions_data:
+            return trends
+        
+        df = pd.DataFrame(submissions_data)
+        
+        # Time-based trends
+        if 'submitted_at' in df.columns:
+            df['submitted_at'] = pd.to_datetime(df['submitted_at'])
+            
+            # Daily submission trend
+            daily_counts = df.groupby(df['submitted_at'].dt.date).size()
+            if len(daily_counts) > 3:
+                # Calculate trend direction
+                recent_avg = daily_counts.tail(3).mean()
+                earlier_avg = daily_counts.head(3).mean()
+                
+                if recent_avg > earlier_avg * 1.2:
+                    trends.append({
+                        'type': 'increasing_submissions',
+                        'description': f'Submission rate is increasing ({recent_avg:.1f} vs {earlier_avg:.1f} daily average)',
+                        'direction': 'up',
+                        'confidence': 'medium'
+                    })
+                elif recent_avg < earlier_avg * 0.8:
+                    trends.append({
+                        'type': 'decreasing_submissions',
+                        'description': f'Submission rate is decreasing ({recent_avg:.1f} vs {earlier_avg:.1f} daily average)',
+                        'direction': 'down',
+                        'confidence': 'medium'
+                    })
+        
+        # Response pattern trends
+        for column in df.columns:
+            if column in ['submission_id', 'submitted_at', 'submitter_email']:
+                continue
+                
+            completion_rate = (df[column].notna().sum() / len(df)) * 100
+            
+            if completion_rate < 50:
+                trends.append({
+                    'type': 'low_completion',
+                    'description': f'Field "{column}" has low completion rate ({completion_rate:.1f}%)',
+                    'field': column,
+                    'direction': 'down',
+                    'confidence': 'high'
+                })
+            elif completion_rate > 95:
+                trends.append({
+                    'type': 'high_completion',
+                    'description': f'Field "{column}" has excellent completion rate ({completion_rate:.1f}%)',
+                    'field': column,
+                    'direction': 'up',
+                    'confidence': 'high'
+                })
+        
+        return trends
+
+    def _generate_form_metrics(self, submissions_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Generate key metrics from form submission data"""
+        import pandas as pd
+        
+        if not submissions_data:
+            return {}
+        
+        df = pd.DataFrame(submissions_data)
+        
+        metrics = {
+            'total_submissions': len(df),
+            'fields_count': len([col for col in df.columns if col not in ['submission_id', 'submitted_at', 'submitter_email']]),
+            'overall_completion_rate': 0,
+            'data_quality_score': 0,
+            'response_consistency': 0
+        }
+        
+        # Calculate overall completion rate
+        data_fields = [col for col in df.columns if col not in ['submission_id', 'submitted_at', 'submitter_email']]
+        if data_fields:
+            completion_rates = [(df[col].notna().sum() / len(df)) * 100 for col in data_fields]
+            metrics['overall_completion_rate'] = int(round(sum(completion_rates) / len(completion_rates), 1))
+        
+        # Calculate data quality score (based on completion rates and data consistency)
+        quality_factors = []
+        
+        # Factor 1: Completion rate
+        quality_factors.append(metrics['overall_completion_rate'] / 100)
+        
+        # Factor 2: Consistency (how varied are the completion rates)
+        if data_fields:
+            completion_rates = [(df[col].notna().sum() / len(df)) * 100 for col in data_fields]
+            consistency = 1 - (pd.Series(completion_rates).std() / 100)
+            quality_factors.append(max(0, consistency))
+        
+        # Factor 3: Response variety (not all the same answers)
+        variety_scores = []
+        for col in data_fields:
+            if df[col].notna().any():
+                unique_ratio = df[col].nunique() / df[col].notna().sum()
+                variety_scores.append(min(1, unique_ratio * 2))  # Cap at 1
+        
+        if variety_scores:
+            quality_factors.append(sum(variety_scores) / len(variety_scores))
+        
+        metrics['data_quality_score'] = int(round((sum(quality_factors) / len(quality_factors)) * 100, 1))
+        
+        return metrics
+
+    def _generate_fallback_insights(self, data_summary: Dict[str, Any]) -> List[str]:
+        """Generate basic insights when AI is not available"""
+        insights = []
+        
+        total_responses = data_summary.get('total_responses', 0)
+        insights.append(f"Collected {total_responses} total responses")
+        
+        fields = data_summary.get('fields_analyzed', [])
+        if fields:
+            avg_completion = sum(field['completion_rate'] for field in fields) / len(fields)
+            insights.append(f"Average field completion rate is {avg_completion:.1f}%")
+            
+            # Identify best and worst performing fields
+            best_field = max(fields, key=lambda x: x['completion_rate'])
+            worst_field = min(fields, key=lambda x: x['completion_rate'])
+            
+            insights.append(f"Best performing field: '{best_field['field_name']}' ({best_field['completion_rate']:.1f}% completion)")
+            insights.append(f"Field needing attention: '{worst_field['field_name']}' ({worst_field['completion_rate']:.1f}% completion)")
+        
+        temporal = data_summary.get('temporal_patterns', {})
+        if temporal:
+            insights.append(f"Responses collected over {temporal.get('days_with_responses', 0)} days")
+            if temporal.get('peak_day'):
+                insights.append(f"Peak response day: {temporal['peak_day']} with {temporal['peak_day_count']} submissions")
+        
+        return insights
+
+    def _generate_fallback_summary(self, data_summary: Dict[str, Any], form_title: str) -> str:
+        """Generate basic summary when AI is not available"""
+        total_responses = data_summary.get('total_responses', 0)
+        fields_count = len(data_summary.get('fields_analyzed', []))
+        
+        summary = f"The '{form_title}' form has collected {total_responses} responses across {fields_count} fields. "
+        
+        if data_summary.get('fields_analyzed'):
+            avg_completion = sum(field['completion_rate'] for field in data_summary['fields_analyzed']) / len(data_summary['fields_analyzed'])
+            summary += f"The average field completion rate is {avg_completion:.1f}%. "
+        
+        temporal = data_summary.get('temporal_patterns', {})
+        if temporal and temporal.get('days_with_responses'):
+            summary += f"Responses were collected over {temporal['days_with_responses']} days with an average of {temporal.get('avg_responses_per_day', 0):.1f} responses per day."
+        
+        return summary
+
+    def _generate_fallback_recommendations(self, data_summary: Dict[str, Any]) -> List[str]:
+        """Generate basic recommendations when AI is not available"""
+        recommendations = []
+        
+        fields = data_summary.get('fields_analyzed', [])
+        if fields:
+            low_completion_fields = [field for field in fields if field['completion_rate'] < 70]
+            
+            if low_completion_fields:
+                recommendations.append(f"Consider making the following fields optional or simplifying them: {', '.join([field['field_name'] for field in low_completion_fields[:3]])}")
+            
+            if len(fields) > 15:
+                recommendations.append("Consider reducing the number of form fields to improve completion rates")
+            
+            recommendations.append("Add progress indicators to help users understand how much of the form remains")
+            recommendations.append("Consider implementing form validation to improve data quality")
+        
+        total_responses = data_summary.get('total_responses', 0)
+        if total_responses < 10:
+            recommendations.append("Promote the form more widely to increase response volume")
+        
+        return recommendations
+
     def analyze_data(self, data: Dict[str, Any], context: str = "general") -> Dict[str, Any]:
         """
         Enhanced data analysis with comprehensive insights
@@ -838,6 +1301,149 @@ class AIService:
         except Exception as e:
             logger.error(f"Error extracting text content: {str(e)}")
             return {'error': 'Unable to parse response', 'raw_text': text[:200]}
+
+    def analyze_form_data(self, data_summary: Dict[str, Any], report_type: str = "summary") -> Dict[str, Any]:
+        """
+        Analyze form data using AI to generate insights for automated reports
+        
+        Args:
+            data_summary: Summary of form data including statistics and field analysis
+            report_type: Type of report (summary, detailed, trends)
+            
+        Returns:
+            Dictionary containing AI analysis results
+        """
+        try:
+            if not self.openai_api_key:
+                return self._fallback_form_analysis(data_summary, report_type)
+            
+            # Prepare prompt for AI analysis
+            prompt = self._create_form_analysis_prompt(data_summary, report_type)
+            
+            # Call OpenAI API
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are an expert data analyst specializing in form data analysis and report generation."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=1000,
+                temperature=0.3
+            )
+            
+            ai_response = response.choices[0].message.content
+            
+            # Parse the response
+            parsed_response = self._parse_form_analysis_response(ai_response, report_type)
+            
+            return {
+                'insights': parsed_response.get('insights', []),
+                'summary': parsed_response.get('summary', ''),
+                'recommendations': parsed_response.get('recommendations', []),
+                'trends': parsed_response.get('trends', []),
+                'key_metrics': parsed_response.get('key_metrics', {}),
+                'analysis_type': report_type,
+                'timestamp': datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in AI form analysis: {e}")
+            return self._fallback_form_analysis(data_summary, report_type)
+
+    def _create_form_analysis_prompt(self, data_summary: Dict[str, Any], report_type: str) -> str:
+        """Create a comprehensive prompt for form data analysis"""
+        
+        prompt = f"""
+        Analyze the following form data and generate insights for a {report_type} report.
+        
+        Form Data Summary:
+        - Total Submissions: {data_summary.get('total_submissions', 0)}
+        - Date Range: {data_summary.get('date_range', 'N/A')}
+        - Unique Submitters: {data_summary.get('unique_submitters', 0)}
+        - Submission Rate: {data_summary.get('submission_rate', 0):.1f} per day
+        - Form Title: {data_summary.get('form_title', 'N/A')}
+        
+        Field Analysis:
+        """
+        
+        # Add field-specific analysis
+        for key, value in data_summary.items():
+            if key.endswith('_top_values') or key.endswith('_stats'):
+                prompt += f"- {key}: {value}\n"
+        
+        prompt += f"""
+        
+        Please provide a JSON response with the following structure:
+        {{
+            "insights": [
+                "Key insight 1",
+                "Key insight 2",
+                "Key insight 3"
+            ],
+            "summary": "Brief summary of the data analysis",
+            "recommendations": [
+                "Recommendation 1",
+                "Recommendation 2"
+            ],
+            "trends": [
+                {{
+                    "trend": "Trend description",
+                    "significance": "high/medium/low"
+                }}
+            ],
+            "key_metrics": {{
+                "metric1": "value1",
+                "metric2": "value2"
+            }}
+        }}
+        
+        Focus on providing actionable insights and clear recommendations based on the data patterns.
+        """
+        
+        return prompt
+
+    def _parse_form_analysis_response(self, response: str, report_type: str) -> Dict[str, Any]:
+        """Parse AI response for form analysis"""
+        try:
+            # Try to extract JSON from response
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+            else:
+                # Fallback parsing
+                return self._extract_text_content(response)
+        except Exception as e:
+            logger.error(f"Error parsing form analysis response: {e}")
+            return {
+                'insights': [response[:200] + '...' if len(response) > 200 else response],
+                'summary': 'AI analysis completed',
+                'recommendations': ['Review the data manually for additional insights'],
+                'trends': [],
+                'key_metrics': {}
+            }
+
+    def _fallback_form_analysis(self, data_summary: Dict[str, Any], report_type: str) -> Dict[str, Any]:
+        """Fallback analysis when AI service is unavailable"""
+        insights = [
+            f"Analyzed {data_summary.get('total_submissions', 0)} submissions",
+            f"Date range: {data_summary.get('date_range', 'N/A')}",
+            f"Unique submitters: {data_summary.get('unique_submitters', 0)}",
+            f"Average submission rate: {data_summary.get('submission_rate', 0):.1f} per day"
+        ]
+        
+        return {
+            'insights': insights,
+            'summary': f"Basic analysis of {data_summary.get('form_title', 'form')} data",
+            'recommendations': ['Enable AI analysis for more detailed insights'],
+            'trends': [],
+            'key_metrics': {
+                'total_submissions': data_summary.get('total_submissions', 0),
+                'unique_submitters': data_summary.get('unique_submitters', 0),
+                'submission_rate': data_summary.get('submission_rate', 0)
+            },
+            'analysis_type': report_type,
+            'timestamp': datetime.utcnow().isoformat()
+        }
 
 # Global AI service instance
 ai_service = AIService()

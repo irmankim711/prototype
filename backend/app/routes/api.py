@@ -5,10 +5,10 @@ from flask_limiter import Limiter
 from datetime import datetime, timedelta
 from sqlalchemy import desc, func, or_
 from sqlalchemy.exc import SQLAlchemyError
+from .. import celery
 from ..models import db, Report, ReportTemplate, User
 from ..services.report_service import report_service
 from ..services.ai_service import ai_service
-from ..tasks import generate_report_task
 from ..decorators import get_current_user_id
 from docxtpl import DocxTemplate
 import os
@@ -228,7 +228,7 @@ def create_report():
         
         # Queue report generation task
         try:
-            task = generate_report_task.delay(user_id, task_data)
+            task = celery.send_task('app.tasks.report_tasks.generate_report_task', args=[user_id, task_data])
             task_id = task.id
         except Exception as e:
             current_app.logger.error(f"Failed to queue task: {e}")
@@ -387,7 +387,7 @@ def get_report_stats():
 def get_report_status(task_id):
     """Get the status of a report generation task"""
     try:
-        task = generate_report_task.AsyncResult(task_id)
+        task = celery.AsyncResult(task_id)
         response = {
             'task_id': task_id,
             'status': task.status,

@@ -12,7 +12,6 @@ import {
   Tooltip,
   LinearProgress,
   Avatar,
-  Grid,
 } from "@mui/material";
 // Removed unused react-hook-form imports
 import {
@@ -34,14 +33,56 @@ import {
   SwapHoriz,
   Preview,
   CheckCircle,
+  AutoAwesome,
+  PlayArrow,
+  Schedule,
+  TrendingUp,
+  Analytics,
+  Download,
 } from "@mui/icons-material";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import { Divider, Fade } from "@mui/material";
+import {
+  Divider,
+  Fade,
+  Tabs,
+  Tab,
+  Card,
+  CardContent,
+  Grid,
+  Chip,
+  LinearProgress as MuiLinearProgress,
+  TextField,
+  MenuItem,
+} from "@mui/material";
 import * as XLSX from "xlsx";
 import DownloadIcon from "@mui/icons-material/Download";
 import "./ReportBuilder.css";
+import { formBuilderAPI } from "../../services/formBuilder";
+import axiosInstance from "../../services/axiosInstance";
+
+// Create a simple wrapper to use existing reports API instead of automated reports API
+const reportsAPI = {
+  getReports: async () => {
+    try {
+      const response = await axiosInstance.get("/reports");
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching reports:", error);
+      throw error;
+    }
+  },
+  generateReport: async (data: any) => {
+    try {
+      const response = await axiosInstance.post("/reports", data);
+      return response.data;
+    } catch (error) {
+      console.error("Error generating report:", error);
+      throw error;
+    }
+  },
+};
 
 // Types for better type safety
 interface ImportedDataType {
@@ -76,6 +117,486 @@ const steps = [
   "Review & Generate",
   "Success",
 ];
+
+// Automated Reports Interface Component
+const AutomatedReportsInterface = () => {
+  const [forms, setForms] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
+  const [selectedForm, setSelectedForm] = useState<number | null>(null);
+  const [reportType, setReportType] = useState<
+    "summary" | "detailed" | "trends"
+  >("summary");
+  const [dateRange, setDateRange] = useState<
+    "last_7_days" | "last_30_days" | "last_90_days"
+  >("last_30_days");
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Mock data for demonstration
+  const mockForms = [
+    {
+      id: 1,
+      title: "Employee Satisfaction Survey",
+      description: "Quarterly employee feedback and satisfaction survey",
+      submission_count: 45,
+      is_active: true,
+      created_at: "2024-01-01T00:00:00Z",
+    },
+    {
+      id: 2,
+      title: "Customer Feedback Form",
+      description: "Customer experience and product feedback collection",
+      submission_count: 128,
+      is_active: true,
+      created_at: "2024-01-05T00:00:00Z",
+    },
+    {
+      id: 3,
+      title: "IT Support Request",
+      description: "Technical support and issue reporting form",
+      submission_count: 67,
+      is_active: true,
+      created_at: "2024-01-10T00:00:00Z",
+    },
+    {
+      id: 4,
+      title: "Event Registration",
+      description: "Conference and workshop registration form",
+      submission_count: 89,
+      is_active: true,
+      created_at: "2024-01-12T00:00:00Z",
+    },
+  ];
+
+  const mockReports = [
+    {
+      id: 1,
+      title: "Employee Satisfaction Q1 2024",
+      form_title: "Employee Satisfaction Survey",
+      report_type: "summary",
+      status: "completed",
+      created_at: "2024-01-15T10:30:00Z",
+      download_url: "#",
+    },
+    {
+      id: 2,
+      title: "Customer Feedback Analysis",
+      form_title: "Customer Feedback Form",
+      report_type: "detailed",
+      status: "completed",
+      created_at: "2024-01-14T14:20:00Z",
+      download_url: "#",
+    },
+    {
+      id: 3,
+      title: "Weekly Incident Report",
+      form_title: "IT Support Request",
+      report_type: "trends",
+      status: "processing",
+      created_at: "2024-01-13T09:15:00Z",
+      download_url: "#",
+    },
+  ];
+
+  // Fetch forms and reports on component mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Try to get forms from the real API
+        const formsData = await formBuilderAPI.getForms({
+          page: 1,
+          limit: 100,
+        });
+        console.log("Forms data from API:", formsData);
+
+        if (formsData && formsData.forms && formsData.forms.length > 0) {
+          setForms(formsData.forms);
+        } else {
+          console.log("No forms from API, using mock data");
+          setForms(mockForms);
+        }
+
+        // Try to get reports from the real API
+        try {
+          const reportsData = await reportsAPI.getReports();
+          console.log("Reports data from API:", reportsData);
+
+          if (
+            reportsData &&
+            reportsData.reports &&
+            reportsData.reports.length > 0
+          ) {
+            setReports(reportsData.reports);
+          } else {
+            console.log("No reports from API, using mock data");
+            setReports(mockReports);
+          }
+        } catch (reportsError) {
+          console.error("Error fetching reports:", reportsError);
+          setReports(mockReports);
+        }
+      } catch (error) {
+        console.error("Error fetching forms:", error);
+        setForms(mockForms);
+        setReports(mockReports);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const handleGenerateReport = async () => {
+    if (!selectedForm) return;
+
+    setIsGenerating(true);
+    try {
+      console.log("Generating report with:", {
+        form_id: selectedForm,
+        report_type: reportType,
+        date_range: dateRange,
+      });
+
+      const result = await reportsAPI.generateReport({
+        form_id: selectedForm,
+        report_type: reportType,
+        date_range: dateRange,
+      });
+
+      console.log("Report generation result:", result);
+
+      // Refresh reports list
+      try {
+        const reportsData = await reportsAPI.getReports();
+        if (reportsData && reportsData.reports) {
+          setReports(reportsData.reports);
+        } else {
+          console.log("No reports data returned, keeping current reports");
+        }
+      } catch (refreshError) {
+        console.error("Error refreshing reports:", refreshError);
+      }
+
+      // Show success feedback
+      setTimeout(() => {
+        setIsGenerating(false);
+      }, 2000);
+    } catch (error) {
+      console.error("Error generating report:", error);
+      setIsGenerating(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "success";
+      case "processing":
+        return "warning";
+      case "failed":
+        return "error";
+      default:
+        return "default";
+    }
+  };
+
+  const getReportTypeIcon = (type: string) => {
+    switch (type) {
+      case "summary":
+        return <Analytics />;
+      case "detailed":
+        return <TrendingUp />;
+      case "trends":
+        return <Schedule />;
+      default:
+        return <Description />;
+    }
+  };
+
+  return (
+    <Box className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
+      {/* Header Section */}
+      <Box className="mb-8">
+        <Box className="flex items-center gap-3 mb-4">
+          <Box className="p-3 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl">
+            <AutoAwesome className="text-white text-2xl" />
+          </Box>
+          <Box>
+            <Typography
+              variant="h3"
+              className="font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent"
+            >
+              AI-Powered Reports
+            </Typography>
+            <Typography variant="body1" className="text-slate-600 mt-1">
+              Generate intelligent insights from your form data with advanced
+              analytics
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Main Content Grid */}
+      <Grid container spacing={4} className="max-w-7xl mx-auto">
+        {/* Generate New Report Card */}
+        <Grid item xs={12} lg={7}>
+          <Card
+            className="h-full shadow-xl border-0 bg-white/80 backdrop-blur-sm"
+            sx={{ borderRadius: 3 }}
+          >
+            <CardContent className="p-8">
+              <Box className="flex items-center gap-3 mb-6">
+                <Box className="p-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg">
+                  <PlayArrow className="text-white" />
+                </Box>
+                <Typography variant="h5" className="font-bold text-slate-800">
+                  Generate New Report
+                </Typography>
+              </Box>
+
+              <Box className="space-y-6">
+                {/* Form Selection */}
+                <Box>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Select Form"
+                    value={selectedForm || ""}
+                    onChange={(e) => setSelectedForm(Number(e.target.value))}
+                    variant="outlined"
+                    className="mb-2"
+                    InputProps={{
+                      startAdornment: (
+                        <Box className="mr-3 p-1 bg-blue-100 rounded">
+                          <Description className="text-blue-600 text-sm" />
+                        </Box>
+                      ),
+                    }}
+                  >
+                    <MenuItem value="">
+                      <em>Choose a form to analyze...</em>
+                    </MenuItem>
+                    {forms.map((form) => (
+                      <MenuItem key={form.id} value={form.id}>
+                        <Box className="flex items-center justify-between w-full">
+                          <span>{form.title}</span>
+                          <Chip
+                            label={`${form.submission_count} submissions`}
+                            size="small"
+                            className="ml-2 bg-blue-100 text-blue-700"
+                          />
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Box>
+
+                {/* Report Type Selection */}
+                <Box>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Report Type"
+                    value={reportType}
+                    onChange={(e) => setReportType(e.target.value as any)}
+                    variant="outlined"
+                    className="mb-2"
+                    InputProps={{
+                      startAdornment: (
+                        <Box className="mr-3 p-1 bg-purple-100 rounded">
+                          <Analytics className="text-purple-600 text-sm" />
+                        </Box>
+                      ),
+                    }}
+                  >
+                    <MenuItem value="summary">
+                      <Box className="flex items-center gap-2">
+                        <Analytics className="text-purple-600" />
+                        <span>Summary Report</span>
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="detailed">
+                      <Box className="flex items-center gap-2">
+                        <TrendingUp className="text-purple-600" />
+                        <span>Detailed Analysis</span>
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="trends">
+                      <Box className="flex items-center gap-2">
+                        <Schedule className="text-purple-600" />
+                        <span>Trends Report</span>
+                      </Box>
+                    </MenuItem>
+                  </TextField>
+                </Box>
+
+                {/* Date Range Selection */}
+                <Box>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Date Range"
+                    value={dateRange}
+                    onChange={(e) => setDateRange(e.target.value as any)}
+                    variant="outlined"
+                    className="mb-2"
+                    InputProps={{
+                      startAdornment: (
+                        <Box className="mr-3 p-1 bg-orange-100 rounded">
+                          <Schedule className="text-orange-600 text-sm" />
+                        </Box>
+                      ),
+                    }}
+                  >
+                    <MenuItem value="last_7_days">Last 7 Days</MenuItem>
+                    <MenuItem value="last_30_days">Last 30 Days</MenuItem>
+                    <MenuItem value="last_90_days">Last 90 Days</MenuItem>
+                  </TextField>
+                </Box>
+
+                {/* Generate Button */}
+                <Box className="pt-4">
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    size="large"
+                    onClick={handleGenerateReport}
+                    disabled={!selectedForm || isGenerating}
+                    className="h-14 text-lg font-semibold bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                    startIcon={
+                      isGenerating ? (
+                        <CircularProgress size={24} className="text-white" />
+                      ) : (
+                        <Box className="p-1 bg-white/20 rounded">
+                          <AutoAwesome className="text-white" />
+                        </Box>
+                      )
+                    }
+                  >
+                    {isGenerating ? (
+                      <Box className="flex items-center gap-2">
+                        <span>Generating AI Report...</span>
+                        <Box className="animate-pulse">✨</Box>
+                      </Box>
+                    ) : (
+                      "Generate AI Report"
+                    )}
+                  </Button>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Recent Reports Card */}
+        <Grid item xs={12} lg={5}>
+          <Card
+            className="h-full shadow-xl border-0 bg-white/80 backdrop-blur-sm"
+            sx={{ borderRadius: 3 }}
+          >
+            <CardContent className="p-8">
+              <Box className="flex items-center gap-3 mb-6">
+                <Box className="p-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg">
+                  <Description className="text-white" />
+                </Box>
+                <Typography variant="h5" className="font-bold text-slate-800">
+                  Recent Reports
+                </Typography>
+              </Box>
+
+              <Box className="space-y-4 max-h-96 overflow-y-auto">
+                {reports.length > 0 ? (
+                  reports.slice(0, 3).map((report) => (
+                    <Card
+                      key={report.id}
+                      className="border border-slate-200 hover:border-purple-300 transition-all duration-300 hover:shadow-md"
+                      sx={{ borderRadius: 2 }}
+                    >
+                      <CardContent className="p-4">
+                        <Box className="flex items-start justify-between mb-3">
+                          <Box className="flex items-center gap-2">
+                            <Box className="p-1 bg-gradient-to-r from-blue-100 to-purple-100 rounded">
+                              {getReportTypeIcon(report.report_type)}
+                            </Box>
+                            <Typography
+                              variant="subtitle1"
+                              className="font-semibold text-slate-800"
+                            >
+                              {report.title}
+                            </Typography>
+                          </Box>
+                          <Chip
+                            label={report.status}
+                            color={getStatusColor(report.status) as any}
+                            size="small"
+                            className="font-medium"
+                          />
+                        </Box>
+
+                        <Typography
+                          variant="body2"
+                          className="text-slate-600 mb-3"
+                        >
+                          {report.form_title} • {report.report_type}
+                        </Typography>
+
+                        <Box className="flex items-center justify-between">
+                          <Typography
+                            variant="caption"
+                            className="text-slate-500"
+                          >
+                            {new Date(report.created_at).toLocaleDateString(
+                              "en-US",
+                              {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
+                          </Typography>
+
+                          <Box className="flex gap-2">
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<Download />}
+                              className="border-purple-300 text-purple-600 hover:bg-purple-50"
+                            >
+                              Download
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              startIcon={<Preview />}
+                              className="bg-gradient-to-r from-purple-600 to-blue-600"
+                            >
+                              View
+                            </Button>
+                          </Box>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  <Box className="text-center py-8">
+                    <Box className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                      <AutoAwesome className="text-purple-600 text-2xl" />
+                    </Box>
+                    <Typography variant="h6" className="text-slate-700 mb-2">
+                      No Reports Yet
+                    </Typography>
+                    <Typography variant="body2" className="text-slate-500">
+                      Generate your first AI-powered report to see it here
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+};
 
 // Mock data for fallback
 const mockTemplates = [
@@ -122,6 +643,9 @@ const stepIcons = [
 export default function ReportBuilder() {
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
+  const [reportMode, setReportMode] = useState<"manual" | "automated">(
+    "manual"
+  );
   const [importedData, setImportedData] = useState<ImportedDataType | null>(
     null
   );
@@ -652,20 +1176,21 @@ export default function ReportBuilder() {
           const numericValues = columnValues
             .map((val) => parseFloat(String(val)))
             .filter((val) => !isNaN(val));
-          const aggregated = aggregateNumericData(
-            numericValues,
-            matchedField
-          );
+          const aggregated = aggregateNumericData(numericValues, matchedField);
           if (aggregated !== null) {
             processed[`${matchedField}_sum`] = aggregated.sum;
             processed[`${matchedField}_avg`] = aggregated.avg;
             processed[`${matchedField}_min`] = aggregated.min;
             processed[`${matchedField}_max`] = aggregated.max;
             // Store formatted versions
-            processed[`${matchedField}_sum_formatted`] = new Intl.NumberFormat().format(aggregated.sum);
-            processed[`${matchedField}_avg_formatted`] = new Intl.NumberFormat().format(aggregated.avg);
-            processed[`${matchedField}_min_formatted`] = new Intl.NumberFormat().format(aggregated.min);
-            processed[`${matchedField}_max_formatted`] = new Intl.NumberFormat().format(aggregated.max);
+            processed[`${matchedField}_sum_formatted`] =
+              new Intl.NumberFormat().format(aggregated.sum);
+            processed[`${matchedField}_avg_formatted`] =
+              new Intl.NumberFormat().format(aggregated.avg);
+            processed[`${matchedField}_min_formatted`] =
+              new Intl.NumberFormat().format(aggregated.min);
+            processed[`${matchedField}_max_formatted`] =
+              new Intl.NumberFormat().format(aggregated.max);
           }
         } else if (dataType === "date") {
           // Use the most recent valid date
@@ -874,7 +1399,7 @@ export default function ReportBuilder() {
           setEditData((prev) => ({
             ...prev,
             ai_summary: analysis.summary,
-            ai_insights: analysis.insights.join('\n'),
+            ai_insights: analysis.insights.join("\n"),
             ai_suggestions: analysis.suggestions,
           }));
         },
@@ -1357,14 +1882,44 @@ export default function ReportBuilder() {
         flexDirection: isMobile ? "column" : "row",
       }}
     >
-      {/* Sidebar/Stepper */}
+      {/* Mode Selector */}
+      <Box sx={{ position: "absolute", top: 20, left: 20, zIndex: 1000 }}>
+        <Tabs
+          value={reportMode}
+          onChange={(_, newValue) => setReportMode(newValue)}
+          sx={{
+            backgroundColor: "white",
+            borderRadius: 2,
+            boxShadow: 2,
+            "& .MuiTab-root": {
+              minWidth: 120,
+              fontWeight: 600,
+            },
+          }}
+        >
+          <Tab
+            value="manual"
+            label="Manual Builder"
+            icon={<Description />}
+            iconPosition="start"
+          />
+          <Tab
+            value="automated"
+            label="Automated Reports"
+            icon={<AutoAwesome />}
+            iconPosition="start"
+          />
+        </Tabs>
+      </Box>
+
+      {/* Sidebar/Stepper (manual mode only) */}
       <Box
         sx={{
           width: isMobile ? "100%" : 220,
           minWidth: isMobile ? "100%" : 220,
           backgroundColor: "#f8f9fa",
           padding: 2,
-          display: "flex",
+          display: reportMode === "manual" ? "flex" : "none", // Only show sidebar in manual mode
           flexDirection: isMobile ? "row" : "column",
           alignItems: "center",
           justifyContent: isMobile ? "space-between" : "flex-start",
@@ -1438,36 +1993,41 @@ export default function ReportBuilder() {
       <Box
         sx={{ flex: 1, minWidth: 0, padding: 1, backgroundColor: "#ffffff" }}
       >
-        <Typography
-          variant="h4"
-          gutterBottom
-          sx={{
-            color: "#0e1c40",
-            fontWeight: 700,
-            mb: 2,
-            textAlign: "left",
-          }}
-        >
-          Create New Report
-        </Typography>
-        {getStepContent(activeStep)}
-        <Box display="flex" justifyContent="flex-end" mt={2} gap={2}>
-          {activeStep > 0 && (
-            <Button variant="outlined" onClick={handleBack}>
-              Back
-            </Button>
-          )}
-          {activeStep < steps.length - 1 && (
-            <Button
-              variant="contained"
-              onClick={handleNext}
-              disabled={!canProceed()}
+        {reportMode === "manual" ? (
+          <>
+            <Typography
+              variant="h4"
+              gutterBottom
+              sx={{
+                color: "#0e1c40",
+                fontWeight: 700,
+                mb: 2,
+                textAlign: "left",
+              }}
             >
-              Next
-            </Button>
-          )}
-        </Box>
-        {/* You can add navigation buttons here if needed */}
+              Create New Report
+            </Typography>
+            {getStepContent(activeStep)}
+            <Box display="flex" justifyContent="flex-end" mt={2} gap={2}>
+              {activeStep > 0 && (
+                <Button variant="outlined" onClick={handleBack}>
+                  Back
+                </Button>
+              )}
+              {activeStep < steps.length - 1 && (
+                <Button
+                  variant="contained"
+                  onClick={handleNext}
+                  disabled={!canProceed()}
+                >
+                  Next
+                </Button>
+              )}
+            </Box>
+          </>
+        ) : (
+          <AutomatedReportsInterface />
+        )}
       </Box>
     </Box>
   );

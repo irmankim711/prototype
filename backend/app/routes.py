@@ -2,9 +2,11 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
 from sqlalchemy import desc, func
-from .models import db, Report, ReportTemplate, User
+from .models import db, Report, ReportTemplate, User, Form, FormSubmission
 from .services import report_service, ai_service
-from .tasks import generate_report_task
+from .tasks import generate_report_task, generate_automated_report_task
+import json
+import uuid
 
 api = Blueprint('api', __name__)
 
@@ -209,3 +211,157 @@ def analyze_data():
     data = request.get_json()
     analysis = ai_service.analyze_data(data)
     return jsonify(analysis)
+
+@api.route('/forms/submit', methods=['POST'])
+def submit_form_data():
+    """Handle form submissions from external sources and trigger automated reports"""
+    try:
+        data = request.get_json()
+        
+        # Extract form information
+        form_id = data.get('form_id')
+        form_data = data.get('data', {})
+        submitter_info = data.get('submitter', {})
+        source = data.get('source', 'external')  # google_forms, microsoft_forms, custom
+        
+        # Validate required fields
+        if not form_id or not form_data:
+            return jsonify({'error': 'Missing required fields: form_id and data'}), 400
+        
+        # Get or create form
+        form = Form.query.get(form_id)
+        if not form:
+            return jsonify({'error': 'Form not found'}), 404
+        
+        # Create form submission
+        submission = FormSubmission(
+            form_id=form_id,
+            data=form_data,
+            submitter_email=submitter_info.get('email'),
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent'),
+            submission_source=source,
+            submitted_at=datetime.utcnow()
+        )
+        
+        db.session.add(submission)
+        db.session.commit()
+        
+        # Trigger automated report generation if form has auto-report enabled
+        if form.form_settings and form.form_settings.get('auto_generate_reports'):
+            # Queue automated report generation task
+            task = generate_automated_report_task.delay(
+                form_id=form_id,
+                submission_id=submission.id,
+                trigger_type='form_submission'
+            )
+            
+            return jsonify({
+                'message': 'Form submitted successfully',
+                'submission_id': submission.id,
+                'report_task_id': task.id,
+                'auto_report_triggered': True
+            }), 201
+        
+        return jsonify({
+            'message': 'Form submitted successfully',
+            'submission_id': submission.id
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to submit form: {str(e)}'}), 500
+
+@api.route('/forms/<int:form_id>/submissions', methods=['GET'])
+@jwt_required()
+def get_form_submissions(form_id):
+    """Get all submissions for a specific form"""
+    user_id = get_jwt_identity()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    
+    # Check if user has access to this form
+    form = Form.query.filter_by(id=form_id, creator_id=user_id).first()
+    if not form:
+        return jsonify({'error': 'Form not found or access denied'}), 404
+    
+    submissions = FormSubmission.query.filter_by(form_id=form_id)\
+        .order_by(desc(FormSubmission.submitted_at))\
+        .paginate(page=page, per_page=per_page, error_out=False)
+    
+    return jsonify({
+        'submissions': [{
+            'id': sub.id,
+            'data': sub.data,
+            'submitter_email': sub.submitter_email,
+            'submitted_at': sub.submitted_at.isoformat(),
+            'status': sub.status,
+            'source': sub.submission_source
+        } for sub in submissions.items],
+        'pagination': {
+            'page': submissions.page,
+            'pages': submissions.pages,
+            'per_page': submissions.per_page,
+            'total': submissions.total
+        }
+    }), 200
+
+@api.route('/reports/automated/generate', methods=['POST'])
+@jwt_required()
+def trigger_automated_report():
+    """Manually trigger automated report generation for a form"""
+    user_id = get_jwt_identity()
+    data = request.get_json()
+    
+    form_id = data.get('form_id')
+    report_type = data.get('report_type', 'summary')  # summary, detailed, trends
+    date_range = data.get('date_range', 'last_30_days')
+    
+    if not form_id:
+        return jsonify({'error': 'form_id is required'}), 400
+    
+    # Check if user has access to this form
+    form = Form.query.filter_by(id=form_id, creator_id=user_id).first()
+    if not form:
+        return jsonify({'error': 'Form not found or access denied'}), 404
+    
+    # Queue automated report generation
+    task = generate_automated_report_task.delay(
+        form_id=form_id,
+        report_type=report_type,
+        date_range=date_range,
+        trigger_type='manual',
+        user_id=user_id
+    )
+    
+    return jsonify({
+        'message': 'Automated report generation started',
+        'task_id': task.id,
+        'form_id': form_id,
+        'report_type': report_type
+    }), 202
+
+@api.route('/reports/automated/status/<task_id>', methods=['GET'])
+@jwt_required()
+def get_automated_report_status(task_id):
+    """Get status of automated report generation task"""
+    from celery.result import AsyncResult
+    
+    result = AsyncResult(task_id)
+    
+    if result.ready():
+        if result.successful():
+            return jsonify({
+                'status': 'completed',
+                'result': result.result
+            }), 200
+        else:
+            return jsonify({
+                'status': 'failed',
+                'error': str(result.result)
+            }), 200
+    else:
+        return jsonify({
+            'status': 'processing',
+            'task_id': task_id
+        }), 200

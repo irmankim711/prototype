@@ -144,6 +144,9 @@ class Form(db.Model):
     submissions = db.relationship('FormSubmission', backref='form', lazy=True, cascade='all, delete-orphan')
     qr_codes = db.relationship('FormQRCode', backref='form', lazy=True, cascade='all, delete-orphan')
 
+    def __init__(self, **kwargs):
+        super(Form, self).__init__(**kwargs)
+
 class FormSubmission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     form_id = db.Column(db.Integer, db.ForeignKey('form.id'), nullable=False)
@@ -159,6 +162,9 @@ class FormSubmission(db.Model):
     submission_source = db.Column(db.String(50), default='web')  # web, qr_code, api, mobile
     location_data = db.Column(db.JSON)  # Optional location information
     processing_notes = db.Column(db.Text)  # Admin notes for processing
+
+    def __init__(self, **kwargs):
+        super(FormSubmission, self).__init__(**kwargs)
 
 # New model for QR Code management
 class FormQRCode(db.Model):
@@ -177,6 +183,9 @@ class FormQRCode(db.Model):
     border = db.Column(db.Integer, default=4)  # Border size
     background_color = db.Column(db.String(7), default='#FFFFFF')  # Hex color
     foreground_color = db.Column(db.String(7), default='#000000')  # Hex color
+
+    def __init__(self, **kwargs):
+        super(FormQRCode, self).__init__(**kwargs)
     
     # Analytics
     scan_count = db.Column(db.Integer, default=0)
@@ -252,3 +261,106 @@ class QuickAccessToken(db.Model):
         self.current_uses += 1
         self.last_used = datetime.utcnow()
         db.session.commit()
+
+# Form Access Code Model for Public Form Access (Generic - Multiple Forms)
+class FormAccessCode(db.Model):
+    __tablename__ = 'form_access_codes'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(10), unique=True, nullable=False)
+    title = db.Column(db.String(100), nullable=False)  # Name for this access code
+    description = db.Column(db.Text)  # Description of what this code provides access to
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    expires_at = db.Column(db.DateTime)
+    max_uses = db.Column(db.Integer)
+    current_uses = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # JSON array of form IDs that this code can access
+    allowed_form_ids = db.Column(db.JSON)  # [1, 2, 3, ...] - list of form IDs
+    
+    # JSON array of external form objects
+    allowed_external_forms = db.Column(db.JSON)  # [{"title": "...", "url": "...", "description": "..."}, ...]
+    
+    # Relationships
+    creator = db.relationship('User', backref='created_access_codes')
+    
+    def is_valid(self):
+        """Check if access code is still valid"""
+        if not self.is_active:
+            return False
+        if self.expires_at and self.expires_at < datetime.utcnow():
+            return False
+        if self.max_uses and self.current_uses >= self.max_uses:
+            return False
+        return True
+    
+    def use_code(self):
+        """Mark code as used"""
+        if self.max_uses:
+            self.current_uses += 1
+            db.session.commit()
+    
+    def can_access_form(self, form_id):
+        """Check if this code can access a specific form"""
+        if not self.is_valid():
+            return False
+        if not self.allowed_form_ids:
+            return False
+        return form_id in self.allowed_form_ids
+    
+    def get_accessible_forms(self):
+        """Get all forms this code can access"""
+        accessible_forms = []
+        
+        # Get internal forms
+        if self.allowed_form_ids:
+            forms = Form.query.filter(
+                Form.id.in_(self.allowed_form_ids),
+                Form.is_active == True
+            ).all()
+            
+            for form in forms:
+                accessible_forms.append({
+                    'id': form.id,
+                    'title': form.title,
+                    'description': form.description,
+                    'type': 'internal',
+                    'is_public': form.is_public,
+                    'created_at': form.created_at.isoformat() if form.created_at else None,
+                    'field_count': len(form.schema) if form.schema else 0
+                })
+        
+        # Get external forms
+        if self.allowed_external_forms:
+            for ext_form in self.allowed_external_forms:
+                accessible_forms.append({
+                    'id': f"external_{ext_form.get('id', 'unknown')}",
+                    'title': ext_form.get('title', 'External Form'),
+                    'description': ext_form.get('description', ''),
+                    'type': 'external',
+                    'external_url': ext_form.get('url', ''),
+                    'created_at': ext_form.get('created_at', ''),
+                    'field_count': 0
+                })
+        
+        return accessible_forms
+    
+    def to_dict(self):
+        """Convert to dictionary for API responses"""
+        return {
+            'id': self.id,
+            'code': self.code,
+            'title': self.title,
+            'description': self.description,
+            'created_by': self.created_by,
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'max_uses': self.max_uses,
+            'current_uses': self.current_uses,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'allowed_form_ids': self.allowed_form_ids or [],
+            'allowed_external_forms': self.allowed_external_forms or [],
+            'accessible_forms_count': len(self.get_accessible_forms())
+        }

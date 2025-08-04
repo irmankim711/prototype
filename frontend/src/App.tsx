@@ -18,6 +18,7 @@ import "./styles/enhancedDashboard.css";
 import LandingPageEnhanced from "./pages/LandingPage/LandingPageEnhanced";
 import Dashboard from "./pages/Dashboard/Dashboard";
 import PublicForms from "./pages/PublicForms/PublicForms";
+import PublicFormBuilder from "./pages/PublicFormBuilder/PublicFormBuilder";
 
 import Submission from "./pages/Submission/Submission";
 import ReportBuilder from "./pages/ReportBuilder/ReportBuilder";
@@ -29,16 +30,19 @@ import FormBuilderDashboardEnhanced from "./pages/FormBuilderAdmin/FormBuilderDa
 import UserProfile from "./pages/UserProfile/UserProfile";
 import Settings from "./pages/Settings/Settings";
 import AboutUs from "./pages/AboutUs/AboutUs";
+import PublicFormAccess from "./components/PublicFormAccess/PublicFormAccess";
 
 const queryClient = new QueryClient();
 
 function AppLayout() {
   const location = useLocation();
-  // Sidebar is visible on all pages except landing page, about us page, and public forms
+  // Sidebar is visible on all pages except landing page, about us page, public forms, public form builder, and access code page
   const showSidebar =
     location.pathname !== "/" &&
     location.pathname !== "/about" &&
-    location.pathname !== "/forms/public";
+    location.pathname !== "/forms/public" &&
+    location.pathname !== "/public-form-builder" &&
+    location.pathname !== "/access-forms";
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
@@ -51,6 +55,8 @@ function AppLayout() {
           <Route path="/" element={<LandingPageEnhanced />} />
           <Route path="/about" element={<AboutUs />} />
           <Route path="/forms/public" element={<PublicForms />} />
+          <Route path="/public-form-builder" element={<PublicFormBuilder />} />
+          <Route path="/access-forms" element={<PublicFormAccess />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route
             path="/dashboard-enhanced"
