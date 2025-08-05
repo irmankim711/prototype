@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, redirect
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, create_refresh_token
 from flask_limiter.util import get_remote_address
 from flask_limiter import Limiter
@@ -9,6 +9,7 @@ from .. import celery
 from ..models import db, Report, ReportTemplate, User
 from ..services.report_service import report_service
 from ..services.ai_service import ai_service
+from ..services.google_forms_service import google_forms_service
 from ..decorators import get_current_user_id
 from docxtpl import DocxTemplate
 import os
@@ -21,6 +22,107 @@ limiter = Limiter(key_func=get_remote_address)
 
 TEMPLATE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../templates'))
 
+# Add route for automated reports list
+@api.route('/automated-reports', methods=['GET'])
+@jwt_required()
+def get_automated_reports():
+    """Get all automated reports for the current user"""
+    try:
+        user_id = get_jwt_identity()
+        
+        # Get reports with pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        
+        reports_query = Report.query.filter_by(user_id=user_id).order_by(desc(Report.updated_at))
+        
+        # Add filtering
+        status_filter = request.args.get('status')
+        if status_filter:
+            reports_query = reports_query.filter(Report.status == status_filter)
+        
+        type_filter = request.args.get('type')
+        if type_filter:
+            reports_query = reports_query.filter(Report.type == type_filter)
+        
+        reports = reports_query.paginate(
+            page=page, 
+            per_page=per_page, 
+            error_out=False
+        )
+        
+        # Convert to enhanced format
+        enhanced_reports = []
+        for report in reports.items:
+            report_data = {
+                'id': report.id,
+                'title': report.title,
+                'description': report.description,
+                'content': getattr(report, 'content', ''),
+                'status': report.status,
+                'type': getattr(report, 'type', 'summary'),
+                'data_source': getattr(report, 'data_source', 'unknown'),
+                'source_id': getattr(report, 'source_id', ''),
+                'created_at': report.created_at.isoformat(),
+                'updated_at': report.updated_at.isoformat(),
+                'generated_by_ai': getattr(report, 'generated_by_ai', False),
+                'ai_suggestions': getattr(report, 'ai_suggestions', []),
+                'download_formats': ['pdf', 'word', 'excel', 'html'],
+                'metrics': {
+                    'total_responses': getattr(report, 'total_responses', 0),
+                    'completion_rate': getattr(report, 'completion_rate', 0.0),
+                    'avg_response_time': getattr(report, 'avg_response_time', 0.0),
+                }
+            }
+            enhanced_reports.append(report_data)
+        
+        return jsonify(enhanced_reports)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting automated reports: {str(e)}")
+        return jsonify({'error': 'Failed to get reports'}), 500
+
+def handle_google_form_report_generation(user_id, data):
+    """Handle report generation for Google Forms"""
+    try:
+        google_form_id = data.get('google_form_id')
+        if not google_form_id:
+            return jsonify({'error': 'google_form_id is required for Google Form reports'}), 400
+        
+        # Initialize Google Forms service
+        google_service = google_forms_service
+        
+        # For now, create a placeholder report
+        # In a full implementation, you'd generate the actual report from Google Forms data
+        title = f"Google Form Report - {google_form_id}"
+        description = f"Generated report from Google Form {google_form_id}"
+        
+        # Create report record (using column assignments)
+        report = Report()
+        report.title = title
+        report.description = description
+        report.user_id = user_id
+        report.data = {
+            'google_form_id': google_form_id,
+            'report_type': data.get('report_type'),
+            'date_range': data.get('date_range', 'all_time'),
+            'form_source': 'google_form'
+        }
+        report.status = 'completed'  # For now, mark as completed immediately
+        
+        db.session.add(report)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Google Form report created successfully',
+            'report_id': report.id,
+            'status': 'completed'
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error creating Google Form report: {str(e)}")
+        return jsonify({'error': 'Failed to create Google Form report'}), 500
+
 def validate_json_data(data, required_fields=None, optional_fields=None):
     """Validate JSON data and return cleaned data"""
     if not data:
@@ -32,6 +134,82 @@ def validate_json_data(data, required_fields=None, optional_fields=None):
             raise BadRequest(f"Missing required fields: {', '.join(missing_fields)}")
     
     return data
+
+def handle_report_generation(user_id, data):
+    """Handle report generation requests from ReportBuilder"""
+    try:
+        # Validate required fields for report generation
+        required_fields = ['form_id', 'report_type']
+        missing_fields = [field for field in required_fields if field not in data or data[field] is None]
+        
+        if missing_fields:
+            current_app.logger.error(f"Missing required fields: {missing_fields}")
+            return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
+        
+        # Validate form_id
+        form_id = data.get('form_id')
+        if not isinstance(form_id, int) or form_id <= 0:
+            current_app.logger.error(f"Invalid form_id: {form_id}")
+            return jsonify({'error': 'form_id must be a positive integer'}), 400
+        
+        # Validate report_type
+        report_type = data.get('report_type')
+        valid_report_types = ['summary', 'detailed', 'analytics', 'export']
+        if report_type not in valid_report_types:
+            current_app.logger.error(f"Invalid report_type: {report_type}")
+            return jsonify({'error': f'report_type must be one of: {", ".join(valid_report_types)}'}), 400
+        
+        # Validate date_range (optional)
+        date_range = data.get('date_range', 'all_time')
+        valid_date_ranges = ['last_7_days', 'last_30_days', 'last_90_days', 'all_time']
+        if date_range not in valid_date_ranges:
+            current_app.logger.error(f"Invalid date_range: {date_range}")
+            return jsonify({'error': f'date_range must be one of: {", ".join(valid_date_ranges)}'}), 400
+        
+        # Check if this is a Google Form report
+        form_source = data.get('form_source', 'internal')  # 'internal' or 'google_form'
+        
+        if form_source == 'google_form':
+            # Handle Google Form report generation
+            return handle_google_form_report_generation(user_id, data)
+        
+        # Create a report record with generated title
+        title = f"{report_type.title()} Report for Form {form_id}"
+        description = f"Generated {report_type} report for form {form_id} covering {date_range.replace('_', ' ')}"
+        
+        report = Report(
+            title=title,
+            description=description,
+            user_id=user_id,
+            data={
+                'form_id': form_id,
+                'report_type': report_type,
+                'date_range': date_range,
+                'generated_at': datetime.utcnow().isoformat()
+            },
+            status='processing'
+        )
+        
+        db.session.add(report)
+        db.session.commit()
+        
+        current_app.logger.info(f"Created report {report.id} for user {user_id}")
+        
+        # For now, return a success response
+        # In a real implementation, you would queue a background task here
+        return jsonify({
+            'report_id': report.id,
+            'status': 'processing',
+            'message': f'Report generation initiated for form {form_id}',
+            'form_id': form_id,
+            'report_type': report_type,
+            'date_range': date_range
+        }), 202
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in handle_report_generation: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to process report generation request'}), 500
 
 def handle_database_error(error):
     """Handle database errors gracefully"""
@@ -194,8 +372,19 @@ def create_report():
     """Create a new report"""
     try:
         user_id = get_current_user_id()
+        
+        # Log the incoming request for debugging
+        raw_data = request.get_json()
+        current_app.logger.info(f"Received report creation request: {raw_data}")
+        
+        # Check if this is a report generation request (from ReportBuilder)
+        if raw_data and 'form_id' in raw_data and 'report_type' in raw_data:
+            # Handle report generation request
+            return handle_report_generation(user_id, raw_data)
+        
+        # Handle traditional report creation
         data = validate_json_data(
-            request.get_json(), 
+            raw_data, 
             required_fields=['title'],
             optional_fields=['description', 'template_id', 'data']
         )
@@ -244,6 +433,7 @@ def create_report():
         }), 202
         
     except BadRequest as e:
+        current_app.logger.error(f"BadRequest in create_report: {str(e)}")
         return jsonify({'error': str(e)}), 400
     except Exception as e:
         current_app.logger.error(f"Error in create_report: {str(e)}")
@@ -467,6 +657,116 @@ def analyze_data():
 @api.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'Resource not found'}), 404
+
+# Google Forms API Endpoints
+@api.route('/google-forms/auth', methods=['GET'])
+@jwt_required()
+def google_forms_auth():
+    """Initiate Google Forms OAuth flow"""
+    try:
+        user_id = get_jwt_identity()
+        google_service = google_forms_service
+        
+        # Get OAuth URL
+        auth_url = google_service.get_authorization_url(user_id)
+        
+        return jsonify({
+            'auth_url': auth_url,
+            'message': 'Please visit the URL to authorize access to Google Forms'
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error initiating Google Forms auth: {str(e)}")
+        return jsonify({'error': 'Failed to initiate Google Forms authentication'}), 500
+
+@api.route('/google-forms/callback', methods=['GET'])
+@jwt_required()
+def google_forms_callback():
+    """Handle Google Forms OAuth callback"""
+    try:
+        user_id = get_jwt_identity()
+        code = request.args.get('code')
+        
+        if not code:
+            return jsonify({'error': 'Authorization code not provided'}), 400
+        
+        google_service = google_forms_service
+        
+        # Exchange code for tokens
+        success = google_service.handle_oauth_callback(code, user_id)
+        
+        if success:
+            return jsonify({
+                'message': 'Google Forms authorization successful',
+                'status': 'authorized'
+            }), 200
+        else:
+            return jsonify({'error': 'Failed to authorize Google Forms access'}), 400
+            
+    except Exception as e:
+        current_app.logger.error(f"Error handling Google Forms callback: {str(e)}")
+        return jsonify({'error': 'Failed to complete Google Forms authorization'}), 500
+
+@api.route('/google-forms/forms', methods=['GET'])
+@jwt_required()
+def get_google_forms():
+    """Get list of user's Google Forms"""
+    try:
+        user_id = get_jwt_identity()
+        google_service = google_forms_service
+        
+        # Get user's forms
+        forms = google_service.get_user_forms(user_id)
+        
+        return jsonify({
+            'forms': forms,
+            'total': len(forms)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching Google Forms: {str(e)}")
+        return jsonify({'error': 'Failed to fetch Google Forms'}), 500
+
+@api.route('/google-forms/<form_id>/responses', methods=['GET'])
+@jwt_required()
+def get_google_form_responses(form_id):
+    """Get responses for a specific Google Form"""
+    try:
+        user_id = get_jwt_identity()
+        google_service = google_forms_service
+        
+        # Get form responses
+        responses = google_service.get_form_responses(user_id, form_id)
+        
+        return jsonify({
+            'form_id': form_id,
+            'responses': responses,
+            'total': len(responses)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching Google Form responses: {str(e)}")
+        return jsonify({'error': 'Failed to fetch Google Form responses'}), 500
+
+@api.route('/google-forms/<form_id>/analytics', methods=['GET'])
+@jwt_required()
+def get_google_form_analytics(form_id):
+    """Generate analytics for a specific Google Form"""
+    try:
+        user_id = get_jwt_identity()
+        google_service = google_forms_service
+        
+        # Generate analytics
+        analytics = google_service.generate_form_analytics(user_id, form_id)
+        
+        return jsonify({
+            'form_id': form_id,
+            'analytics': analytics
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error generating Google Form analytics: {str(e)}")
+        return jsonify({'error': 'Failed to generate Google Form analytics'}), 500
 
 @api.errorhandler(400)
 def bad_request(error):

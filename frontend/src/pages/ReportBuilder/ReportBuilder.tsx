@@ -25,8 +25,11 @@ import {
 } from "../../services/api";
 import type { ReportTemplate } from "../../services/api";
 import GoogleSheetImport from "./GoogleSheetImport";
+import GoogleFormsImport from "./GoogleFormsImport";
 import TemplateEditor from "./TemplateEditor";
 import FieldMapping from "./FieldMapping";
+import googleFormsService from "../../services/googleFormsService";
+import type { GoogleForm } from "../../services/googleFormsService";
 import {
   Assignment,
   Description,
@@ -75,10 +78,37 @@ const reportsAPI = {
   },
   generateReport: async (data: any) => {
     try {
-      const response = await axiosInstance.post("/reports", data);
+      console.log("📤 Sending report generation request:", {
+        url: "/reports",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+        payload: data,
+      });
+
+      const response = await axiosInstance.post("/reports", data, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      console.log("✅ Report generation successful:", response.data);
       return response.data;
-    } catch (error) {
-      console.error("Error generating report:", error);
+    } catch (error: any) {
+      console.error("❌ Error generating report:", {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers,
+          data: error.config?.data,
+        },
+      });
       throw error;
     }
   },
@@ -130,6 +160,17 @@ const AutomatedReportsInterface = () => {
     "last_7_days" | "last_30_days" | "last_90_days"
   >("last_30_days");
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Google Forms state
+  const [dataSource, setDataSource] = useState<"internal" | "google_forms">(
+    "internal"
+  );
+  const [googleForms, setGoogleForms] = useState<any[]>([]);
+  const [selectedGoogleForm, setSelectedGoogleForm] = useState<string | null>(
+    null
+  );
+  const [isGoogleAuthorized, setIsGoogleAuthorized] = useState(false);
+  const [isLoadingGoogleForms, setIsLoadingGoogleForms] = useState(false);
 
   // Mock data for demonstration
   const mockForms = [
@@ -243,43 +284,123 @@ const AutomatedReportsInterface = () => {
     fetchData();
   }, []);
 
+  // Google Forms functions
+  const handleGoogleAuth = async () => {
+    try {
+      const authData = await googleFormsService.initiateAuth();
+      // Open auth URL in new window
+      window.open(authData.auth_url, "_blank", "width=500,height=600");
+      // In a real app, you'd handle the callback properly
+      console.log("Google Forms auth initiated:", authData);
+    } catch (error) {
+      console.error("Error initiating Google auth:", error);
+    }
+  };
+
+  const loadGoogleForms = async () => {
+    setIsLoadingGoogleForms(true);
+    try {
+      const formsData = await googleFormsService.getUserForms();
+      setGoogleForms(formsData.forms);
+      setIsGoogleAuthorized(true);
+    } catch (error) {
+      console.error("Error loading Google Forms:", error);
+      setIsGoogleAuthorized(false);
+    } finally {
+      setIsLoadingGoogleForms(false);
+    }
+  };
+
   const handleGenerateReport = async () => {
-    if (!selectedForm) return;
+    // Validate selection based on data source
+    if (dataSource === "internal" && !selectedForm) {
+      console.warn("⚠️ No internal form selected for report generation");
+      return;
+    }
+    if (dataSource === "google_forms" && !selectedGoogleForm) {
+      console.warn("⚠️ No Google Form selected for report generation");
+      return;
+    }
 
     setIsGenerating(true);
     try {
-      console.log("Generating report with:", {
-        form_id: selectedForm,
-        report_type: reportType,
-        date_range: dateRange,
-      });
+      let requestPayload: any;
 
-      const result = await reportsAPI.generateReport({
-        form_id: selectedForm,
-        report_type: reportType,
-        date_range: dateRange,
-      });
+      if (dataSource === "google_forms") {
+        // Generate Google Forms report
+        requestPayload = {
+          google_form_id: selectedGoogleForm,
+          report_type: reportType,
+          date_range: dateRange,
+          form_source: "google_form",
+        };
+        console.log(
+          "🚀 Initiating Google Forms report generation with payload:",
+          requestPayload
+        );
+        const result = await googleFormsService.generateReport(requestPayload);
+        console.log("✅ Google Forms report generation result:", result);
+      } else {
+        // Generate internal form report
+        requestPayload = {
+          form_id: selectedForm,
+          report_type: reportType,
+          date_range: dateRange,
+        };
 
-      console.log("Report generation result:", result);
+        console.log(
+          "🚀 Initiating internal form report generation with payload:",
+          requestPayload
+        );
+
+        // Validate payload before sending
+        if (
+          !requestPayload.form_id ||
+          typeof requestPayload.form_id !== "number"
+        ) {
+          throw new Error("Invalid form_id: must be a positive number");
+        }
+        if (
+          !requestPayload.report_type ||
+          typeof requestPayload.report_type !== "string"
+        ) {
+          throw new Error("Invalid report_type: must be a non-empty string");
+        }
+        if (
+          !requestPayload.date_range ||
+          typeof requestPayload.date_range !== "string"
+        ) {
+          throw new Error("Invalid date_range: must be a non-empty string");
+        }
+
+        const result = await reportsAPI.generateReport(requestPayload);
+        console.log("✅ Internal form report generation result:", result);
+      }
 
       // Refresh reports list
       try {
+        console.log("🔄 Refreshing reports list...");
         const reportsData = await reportsAPI.getReports();
         if (reportsData && reportsData.reports) {
           setReports(reportsData.reports);
+          console.log("✅ Reports list refreshed successfully");
         } else {
-          console.log("No reports data returned, keeping current reports");
+          console.log("⚠️ No reports data returned, keeping current reports");
         }
       } catch (refreshError) {
-        console.error("Error refreshing reports:", refreshError);
+        console.error("❌ Error refreshing reports:", refreshError);
       }
 
       // Show success feedback
       setTimeout(() => {
         setIsGenerating(false);
       }, 2000);
-    } catch (error) {
-      console.error("Error generating report:", error);
+    } catch (error: any) {
+      console.error("❌ Report generation failed:", {
+        error: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
       setIsGenerating(false);
     }
   };
@@ -352,41 +473,168 @@ const AutomatedReportsInterface = () => {
               </Box>
 
               <Box className="space-y-6">
-                {/* Form Selection */}
+                {/* Data Source Selection */}
                 <Box>
                   <TextField
                     select
                     fullWidth
-                    label="Select Form"
-                    value={selectedForm || ""}
-                    onChange={(e) => setSelectedForm(Number(e.target.value))}
+                    label="Data Source"
+                    value={dataSource}
+                    onChange={(e) => {
+                      setDataSource(
+                        e.target.value as "internal" | "google_forms"
+                      );
+                      // Reset form selections when switching source
+                      setSelectedForm(null);
+                      setSelectedGoogleForm(null);
+                    }}
                     variant="outlined"
                     className="mb-2"
                     InputProps={{
                       startAdornment: (
-                        <Box className="mr-3 p-1 bg-blue-100 rounded">
-                          <Description className="text-blue-600 text-sm" />
+                        <Box className="mr-3 p-1 bg-indigo-100 rounded">
+                          <SwapHoriz className="text-indigo-600 text-sm" />
                         </Box>
                       ),
                     }}
                   >
-                    <MenuItem value="">
-                      <em>Choose a form to analyze...</em>
+                    <MenuItem value="internal">
+                      <Box className="flex items-center gap-2">
+                        <Assignment className="text-indigo-600" />
+                        <span>Internal Forms</span>
+                      </Box>
                     </MenuItem>
-                    {forms.map((form) => (
-                      <MenuItem key={form.id} value={form.id}>
-                        <Box className="flex items-center justify-between w-full">
-                          <span>{form.title}</span>
-                          <Chip
-                            label={`${form.submission_count} submissions`}
-                            size="small"
-                            className="ml-2 bg-blue-100 text-blue-700"
-                          />
-                        </Box>
-                      </MenuItem>
-                    ))}
+                    <MenuItem value="google_forms">
+                      <Box className="flex items-center gap-2">
+                        <Description className="text-green-600" />
+                        <span>Google Forms</span>
+                      </Box>
+                    </MenuItem>
                   </TextField>
                 </Box>
+
+                {/* Google Forms Authorization */}
+                {dataSource === "google_forms" && !isGoogleAuthorized && (
+                  <Box>
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      onClick={handleGoogleAuth}
+                      startIcon={<CheckCircle />}
+                      className="mb-4"
+                    >
+                      Authorize Google Forms Access
+                    </Button>
+                    <Typography variant="caption" color="textSecondary">
+                      You need to authorize access to your Google Forms to
+                      generate reports
+                    </Typography>
+                  </Box>
+                )}
+
+                {/* Google Forms Loading */}
+                {dataSource === "google_forms" &&
+                  isGoogleAuthorized &&
+                  !googleForms.length && (
+                    <Box>
+                      <Button
+                        variant="outlined"
+                        fullWidth
+                        onClick={loadGoogleForms}
+                        disabled={isLoadingGoogleForms}
+                        startIcon={
+                          isLoadingGoogleForms ? (
+                            <CircularProgress size={20} />
+                          ) : (
+                            <Download />
+                          )
+                        }
+                        className="mb-4"
+                      >
+                        {isLoadingGoogleForms
+                          ? "Loading Google Forms..."
+                          : "Load Google Forms"}
+                      </Button>
+                    </Box>
+                  )}
+
+                {/* Form Selection */}
+                {dataSource === "internal" && (
+                  <Box>
+                    <TextField
+                      select
+                      fullWidth
+                      label="Select Form"
+                      value={selectedForm || ""}
+                      onChange={(e) => setSelectedForm(Number(e.target.value))}
+                      variant="outlined"
+                      className="mb-2"
+                      InputProps={{
+                        startAdornment: (
+                          <Box className="mr-3 p-1 bg-blue-100 rounded">
+                            <Description className="text-blue-600 text-sm" />
+                          </Box>
+                        ),
+                      }}
+                    >
+                      <MenuItem value="">
+                        <em>Choose a form to analyze...</em>
+                      </MenuItem>
+                      {forms.map((form) => (
+                        <MenuItem key={form.id} value={form.id}>
+                          <Box className="flex items-center justify-between w-full">
+                            <span>{form.title}</span>
+                            <Chip
+                              label={`${form.submission_count} submissions`}
+                              size="small"
+                              className="ml-2 bg-blue-100 text-blue-700"
+                            />
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Box>
+                )}
+
+                {/* Google Form Selection */}
+                {dataSource === "google_forms" && googleForms.length > 0 && (
+                  <Box>
+                    <TextField
+                      select
+                      fullWidth
+                      label="Select Google Form"
+                      value={selectedGoogleForm || ""}
+                      onChange={(e) => setSelectedGoogleForm(e.target.value)}
+                      variant="outlined"
+                      className="mb-2"
+                      InputProps={{
+                        startAdornment: (
+                          <Box className="mr-3 p-1 bg-green-100 rounded">
+                            <Description className="text-green-600 text-sm" />
+                          </Box>
+                        ),
+                      }}
+                    >
+                      <MenuItem value="">
+                        <em>Choose a Google Form to analyze...</em>
+                      </MenuItem>
+                      {googleForms.map((form) => (
+                        <MenuItem key={form.id} value={form.id}>
+                          <Box className="flex items-center justify-between w-full">
+                            <span>{form.title}</span>
+                            <Chip
+                              label={`${form.responseCount || 0} responses`}
+                              size="small"
+                              className="ml-2 bg-green-100 text-green-700"
+                            />
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Box>
+                )}
+
+                {/* Original Form Selection - removing this as we replaced it above */}
 
                 {/* Report Type Selection */}
                 <Box>

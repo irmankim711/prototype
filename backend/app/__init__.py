@@ -252,6 +252,7 @@ def register_blueprints(app):
     from .routes.mvp import mvp
     from .routes.api import api
     from .routes.quick_auth import quick_auth_bp
+    from .routes.ai_reports import ai_reports_bp
     from .public_routes import public_bp
     from .public_forms import public_forms_bp
     
@@ -264,6 +265,7 @@ def register_blueprints(app):
     app.register_blueprint(mvp, url_prefix='/api/mvp')
     app.register_blueprint(api, url_prefix='/api')
     app.register_blueprint(quick_auth_bp, url_prefix='/api/quick-auth')
+    app.register_blueprint(ai_reports_bp, url_prefix='/api')
     app.register_blueprint(public_bp, url_prefix='/api/public')
     app.register_blueprint(public_forms_bp, url_prefix='/api/public-forms')
 
