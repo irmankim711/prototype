@@ -11,10 +11,10 @@ class ReportService:
         self.initialize_google_credentials()
 
     def initialize_google_credentials(self):
-        # Initialize Google credentials from environment or token file
-        # This is a simplified version - you'll need proper OAuth2 flow
-        if os.path.exists('token.json'):
-            self.credentials = Credentials.from_authorized_user_file('token.json')
+        # Initialize Google credentials from environment variables
+        token_info = os.getenv("GOOGLE_TOKEN_INFO")
+        if token_info:
+            self.credentials = Credentials.from_authorized_user_info(json.loads(token_info))
 
     def get_templates(self):
         templates = ReportTemplate.query.filter_by(is_active=True).all()

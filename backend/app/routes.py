@@ -11,6 +11,9 @@ api = Blueprint('api', __name__)
 def create_report():
     user_id = get_jwt_identity()
     data = request.get_json()
+
+    if not data or 'template_id' not in data:
+        return jsonify({'error': 'Missing template_id'}), 400
     
     # Queue report generation task
     task = generate_report_task.delay(user_id, data)
