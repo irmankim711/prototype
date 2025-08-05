@@ -17,6 +17,8 @@ pnpm-debug.log*
 client_secret_*.json
 credentials.json
 service-account-key.json
+tokens/
+backend/tokens/
 *.pem
 *.key
 *.crt
