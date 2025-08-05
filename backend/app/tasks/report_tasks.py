@@ -16,16 +16,21 @@ from typing import Dict, List, Any, Optional
 from flask import current_app
 
 # Optional imports for plotting
-try:
-    import matplotlib
-    matplotlib.use('Agg')  # Use non-interactive backend
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    PLOTTING_AVAILABLE = True
-except ImportError:
-    PLOTTING_AVAILABLE = False
-    plt = None
-    sns = None
+PLOTTING_AVAILABLE = False
+plt = None
+sns = None
+
+# Disable matplotlib for now to avoid import issues
+# try:
+#     import matplotlib
+#     matplotlib.use('Agg')  # Use non-interactive backend
+#     import matplotlib.pyplot as plt
+#     import seaborn as sns
+#     PLOTTING_AVAILABLE = True
+# except ImportError:
+#     PLOTTING_AVAILABLE = False
+#     plt = None
+#     sns = None
 
 from ..models import db, Form, FormSubmission, Report, User
 from ..services.ai_service import AIService

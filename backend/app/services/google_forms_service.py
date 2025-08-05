@@ -25,10 +25,17 @@ class GoogleFormsService:
     def __init__(self):
         self.credentials_file = os.getenv('GOOGLE_CREDENTIALS_FILE', 'credentials.json')
         self.token_file = os.getenv('GOOGLE_TOKEN_FILE', 'token.json')
+        self.client_id = os.getenv('GOOGLE_CLIENT_ID', '1008582896300-sbsrcs6jg32lncrnmmf1ia93vnl81tls.apps.googleusercontent.com')
+        self.client_secret = os.getenv('GOOGLE_CLIENT_SECRET', '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')
+        self.redirect_uri = os.getenv('OAUTH_REDIRECT_URI', 'http://localhost:5000/api/google-forms/callback')
+        
+        # Check if credentials file exists
         self.mock_mode = not os.path.exists(self.credentials_file)
         
         if self.mock_mode:
             logger.warning("Google credentials file not found. Running in mock mode.")
+        else:
+            logger.info(f"Google Forms service initialized with client ID: {self.client_id[:20]}...")
         
     def get_credentials(self, user_id: str) -> Optional[Credentials]:
         """Get stored credentials for a user"""
@@ -64,19 +71,43 @@ class GoogleFormsService:
         try:
             logger.info(f"Creating OAuth flow for user {user_id}")
             logger.info(f"Using credentials file: {self.credentials_file}")
+            logger.info(f"Client ID: {self.client_id[:20]}...")
+            logger.info(f"Redirect URI: {self.redirect_uri}")
             
-            flow = Flow.from_client_secrets_file(
-                self.credentials_file,
-                scopes=self.SCOPES,
-                redirect_uri='http://localhost:5000/api/google-forms/callback'
-            )
+            # Create flow with proper error handling
+            try:
+                flow = Flow.from_client_secrets_file(
+                    self.credentials_file,
+                    scopes=self.SCOPES,
+                    redirect_uri=self.redirect_uri
+                )
+            except Exception as flow_error:
+                logger.error(f"Error creating OAuth flow: {flow_error}")
+                logger.info("Attempting to create flow with manual configuration...")
+                
+                # Fallback: Create flow manually if file-based creation fails
+                flow = Flow.from_client_config(
+                    {
+                        "installed": {
+                            "client_id": self.client_id,
+                            "client_secret": self.client_secret,
+                            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                            "token_uri": "https://oauth2.googleapis.com/token",
+                            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                            "redirect_uris": [self.redirect_uri]
+                        }
+                    },
+                    scopes=self.SCOPES
+                )
+                flow.redirect_uri = self.redirect_uri
             
             logger.info(f"OAuth flow created successfully")
             
             auth_url, _ = flow.authorization_url(
                 access_type='offline',
                 include_granted_scopes='true',
-                state=user_id  # Pass user_id as state parameter
+                state=user_id,  # Pass user_id as state parameter
+                prompt='consent'  # Force consent to ensure refresh token
             )
             
             logger.info(f"Authorization URL generated: {auth_url}")
@@ -101,11 +132,32 @@ class GoogleFormsService:
             logger.info(f"Handling OAuth callback for user {user_id}")
             logger.info(f"Authorization code received: {code[:20]}...")
             
-            flow = Flow.from_client_secrets_file(
-                self.credentials_file,
-                scopes=self.SCOPES,
-                redirect_uri='http://localhost:5000/api/google-forms/callback'
-            )
+            # Create the same flow configuration as in get_auth_url
+            try:
+                flow = Flow.from_client_secrets_file(
+                    self.credentials_file,
+                    scopes=self.SCOPES,
+                    redirect_uri=self.redirect_uri
+                )
+            except Exception as flow_error:
+                logger.error(f"Error creating OAuth flow in callback: {flow_error}")
+                logger.info("Using manual flow configuration for callback...")
+                
+                # Fallback: Create flow manually
+                flow = Flow.from_client_config(
+                    {
+                        "installed": {
+                            "client_id": self.client_id,
+                            "client_secret": self.client_secret,
+                            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                            "token_uri": "https://oauth2.googleapis.com/token",
+                            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                            "redirect_uris": [self.redirect_uri]
+                        }
+                    },
+                    scopes=self.SCOPES
+                )
+                flow.redirect_uri = self.redirect_uri
             
             logger.info("Fetching token with authorization code")
             flow.fetch_token(code=code)

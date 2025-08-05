@@ -254,7 +254,7 @@ def register_blueprints(app):
     from .routes.quick_auth import quick_auth_bp
     from .routes.ai_reports import ai_reports_bp
     from .public_routes import public_bp
-    from .public_forms import public_forms_bp
+    from .routes.public_forms import public_forms_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
