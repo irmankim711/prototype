@@ -1,4 +1,5 @@
-import React, { useState, useContext } from "react";
+import React from "react";
+import { useState, useContext } from "react";
 import {
   Drawer,
   List,
@@ -102,7 +103,7 @@ const LogoBox = styled(Box)(({ theme }) => ({
 }));
 
 const StyledListItemButton = styled(ListItemButton, {
-  shouldForwardProp: (prop) => prop !== "isActive",
+  shouldForwardProp: (prop: string) => prop !== "isActive",
 })<{ isActive?: boolean }>(({ theme, isActive }) => ({
   margin: theme.spacing(0.5, 1),
   borderRadius: "12px",
@@ -194,7 +195,7 @@ const StyledListItemButton = styled(ListItemButton, {
 }));
 
 const NestedListItemButton = styled(ListItemButton, {
-  shouldForwardProp: (prop) => prop !== "isActive",
+  shouldForwardProp: (prop: string) => prop !== "isActive",
 })<{ isActive?: boolean }>(({ theme, isActive }) => ({
   margin: theme.spacing(0.3, 1, 0.3, 3),
   borderRadius: "8px",
@@ -344,6 +345,11 @@ const navItems = [
         icon: <TemplatesIcon />,
         path: "/report-templates",
       },
+      {
+        label: "Google Forms",
+        icon: <AutomatedReportsIcon />,
+        path: "/google-forms",
+      },
     ],
   },
   { label: "Form Builder", icon: <BuildIcon />, path: "/form-builder-admin" },
@@ -367,7 +373,7 @@ export default function EnhancedSidebar() {
   };
 
   const handleReportsClick = () => {
-    setOpenReports((prev) => !prev);
+    setOpenReports((prev: boolean) => !prev);
   };
 
   const handleLogout = async () => {
@@ -425,7 +431,7 @@ export default function EnhancedSidebar() {
           {navItems.map((item, index) => {
             if (item.children) {
               const isActive = item.children.some(
-                (child) => location.pathname === child.path
+                (child: { path: string }) => location.pathname === child.path
               );
               return (
                 <React.Fragment key={item.label}>

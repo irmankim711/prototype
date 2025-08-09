@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React from "react";
+import { useState } from "react";
 import {
   Box,
   Card,
@@ -146,7 +147,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ formId }) => {
   const handleEmail = (reportId: string) => {
     const emails = prompt("Enter email addresses (comma-separated):");
     if (emails) {
-      const emailList = emails.split(",").map((email) => email.trim());
+      const emailList = emails.split(",").map((email: any) => email.trim());
       emailMutation.mutate({ reportId, emails: emailList });
     }
   };
@@ -411,7 +412,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ formId }) => {
                 queryClient.setQueryData(
                   ["reports"],
                   (old: Report[] | undefined) =>
-                    old?.map((r) =>
+                    old?.map((r: any) =>
                       r.id === updatedReport.id ? updatedReport : r
                     )
                 );

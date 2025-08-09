@@ -293,7 +293,9 @@ def generate_word_report(form, analysis, submissions):
     
     # Title
     title = doc.add_heading(f'Automated Report: {form.title}', 0)
-    title.alignment = 1  # Center alignment
+    # ✅ FIXED: Use proper enum import for alignment
+    from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+    title.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
     
     # Executive Summary
     doc.add_heading('Executive Summary', level=1)

@@ -1,5 +1,6 @@
-import React, { useRef } from 'react';
-import { Box, Button, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Alert } from '@mui/material';
+import React from "react";
+import { useRef } from "react";
+import { Box, Button, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Alert } from "@mui/material";
 import * as XLSX from 'xlsx';
 
 interface ExcelImportProps {
@@ -19,7 +20,7 @@ export default function ExcelImport({ onDataParsed }: ExcelImportProps) {
     setError(null);
     
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = (evt: any) => {
       try {
         console.log('File read successfully, processing...');
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
@@ -100,7 +101,7 @@ export default function ExcelImport({ onDataParsed }: ExcelImportProps) {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  {preview.headers.map((header) => (
+                  {preview.headers.map((header: any) => (
                     <TableCell key={header}>{header}</TableCell>
                   ))}
                 </TableRow>

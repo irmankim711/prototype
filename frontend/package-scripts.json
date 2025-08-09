@@ -1,0 +1,22 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:fast": "tsc -b tsconfig.relaxed.json && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "type-check": "tsc --noEmit",
+    "type-check:fast": "tsc --noEmit -p tsconfig.relaxed.json",
+    "clean-build": "npm run type-check:fast && npm run build:fast",
+    "test:mobile": "npm test -- --testPathPattern=Mobile",
+    "build:pwa": "npm run build && workbox generateSW",
+    "analyze:bundle": "npm run build && npx webpack-bundle-analyzer build/static/js/*.js"
+  }
+}

@@ -1,3 +1,4 @@
+import React from "react";
 import { useState } from "react";
 import QRCodeGenerator from "./QRCodeGenerator";
 import QRCodeModal from "./QRCodeModal";
@@ -34,7 +35,7 @@ export function FormQRManager({
   const [qrCodes, setQRCodes] = useState<QRCodeData[]>(existingQRCodes);
 
   const handleQRCodeGenerated = (newQRCode: QRCodeData) => {
-    setQRCodes((prev) => [...prev, newQRCode]);
+    setQRCodes((prev: any) => [...prev, newQRCode]);
     setSelectedQRCode(newQRCode);
     setShowModal(true);
   };
@@ -75,7 +76,7 @@ export function FormQRManager({
       {/* QR Codes List */}
       {qrCodes.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {qrCodes.map((qrCode) => (
+          {qrCodes.map((qrCode: any) => (
             <div
               key={qrCode.id}
               className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"

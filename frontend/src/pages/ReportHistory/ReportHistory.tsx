@@ -1,3 +1,4 @@
+import React from "react";
 import { useState } from "react";
 import {
   Box,
@@ -147,7 +148,7 @@ export default function ReportHistory() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {reports.map((report) => (
+              {reports.map((report: any) => (
                 <TableRow key={report.id}>
                   <TableCell>{report.title}</TableCell>
                   <TableCell>{report.templateId}</TableCell>

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Box,
@@ -99,7 +100,7 @@ export default function FormSubmission({
   const submitMutation = useMutation({
     mutationFn: (data: { data: FormData; email?: string }) =>
       formBuilderAPI.submitForm(formId, data),
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       setSnackbar({
         open: true,
         message: "Form submitted successfully!",
@@ -118,7 +119,7 @@ export default function FormSubmission({
   useEffect(() => {
     if (form?.schema?.fields) {
       const initialData: FormData = {};
-      form.schema.fields.forEach((field) => {
+      form.schema.fields.forEach((field: any) => {
         if (field.defaultValue !== undefined) {
           initialData[field.id] = field.defaultValue;
         }
@@ -131,7 +132,7 @@ export default function FormSubmission({
   const validateForm = (): boolean => {
     const newErrors: { [key: string]: string } = {};
 
-    form?.schema?.fields.forEach((field) => {
+    form?.schema?.fields.forEach((field: any) => {
       const value = formData[field.id];
 
       // Check required fields
@@ -225,11 +226,11 @@ export default function FormSubmission({
 
   // Handle field value change
   const handleFieldChange = (fieldId: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [fieldId]: value }));
+    setFormData((prev: any) => ({ ...prev, [fieldId]: value }));
 
     // Clear error for this field
     if (errors[fieldId]) {
-      setErrors((prev) => ({ ...prev, [fieldId]: "" }));
+      setErrors((prev: any) => ({ ...prev, [fieldId]: "" }));
     }
   };
 
@@ -287,7 +288,7 @@ export default function FormSubmission({
             label={field.label}
             placeholder={field.placeholder}
             value={value || ""}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            onChange={(e: any) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
             error={hasError}
@@ -306,7 +307,7 @@ export default function FormSubmission({
             label={field.label}
             placeholder={field.placeholder}
             value={value || ""}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            onChange={(e: any) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
             multiline
@@ -327,7 +328,7 @@ export default function FormSubmission({
             label={field.label}
             placeholder={field.placeholder}
             value={value || ""}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            onChange={(e: any) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
             type="email"
@@ -347,7 +348,7 @@ export default function FormSubmission({
             label={field.label}
             placeholder={field.placeholder}
             value={value || ""}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            onChange={(e: any) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
             type="number"
@@ -372,11 +373,11 @@ export default function FormSubmission({
             <InputLabel>{field.label}</InputLabel>
             <Select
               value={value || ""}
-              onChange={(e) => handleFieldChange(field.id, e.target.value)}
+              onChange={(e: any) => handleFieldChange(field.id, e.target.value)}
               label={field.label}
               startAdornment={getFieldIcon(field.type)}
             >
-              {field.options?.map((option) => (
+              {field.options?.map((option: any) => (
                 <MenuItem key={option} value={option}>
                   {option}
                 </MenuItem>
@@ -406,9 +407,9 @@ export default function FormSubmission({
             </FormLabel>
             <RadioGroup
               value={value || ""}
-              onChange={(e) => handleFieldChange(field.id, e.target.value)}
+              onChange={(e: any) => handleFieldChange(field.id, e.target.value)}
             >
-              {field.options?.map((option) => (
+              {field.options?.map((option: any) => (
                 <FormControlLabel
                   key={option}
                   value={option}
@@ -440,7 +441,7 @@ export default function FormSubmission({
               </Box>
             </FormLabel>
             <FormGroup>
-              {field.options?.map((option) => (
+              {field.options?.map((option: any) => (
                 <FormControlLabel
                   key={option}
                   control={
@@ -448,11 +449,11 @@ export default function FormSubmission({
                       checked={
                         Array.isArray(value) ? value.includes(option) : false
                       }
-                      onChange={(e) => {
+                      onChange={(e: any) => {
                         const currentValue = Array.isArray(value) ? value : [];
                         const newValue = e.target.checked
                           ? [...currentValue, option]
-                          : currentValue.filter((v) => v !== option);
+                          : currentValue.filter((v: any) => v !== option);
                         handleFieldChange(field.id, newValue);
                       }}
                     />
@@ -475,7 +476,7 @@ export default function FormSubmission({
             label={field.label}
             placeholder={field.placeholder}
             value={value || ""}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            onChange={(e: any) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
             type="date"
@@ -495,7 +496,7 @@ export default function FormSubmission({
             label={field.label}
             placeholder={field.placeholder}
             value={value || ""}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            onChange={(e: any) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
             type="time"
@@ -515,7 +516,7 @@ export default function FormSubmission({
             label={field.label}
             placeholder={field.placeholder}
             value={value || ""}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            onChange={(e: any) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
             type="datetime-local"
@@ -535,7 +536,7 @@ export default function FormSubmission({
             label={field.label}
             placeholder={field.placeholder}
             value={value || ""}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            onChange={(e: any) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
             type="tel"
@@ -555,7 +556,7 @@ export default function FormSubmission({
             label={field.label}
             placeholder={field.placeholder}
             value={value || ""}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            onChange={(e: any) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
             type="url"
@@ -608,7 +609,7 @@ export default function FormSubmission({
             InputProps={{
               startAdornment: getFieldIcon(field.type),
             }}
-            onChange={(e) => {
+            onChange={(e: any) => {
               const file = (e.target as HTMLInputElement).files?.[0];
               handleFieldChange(field.id, file);
             }}
@@ -621,7 +622,7 @@ export default function FormSubmission({
             label={field.label}
             placeholder={field.placeholder}
             value={value || ""}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            onChange={(e: any) => handleFieldChange(field.id, e.target.value)}
             fullWidth
             margin="normal"
             error={hasError}
@@ -715,7 +716,7 @@ export default function FormSubmission({
 
         <Box
           component="form"
-          onSubmit={(e) => {
+          onSubmit={(e: any) => {
             e.preventDefault();
             handleSubmit();
           }}

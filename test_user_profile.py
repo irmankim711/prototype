@@ -23,8 +23,8 @@ def test_user_profile():
     print("=" * 50)
     
     # Test data
-    test_email = "testuser@example.com"
-    test_password = "testpassword123"
+    test_email = os.getenv('TEST_EMAIL', 'testuser@example.com')
+    test_password = os.getenv('TEST_PASSWORD', 'testpassword123')
     
     session = requests.Session()
     

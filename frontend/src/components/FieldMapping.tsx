@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, FormControl, InputLabel, Select, MenuItem, Paper } from '@mui/material';
+import { Box, Typography, FormControl, InputLabel, Select, MenuItem, Paper } from "@mui/material";
 
 interface FieldMappingProps {
   placeholders?: string[];

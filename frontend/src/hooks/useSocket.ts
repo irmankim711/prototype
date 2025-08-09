@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { useEffect, useState } from "react";
+import { io, Socket } from "socket.io-client";
 
 type SubmissionEvent = { timestamp: number };
 type ActivityEvent = { userId: number; action: string; timestamp: number };
@@ -18,11 +18,11 @@ export function useSocket() {
     setSocket(s);
 
     s.on('submission', (payload: SubmissionEvent) => {
-      setData((d) => ({ ...d, submissions: [...d.submissions.slice(-99), payload] }));
+      setData((d: any) => ({ ...d, submissions: [...d.submissions.slice(-99), payload] }));
     });
 
     s.on('activity', (payload: ActivityEvent) => {
-      setData((d) => ({ ...d, activities: [...d.activities.slice(-99), payload] }));
+      setData((d: any) => ({ ...d, activities: [...d.activities.slice(-99), payload] }));
     });
 
     return () => {

@@ -165,7 +165,8 @@ UserProfile/
 import { fetchUserProfile } from "../services/api";
 
 const profile = await fetchUserProfile();
-console.log(profile);
+// Handle successful profile fetch
+// profile data is available for use
 ```
 
 **Update User Profile**
@@ -180,7 +181,8 @@ const updateData = {
 };
 
 const result = await updateUserProfile(updateData);
-console.log(result.message); // "Profile updated successfully"
+// Handle successful update
+// result.message contains success message
 ```
 
 ## 🔍 Testing

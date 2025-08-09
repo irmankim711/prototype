@@ -14,7 +14,7 @@ from sqlalchemy import text, inspect, MetaData, Table
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 from werkzeug.middleware.proxy_fix import ProxyFix
-from datetime import datetime
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -41,13 +41,18 @@ def create_app(config_name=None):
     # Security Configuration
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 3600))  # 1 hour
-    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = int(os.getenv('JWT_REFRESH_TOKEN_EXPIRES', 2592000))  # 30 days
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(seconds=int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 3600)))  # 1 hour
+    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(seconds=int(os.getenv('JWT_REFRESH_TOKEN_EXPIRES', 2592000)))  # 30 days
+    app.config['JWT_ALGORITHM'] = 'HS256'  # Explicitly set algorithm
+    app.config['JWT_DECODE_ALGORITHMS'] = ['HS256']  # Allowed algorithms for decoding
+    app.config['JWT_ERROR_MESSAGE_KEY'] = 'msg'  # Consistent error message key
     # JWT Cookie configuration
     app.config['JWT_TOKEN_LOCATION'] = ['cookies', 'headers']
     app.config['JWT_ACCESS_COOKIE_PATH'] = '/'
     app.config['JWT_REFRESH_COOKIE_PATH'] = '/api/auth/refresh'
     app.config['JWT_COOKIE_CSRF_PROTECT'] = False  # For development only! Enable and handle CSRF in production.
+    app.config['JWT_ACCESS_COOKIE_NAME'] = 'access_token_cookie'
+    app.config['JWT_REFRESH_COOKIE_NAME'] = 'refresh_token_cookie'
     
     # Database Configuration
     database_url = os.getenv('DATABASE_URL', 'sqlite:///app.db')
@@ -93,6 +98,129 @@ def create_app(config_name=None):
     Migrate(app, db)
     limiter.init_app(app)
     
+    # JWT User Identity Loader - Critical for resolving 422 errors
+    @jwt.user_identity_loader
+    def user_identity_lookup(user):
+        """Convert user object to identity for JWT token with enhanced validation."""
+        try:
+            # Handle different input types
+            if isinstance(user, str):
+                # If it's already a string, validate and return
+                if user == 'bypass-user':
+                    return user
+                # Try to convert to int and back to string to validate
+                try:
+                    int(user)
+                    return user
+                except ValueError:
+                    app.logger.error(f"Invalid string identity: {user}")
+                    return None
+            elif isinstance(user, int):
+                return str(user)
+            elif hasattr(user, 'id'):
+                # User object with id attribute
+                return str(user.id)
+            else:
+                app.logger.error(f"Invalid user type for identity: {type(user)} - {user}")
+                return None
+        except Exception as e:
+            app.logger.error(f"Identity lookup failed: {e}")
+            return None
+    
+    @jwt.user_lookup_loader
+    def user_lookup_callback(_jwt_header, jwt_data):
+        """Load user from JWT token data with enhanced error handling."""
+        from .models import User
+        identity = jwt_data["sub"]
+        
+        # Handle bypass user for development
+        if identity == 'bypass-user':
+            return None  # Bypass user doesn't need database lookup
+        
+        try:
+            # Ensure identity is a string and try to convert to int
+            if isinstance(identity, str):
+                user_id = int(identity)
+            elif isinstance(identity, int):
+                user_id = identity
+            else:
+                app.logger.error(f"Invalid identity type: {type(identity)} - {identity}")
+                return None
+            
+            # Look up user in database
+            user = User.query.get(user_id)
+            if user and user.is_active:
+                return user
+            elif user and not user.is_active:
+                app.logger.warning(f"Inactive user attempted access: {user_id}")
+                return None
+            else:
+                app.logger.warning(f"User not found: {user_id}")
+                return None
+                
+        except (ValueError, TypeError) as e:
+            app.logger.error(f"User lookup failed - Invalid identity format: {identity} - Error: {e}")
+            return None
+        except Exception as e:
+            app.logger.error(f"User lookup failed - Database error: {e}")
+            return None
+    
+    # JWT Error Handlers - Critical for resolving 422 errors
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        """Handle expired tokens."""
+        return jsonify({
+            'error': 'token_expired',
+            'message': 'The token has expired'
+        }), 401
+    
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error_string):
+        """Handle invalid tokens."""
+        return jsonify({
+            'error': 'invalid_token',
+            'message': 'Token validation failed',
+            'details': error_string
+        }), 422
+    
+    @jwt.unauthorized_loader
+    def missing_token_callback(error_string):
+        """Handle missing tokens."""
+        return jsonify({
+            'error': 'missing_token',
+            'message': 'Authentication token is required',
+            'details': error_string
+        }), 401
+    
+    @jwt.needs_fresh_token_loader
+    def token_not_fresh_callback(jwt_header, jwt_payload):
+        """Handle non-fresh tokens when fresh token is required."""
+        return jsonify({
+            'error': 'fresh_token_required',
+            'message': 'A fresh token is required'
+        }), 401
+    
+    @jwt.revoked_token_loader
+    def revoked_token_callback(jwt_header, jwt_payload):
+        """Handle revoked tokens."""
+        return jsonify({
+            'error': 'token_revoked',
+            'message': 'The token has been revoked'
+        }), 401
+    
+    @jwt.token_verification_failed_loader
+    def token_verification_failed_callback(jwt_header, jwt_payload):
+        """Handle token verification failures."""
+        return jsonify({
+            'error': 'token_verification_failed',
+            'message': 'Token verification failed'
+        }), 422
+    
+    @jwt.decode_key_loader
+    def decode_key_callback(jwt_header, jwt_payload):
+        """Provide the key for decoding JWT tokens."""
+        return app.config['JWT_SECRET_KEY']
+    
     # Celery configuration
     celery.conf.update(
         broker_url=os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0'),
@@ -112,14 +240,20 @@ def create_app(config_name=None):
     # Sentry Configuration for production
     if config_name == 'production':
         sentry_dsn = os.getenv('SENTRY_DSN')
-        if sentry_dsn:
-            sentry_sdk.init(
-                dsn=sentry_dsn,
-                integrations=[FlaskIntegration()],
-                traces_sample_rate=0.1,
-                profiles_sample_rate=0.1,
-                environment=config_name
-            )
+        if sentry_dsn and sentry_dsn.strip() and sentry_dsn.startswith('https://'):
+            try:
+                sentry_sdk.init(
+                    dsn=sentry_dsn,
+                    integrations=[FlaskIntegration()],
+                    traces_sample_rate=0.1,
+                    profiles_sample_rate=0.1,
+                    environment=config_name
+                )
+                app.logger.info("✅ Sentry monitoring enabled")
+            except Exception as e:
+                app.logger.warning(f"⚠️ Sentry initialization failed: {str(e)}")
+        else:
+            app.logger.info("ℹ️ Sentry monitoring disabled (no valid DSN provided)")
     
     # Enhanced logging configuration
     if app.config.get('ENV') == 'development':
@@ -245,6 +379,7 @@ def register_blueprints(app):
     """Register Flask blueprints."""
     from .auth import auth_bp
     from .routes.dashboard import dashboard_bp
+    from .routes.analytics import analytics_bp
     from .routes.users import users_bp
     from .routes.forms import forms_bp
     from .routes.admin_forms import admin_forms_bp
@@ -255,9 +390,12 @@ def register_blueprints(app):
     from .routes.ai_reports import ai_reports_bp
     from .public_routes import public_bp
     from .routes.public_forms import public_forms_bp
+    from .routes.google_forms_routes import google_forms_bp
+    from .routes.production_routes import production_bp  # NEW: Production routes
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
-    app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+    app.register_blueprint(dashboard_bp)  # Dashboard already has url_prefix='/api/dashboard'
+    app.register_blueprint(analytics_bp)  # Analytics already has url_prefix='/api/analytics'
     app.register_blueprint(users_bp, url_prefix='/api/users')
     app.register_blueprint(forms_bp, url_prefix='/api/forms')
     app.register_blueprint(admin_forms_bp, url_prefix='/api/admin/forms')
@@ -268,6 +406,8 @@ def register_blueprints(app):
     app.register_blueprint(ai_reports_bp, url_prefix='/api')
     app.register_blueprint(public_bp, url_prefix='/api/public')
     app.register_blueprint(public_forms_bp, url_prefix='/api/public-forms')
+    app.register_blueprint(google_forms_bp)  # Already has url_prefix='/api/google-forms'
+    app.register_blueprint(production_bp)  # NEW: Production routes with /api/production prefix
 
 def main():
     app = create_app()

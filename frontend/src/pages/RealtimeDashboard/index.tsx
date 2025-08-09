@@ -1,3 +1,4 @@
+import React from "react";
 import { Responsive, WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -18,6 +19,8 @@ import { useMemo, useState } from "react";
 import clsx from "clsx";
 import "./dashboard.css";
 
+const ResponsiveGridLayout = WidthProvider(Responsive);
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -29,14 +32,12 @@ ChartJS.register(
   Legend
 );
 
-const ResponsiveGridLayout = WidthProvider(Responsive);
-
 export default function RealtimeDashboard() {
   const { data } = useSocket();
   const [dark, setDark] = useState(true);
 
   const submissionChart = useMemo(() => {
-    const labels = data.submissions.map((s) =>
+    const labels = data.submissions.map((s: any) =>
       new Date(s.timestamp).toLocaleTimeString()
     );
     return {
@@ -53,7 +54,7 @@ export default function RealtimeDashboard() {
   }, [data.submissions]);
 
   const activityChart = useMemo(() => {
-    const labels = data.activities.map((a) =>
+    const labels = data.activities.map((a: any) =>
       new Date(a.timestamp).toLocaleTimeString()
     );
     return {
@@ -83,7 +84,7 @@ export default function RealtimeDashboard() {
       <header className="flex items-center justify-between p-4 border-b border-gray-700">
         <h1 className="text-2xl font-bold">Realtime Analytics</h1>
         <button
-          onClick={() => setDark((d) => !d)}
+          onClick={() => setDark((d: any) => !d)}
           className="px-3 py-1 rounded bg-indigo-600 text-white text-sm"
         >
           {dark ? "Light" : "Dark"} Mode

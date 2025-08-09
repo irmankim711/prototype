@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -12,8 +13,8 @@ import {
   Alert,
   Chip,
   Divider,
-} from '@mui/material';
-import { Save as SaveIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+} from "@mui/material";
+import { Refresh as RefreshIcon } from "@mui/icons-material";
 
 interface FieldMappingProps {
   excelHeaders: string[];
@@ -28,14 +29,17 @@ export default function FieldMapping({
   currentMapping,
   onMappingChange,
 }: FieldMappingProps) {
-  const [mapping, setMapping] = useState<Record<string, string>>(currentMapping);
-  const [unmappedPlaceholders, setUnmappedPlaceholders] = useState<string[]>([]);
+  const [mapping, setMapping] =
+    useState<Record<string, string>>(currentMapping);
+  const [unmappedPlaceholders, setUnmappedPlaceholders] = useState<string[]>(
+    []
+  );
 
   useEffect(() => {
     // Find placeholders that aren't mapped yet
     const mappedPlaceholders = Object.values(mapping);
     const unmapped = templatePlaceholders.filter(
-      placeholder => !mappedPlaceholders.includes(placeholder)
+      (placeholder) => !mappedPlaceholders.includes(placeholder)
     );
     setUnmappedPlaceholders(unmapped);
   }, [mapping, templatePlaceholders]);
@@ -48,24 +52,27 @@ export default function FieldMapping({
 
   const handleAutoMap = () => {
     const autoMapping: Record<string, string> = {};
-    
-    excelHeaders.forEach(header => {
+
+    excelHeaders.forEach((header) => {
       const normalizedHeader = header.toLowerCase();
-      
+
       // Try to find a matching placeholder
       for (const placeholder of templatePlaceholders) {
         const normalizedPlaceholder = placeholder.toLowerCase();
-        
+
         // Check for exact matches or partial matches
-        if (normalizedHeader.includes(normalizedPlaceholder) || 
-            normalizedPlaceholder.includes(normalizedHeader) ||
-            normalizedHeader.replace(/[^a-z0-9]/g, '') === normalizedPlaceholder.replace(/[^a-z0-9]/g, '')) {
+        if (
+          normalizedHeader.includes(normalizedPlaceholder) ||
+          normalizedPlaceholder.includes(normalizedHeader) ||
+          normalizedHeader.replace(/[^a-z0-9]/g, "") ===
+            normalizedPlaceholder.replace(/[^a-z0-9]/g, "")
+        ) {
           autoMapping[header] = placeholder;
           break;
         }
       }
     });
-    
+
     setMapping(autoMapping);
     onMappingChange(autoMapping);
   };
@@ -77,7 +84,12 @@ export default function FieldMapping({
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={3}
+      >
         <Typography variant="h6">Field Mapping</Typography>
         <Box>
           <Button
@@ -88,18 +100,15 @@ export default function FieldMapping({
           >
             Auto Map
           </Button>
-          <Button
-            variant="outlined"
-            onClick={handleClearMapping}
-            color="error"
-          >
+          <Button variant="outlined" onClick={handleClearMapping} color="error">
             Clear All
           </Button>
         </Box>
       </Box>
 
       <Alert severity="info" sx={{ mb: 3 }}>
-        Map your Excel columns to template placeholders. Unmapped placeholders will need to be filled manually.
+        Map your Excel columns to template placeholders. Unmapped placeholders
+        will need to be filled manually.
       </Alert>
 
       <Grid container spacing={3}>
@@ -115,7 +124,7 @@ export default function FieldMapping({
                   label={header}
                   variant="outlined"
                   sx={{ m: 0.5 }}
-                  color={mapping[header] ? 'primary' : 'default'}
+                  color={mapping[header] ? "primary" : "default"}
                 />
               ))}
             </Box>
@@ -134,7 +143,11 @@ export default function FieldMapping({
                   label={placeholder}
                   variant="outlined"
                   sx={{ m: 0.5 }}
-                  color={Object.values(mapping).includes(placeholder) ? 'success' : 'default'}
+                  color={
+                    Object.values(mapping).includes(placeholder)
+                      ? "success"
+                      : "default"
+                  }
                 />
               ))}
             </Box>
@@ -149,19 +162,21 @@ export default function FieldMapping({
       </Typography>
 
       <Grid container spacing={2}>
-        {excelHeaders.map((header) => (
+        {excelHeaders.map((header: any) => (
           <Grid item xs={12} sm={6} key={header}>
             <FormControl fullWidth size="small">
               <InputLabel>{header}</InputLabel>
               <Select
-                value={mapping[header] || ''}
+                value={mapping[header] || ""}
                 label={header}
-                onChange={(e) => handleMappingChange(header, e.target.value)}
+                onChange={(e: any) =>
+                  handleMappingChange(header, e.target.value)
+                }
               >
                 <MenuItem value="">
                   <em>Select placeholder...</em>
                 </MenuItem>
-                {templatePlaceholders.map((placeholder) => (
+                {templatePlaceholders.map((placeholder: any) => (
                   <MenuItem key={placeholder} value={placeholder}>
                     {placeholder}
                   </MenuItem>
@@ -178,7 +193,7 @@ export default function FieldMapping({
             Unmapped placeholders that need manual input:
           </Typography>
           <Box sx={{ mt: 1 }}>
-            {unmappedPlaceholders.map((placeholder) => (
+            {unmappedPlaceholders.map((placeholder: any) => (
               <Chip
                 key={placeholder}
                 label={placeholder}
@@ -191,7 +206,7 @@ export default function FieldMapping({
         </Alert>
       )}
 
-      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
+      <Box sx={{ mt: 3, display: "flex", justifyContent: "space-between" }}>
         <Typography variant="body2" color="text.secondary">
           {Object.keys(mapping).length} of {excelHeaders.length} columns mapped
         </Typography>
@@ -201,4 +216,4 @@ export default function FieldMapping({
       </Box>
     </Box>
   );
-} 
+}

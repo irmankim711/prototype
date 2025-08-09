@@ -1,3 +1,4 @@
+import React from "react";
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -358,19 +359,19 @@ const AutomatedReportsInterface = () => {
           !requestPayload.form_id ||
           typeof requestPayload.form_id !== "number"
         ) {
-          throw new Error("Invalid form_id: must be a positive number");
+          throw Error("Invalid form_id: must be a positive number");
         }
         if (
           !requestPayload.report_type ||
           typeof requestPayload.report_type !== "string"
         ) {
-          throw new Error("Invalid report_type: must be a non-empty string");
+          throw Error("Invalid report_type: must be a non-empty string");
         }
         if (
           !requestPayload.date_range ||
           typeof requestPayload.date_range !== "string"
         ) {
-          throw new Error("Invalid date_range: must be a non-empty string");
+          throw Error("Invalid date_range: must be a non-empty string");
         }
 
         const result = await reportsAPI.generateReport(requestPayload);
@@ -480,7 +481,7 @@ const AutomatedReportsInterface = () => {
                     fullWidth
                     label="Data Source"
                     value={dataSource}
-                    onChange={(e) => {
+                    onChange={(e: any) => {
                       setDataSource(
                         e.target.value as "internal" | "google_forms"
                       );
@@ -566,7 +567,7 @@ const AutomatedReportsInterface = () => {
                       fullWidth
                       label="Select Form"
                       value={selectedForm || ""}
-                      onChange={(e) => setSelectedForm(Number(e.target.value))}
+                      onChange={(e: any) => setSelectedForm(Number(e.target.value))}
                       variant="outlined"
                       className="mb-2"
                       InputProps={{
@@ -580,7 +581,7 @@ const AutomatedReportsInterface = () => {
                       <MenuItem value="">
                         <em>Choose a form to analyze...</em>
                       </MenuItem>
-                      {forms.map((form) => (
+                      {forms.map((form: any) => (
                         <MenuItem key={form.id} value={form.id}>
                           <Box className="flex items-center justify-between w-full">
                             <span>{form.title}</span>
@@ -604,7 +605,7 @@ const AutomatedReportsInterface = () => {
                       fullWidth
                       label="Select Google Form"
                       value={selectedGoogleForm || ""}
-                      onChange={(e) => setSelectedGoogleForm(e.target.value)}
+                      onChange={(e: any) => setSelectedGoogleForm(e.target.value)}
                       variant="outlined"
                       className="mb-2"
                       InputProps={{
@@ -618,7 +619,7 @@ const AutomatedReportsInterface = () => {
                       <MenuItem value="">
                         <em>Choose a Google Form to analyze...</em>
                       </MenuItem>
-                      {googleForms.map((form) => (
+                      {googleForms.map((form: any) => (
                         <MenuItem key={form.id} value={form.id}>
                           <Box className="flex items-center justify-between w-full">
                             <span>{form.title}</span>
@@ -643,7 +644,7 @@ const AutomatedReportsInterface = () => {
                     fullWidth
                     label="Report Type"
                     value={reportType}
-                    onChange={(e) => setReportType(e.target.value as any)}
+                    onChange={(e: any) => setReportType(e.target.value as any)}
                     variant="outlined"
                     className="mb-2"
                     InputProps={{
@@ -682,7 +683,7 @@ const AutomatedReportsInterface = () => {
                     fullWidth
                     label="Date Range"
                     value={dateRange}
-                    onChange={(e) => setDateRange(e.target.value as any)}
+                    onChange={(e: any) => setDateRange(e.target.value as any)}
                     variant="outlined"
                     className="mb-2"
                     InputProps={{
@@ -751,7 +752,7 @@ const AutomatedReportsInterface = () => {
 
               <Box className="space-y-4 max-h-96 overflow-y-auto">
                 {reports.length > 0 ? (
-                  reports.slice(0, 3).map((report) => (
+                  reports.slice(0, 3).map((report: any) => (
                     <Card
                       key={report.id}
                       className="border border-slate-200 hover:border-purple-300 transition-all duration-300 hover:shadow-md"
@@ -921,7 +922,7 @@ export default function ReportBuilder() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = (evt: any) => {
       try {
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
@@ -938,7 +939,7 @@ export default function ReportBuilder() {
         if (allTables.length > 1) {
           console.log(
             `Found ${allTables.length} tables:`,
-            allTables.map((t) => t.name)
+            allTables.map((t: any) => t.name)
           );
           // For now, use the largest table by default
           const largestTable = allTables.reduce((prev, current) =>
@@ -967,7 +968,7 @@ export default function ReportBuilder() {
       range: string;
     }> = [];
 
-    workbook.SheetNames.forEach((sheetName) => {
+    workbook.SheetNames.forEach((sheetName: any) => {
       const worksheet = workbook.Sheets[sheetName];
       const tables = detectTablesInSheet(worksheet, sheetName);
       allTables.push(...tables);
@@ -1046,7 +1047,7 @@ export default function ReportBuilder() {
     for (let row = 0; row < data.length; row++) {
       const rowData = data[row] || [];
       const hasData = rowData.some(
-        (cell) =>
+        (cell: any) =>
           cell !== null && cell !== undefined && String(cell).trim() !== ""
       );
 
@@ -1054,7 +1055,7 @@ export default function ReportBuilder() {
         if (!currentBlock) {
           // Start new block
           const firstDataCol = rowData.findIndex(
-            (cell) =>
+            (cell: any) =>
               cell !== null && cell !== undefined && String(cell).trim() !== ""
           );
           const lastDataCol =
@@ -1081,7 +1082,7 @@ export default function ReportBuilder() {
           const firstDataCol = Math.min(
             currentBlock.startCol,
             rowData.findIndex(
-              (cell) =>
+              (cell: any) =>
                 cell !== null &&
                 cell !== undefined &&
                 String(cell).trim() !== ""
@@ -1110,13 +1111,13 @@ export default function ReportBuilder() {
       } else if (currentBlock && currentBlock.data.length > 1) {
         // Empty row found, close current block if it has enough data
         const headers = currentBlock.data[0]
-          .map((h) => String(h || "").trim())
-          .filter((h) => h);
+          .map((h: any) => String(h || "").trim())
+          .filter((h: any) => h);
         const rows = currentBlock.data
           .slice(1)
-          .filter((row) =>
+          .filter((row: any) =>
             row.some(
-              (cell) =>
+              (cell: any) =>
                 cell !== null &&
                 cell !== undefined &&
                 String(cell).trim() !== ""
@@ -1137,13 +1138,13 @@ export default function ReportBuilder() {
     // Handle last block
     if (currentBlock && currentBlock.data.length > 1) {
       const headers = currentBlock.data[0]
-        .map((h) => String(h || "").trim())
-        .filter((h) => h);
+        .map((h: any) => String(h || "").trim())
+        .filter((h: any) => h);
       const rows = currentBlock.data
         .slice(1)
-        .filter((row) =>
+        .filter((row: any) =>
           row.some(
-            (cell) =>
+            (cell: any) =>
               cell !== null && cell !== undefined && String(cell).trim() !== ""
           )
         );
@@ -1200,13 +1201,13 @@ export default function ReportBuilder() {
 
     // Auto-populate editData with processed values
     const autoMappedData: Record<string, string> = {};
-    Object.keys(processedData).forEach((key) => {
+    Object.keys(processedData).forEach((key: any) => {
       if (processedData[key] !== null && processedData[key] !== undefined) {
         autoMappedData[key] = String(processedData[key]);
       }
     });
 
-    setEditData((prev) => ({ ...prev, ...autoMappedData }));
+    setEditData((prev: any) => ({ ...prev, ...autoMappedData }));
   };
 
   // Enhanced Excel data processing with better type inference and data aggregation
@@ -1360,15 +1361,15 @@ export default function ReportBuilder() {
     // Helper function to infer data type
     const inferDataType = (values: any[]) => {
       const nonEmptyValues = values.filter(
-        (v) => v !== null && v !== undefined && String(v).trim() !== ""
+        (v: any) => v !== null && v !== undefined && String(v).trim() !== ""
       );
       if (nonEmptyValues.length === 0) return "text";
 
       const numericValues = nonEmptyValues
-        .map((v) => parseFloat(String(v)))
-        .filter((v) => !isNaN(v));
+        .map((v: any) => parseFloat(String(v)))
+        .filter((v: any) => !isNaN(v));
       const dateValues = nonEmptyValues.filter(
-        (v) => !isNaN(Date.parse(String(v)))
+        (v: any) => !isNaN(Date.parse(String(v)))
       );
 
       if (numericValues.length > nonEmptyValues.length * 0.8) return "number";
@@ -1397,9 +1398,9 @@ export default function ReportBuilder() {
 
       // Get column values
       const columnValues = rows
-        .map((row) => row[index])
+        .map((row: any) => row[index])
         .filter(
-          (val) =>
+          (val: any) =>
             val !== null && val !== undefined && String(val).trim() !== ""
         );
 
@@ -1408,7 +1409,7 @@ export default function ReportBuilder() {
       // Find matching field mapping
       let matchedField = null;
       for (const [field, patterns] of Object.entries(fieldMappings)) {
-        if (patterns.some((pattern) => normalizedHeader.includes(pattern))) {
+        if (patterns.some((pattern: any) => normalizedHeader.includes(pattern))) {
           matchedField = field;
           break;
         }
@@ -1422,8 +1423,8 @@ export default function ReportBuilder() {
 
         if (dataType === "number") {
           const numericValues = columnValues
-            .map((val) => parseFloat(String(val)))
-            .filter((val) => !isNaN(val));
+            .map((val: any) => parseFloat(String(val)))
+            .filter((val: any) => !isNaN(val));
           const aggregated = aggregateNumericData(numericValues, matchedField);
           if (aggregated !== null) {
             processed[`${matchedField}_sum`] = aggregated.sum;
@@ -1443,8 +1444,8 @@ export default function ReportBuilder() {
         } else if (dataType === "date") {
           // Use the most recent valid date
           const validDates = columnValues
-            .map((val) => new Date(val))
-            .filter((date) => !isNaN(date.getTime()))
+            .map((val: any) => new Date(val))
+            .filter((date: any) => !isNaN(date.getTime()))
             .sort((a, b) => b.getTime() - a.getTime());
 
           if (validDates.length > 0) {
@@ -1474,8 +1475,8 @@ export default function ReportBuilder() {
 
         if (dataType === "number") {
           const numericValues = columnValues
-            .map((val) => parseFloat(String(val)))
-            .filter((val) => !isNaN(val));
+            .map((val: any) => parseFloat(String(val)))
+            .filter((val: any) => !isNaN(val));
           if (numericValues.length > 0) {
             // Default to sum for unknown numeric fields
             processed[sanitizedFieldName] = numericValues.reduce(
@@ -1505,12 +1506,12 @@ export default function ReportBuilder() {
 
       // Calculate some basic analytics if we have numeric data
       const numericFields = Object.keys(processed).filter(
-        (key) =>
+        (key: any) =>
           typeof processed[key] === "number" && !key.includes("_formatted")
       );
 
       if (numericFields.length > 0) {
-        const numericValues = numericFields.map((field) => processed[field]);
+        const numericValues = numericFields.map((field: any) => processed[field]);
         processed["data_summary"] = {
           numeric_fields: numericFields.length,
           max_value: Math.max(...numericValues),
@@ -1554,10 +1555,10 @@ export default function ReportBuilder() {
 
   const createReportMutation = useMutation({
     mutationFn: createReport,
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       navigate(`/reports/${data.id}`);
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.log("Create report error:", error);
       // Show success message even if API fails (for demo)
       alert("Report created successfully! (Demo mode)");
@@ -1566,10 +1567,10 @@ export default function ReportBuilder() {
 
   const analyzeDataMutation = useMutation({
     mutationFn: analyzeData,
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       setAnalysis(data);
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.log("Analyze data error:", error);
       // Mock analysis data
       setAnalysis({
@@ -1628,8 +1629,8 @@ export default function ReportBuilder() {
           if (headerIndex !== -1) {
             // Get the first non-empty value from this column
             const columnValues = importedData.rows
-              .map((row) => row[headerIndex])
-              .filter((val) => val !== null && val !== undefined && val !== "");
+              .map((row: any) => row[headerIndex])
+              .filter((val: any) => val !== null && val !== undefined && val !== "");
 
             if (columnValues.length > 0) {
               mappedData[placeholder] = String(columnValues[0]);
@@ -1639,12 +1640,12 @@ export default function ReportBuilder() {
       }
 
       // Merge with existing editData
-      setEditData((prev) => ({ ...prev, ...mappedData }));
+      setEditData((prev: any) => ({ ...prev, ...mappedData }));
 
       // Integrate AI analysis after mapping
       analyzeDataMutation.mutate(editData, {
-        onSuccess: (analysis) => {
-          setEditData((prev) => ({
+        onSuccess: (analysis: any) => {
+          setEditData((prev: any) => ({
             ...prev,
             ai_summary: analysis.summary,
             ai_insights: analysis.insights.join("\n"),
@@ -1654,9 +1655,9 @@ export default function ReportBuilder() {
       });
     }
 
-    setActiveStep((prev) => prev + 1);
+    setActiveStep((prev: any) => prev + 1);
   };
-  const handleBack = () => setActiveStep((prev) => prev - 1);
+  const handleBack = () => setActiveStep((prev: any) => prev - 1);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -1667,7 +1668,7 @@ export default function ReportBuilder() {
         downloadUrl: result.downloadUrl,
         message: result.message,
       });
-      setActiveStep((prevStep) => prevStep + 1);
+      setActiveStep((prevStep: any) => prevStep + 1);
     } catch (error: any) {
       setGenerationError(
         error?.message || "Failed to generate report. Please try again."
@@ -1733,7 +1734,7 @@ export default function ReportBuilder() {
               <Divider sx={{ my: 1 }}>or</Divider>
               {/* Google Sheets Import */}
               <GoogleSheetImport
-                onDataParsed={(data) =>
+                onDataParsed={(data: any) =>
                   setImportedData({
                     ...data,
                     processedData: processExcelData(data.headers, data.rows),
@@ -1904,7 +1905,7 @@ export default function ReportBuilder() {
                     <table className="data-preview-table">
                       <thead className="data-preview-thead">
                         <tr>
-                          {importedData.headers.map((header) => (
+                          {importedData.headers.map((header: any) => (
                             <th key={header} className="data-preview-th">
                               {header}
                             </th>

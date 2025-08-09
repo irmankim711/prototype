@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -161,7 +162,7 @@ export const AISmartPlaceholders: React.FC<AISmartPlaceholdersProps> = ({
                       )}
                       <IconButton
                         size="small"
-                        onClick={(e) => {
+                        onClick={(e: any) => {
                           e.stopPropagation();
                           handleCopyPlaceholder(placeholder);
                         }}
@@ -243,7 +244,7 @@ export const AISmartPlaceholders: React.FC<AISmartPlaceholdersProps> = ({
                 label="Context"
                 placeholder="e.g., financial report, marketing dashboard"
                 value={contextInput}
-                onChange={(e) => setContextInput(e.target.value)}
+                onChange={(e: any) => setContextInput(e.target.value)}
                 variant="outlined"
                 size="small"
               />
@@ -254,7 +255,7 @@ export const AISmartPlaceholders: React.FC<AISmartPlaceholdersProps> = ({
                 label="Industry"
                 placeholder="e.g., healthcare, finance, retail"
                 value={industryInput}
-                onChange={(e) => setIndustryInput(e.target.value)}
+                onChange={(e: any) => setIndustryInput(e.target.value)}
                 variant="outlined"
                 size="small"
               />

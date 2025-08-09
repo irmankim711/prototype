@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from "react";
+import React from "react";
+import { useState, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -173,7 +174,7 @@ export default function FormAutomationDashboard() {
       );
       return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       if (data.success && data.download_url) {
         // Download the file
         window.open(data.download_url, "_blank");
@@ -287,7 +288,7 @@ export default function FormAutomationDashboard() {
                       fullWidth
                       label="Workflow Name"
                       value={workflowName}
-                      onChange={(e) => setWorkflowName(e.target.value)}
+                      onChange={(e: any) => setWorkflowName(e.target.value)}
                       placeholder="Enter a name for your automated workflow"
                     />
                   </Box>
@@ -463,7 +464,7 @@ export default function FormAutomationDashboard() {
                   </Typography>
 
                   <Stepper orientation="vertical">
-                    {workflowStatus.steps.map((step) => (
+                    {workflowStatus.steps.map((step: any) => (
                       <Step
                         key={step.step}
                         active={true}

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Card,
@@ -174,7 +175,7 @@ const EditableReportViewer: React.FC<EditableReportViewerProps> = ({
             {isEditing ? (
               <TextField
                 value={editedTitle}
-                onChange={(e) => setEditedTitle(e.target.value)}
+                onChange={(e: any) => setEditedTitle(e.target.value)}
                 variant="outlined"
                 size="small"
                 fullWidth
@@ -270,7 +271,7 @@ const EditableReportViewer: React.FC<EditableReportViewerProps> = ({
               <TextField
                 label="Description"
                 value={editedDescription}
-                onChange={(e) => setEditedDescription(e.target.value)}
+                onChange={(e: any) => setEditedDescription(e.target.value)}
                 multiline
                 rows={2}
                 fullWidth
@@ -279,7 +280,7 @@ const EditableReportViewer: React.FC<EditableReportViewerProps> = ({
               <TextField
                 label="Content"
                 value={editedContent}
-                onChange={(e) => setEditedContent(e.target.value)}
+                onChange={(e: any) => setEditedContent(e.target.value)}
                 multiline
                 rows={20}
                 fullWidth
@@ -384,7 +385,7 @@ const EditableReportViewer: React.FC<EditableReportViewerProps> = ({
                     icon: <Visibility />,
                     color: "info",
                   },
-                ].map((item) => (
+                ].map((item: any) => (
                   <Grid item xs={12} sm={6} key={item.format}>
                     <Card>
                       <CardContent sx={{ textAlign: "center" }}>
@@ -521,7 +522,7 @@ const EnhancedAutomatedReportDashboard: React.FC = () => {
 
     if (searchTerm) {
       filtered = filtered.filter(
-        (report) =>
+        (report: any) =>
           report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
           report.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
           report.content.toLowerCase().includes(searchTerm.toLowerCase())
@@ -529,11 +530,11 @@ const EnhancedAutomatedReportDashboard: React.FC = () => {
     }
 
     if (filterStatus !== "all") {
-      filtered = filtered.filter((report) => report.status === filterStatus);
+      filtered = filtered.filter((report: any) => report.status === filterStatus);
     }
 
     if (filterType !== "all") {
-      filtered = filtered.filter((report) => report.type === filterType);
+      filtered = filtered.filter((report: any) => report.type === filterType);
     }
 
     setFilteredReports(filtered);
@@ -569,8 +570,8 @@ const EnhancedAutomatedReportDashboard: React.FC = () => {
 
       if (response.ok) {
         // Update local state
-        setReports((prev) =>
-          prev.map((report) =>
+        setReports((prev: any) =>
+          prev.map((report: any) =>
             report.id === reportId
               ? {
                   ...report,
@@ -583,7 +584,7 @@ const EnhancedAutomatedReportDashboard: React.FC = () => {
 
         // Update selected report if it's the one being edited
         if (selectedReport && selectedReport.id === reportId) {
-          setSelectedReport((prev) =>
+          setSelectedReport((prev: any) =>
             prev ? { ...prev, ...updatedData } : null
           );
         }
@@ -673,7 +674,7 @@ const EnhancedAutomatedReportDashboard: React.FC = () => {
               fullWidth
               placeholder="Search reports..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e: any) => setSearchTerm(e.target.value)}
               InputProps={{
                 startAdornment: (
                   <Search sx={{ mr: 1, color: "text.secondary" }} />
@@ -686,7 +687,7 @@ const EnhancedAutomatedReportDashboard: React.FC = () => {
               <InputLabel>Status</InputLabel>
               <Select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+                onChange={(e: any) => setFilterStatus(e.target.value)}
                 label="Status"
               >
                 <MenuItem value="all">All Status</MenuItem>
@@ -702,7 +703,7 @@ const EnhancedAutomatedReportDashboard: React.FC = () => {
               <InputLabel>Type</InputLabel>
               <Select
                 value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
+                onChange={(e: any) => setFilterType(e.target.value)}
                 label="Type"
               >
                 <MenuItem value="all">All Types</MenuItem>
@@ -737,7 +738,7 @@ const EnhancedAutomatedReportDashboard: React.FC = () => {
         </Alert>
       ) : (
         <Grid container spacing={3}>
-          {filteredReports.map((report) => (
+          {filteredReports.map((report: any) => (
             <Grid item xs={12} md={6} lg={4} key={report.id}>
               <Card
                 sx={{
@@ -828,7 +829,7 @@ const EnhancedAutomatedReportDashboard: React.FC = () => {
         <EditableReportViewer
           report={selectedReport}
           onClose={() => setSelectedReport(null)}
-          onSave={(updatedData) =>
+          onSave={(updatedData: any) =>
             handleSaveReport(selectedReport.id, updatedData)
           }
           onDownload={handleDownloadReport}

@@ -937,7 +937,7 @@ export default function LandingPage() {
                   type="email"
                   fullWidth
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e: any) => setEmail(e.target.value)}
                   required
                   autoComplete="email"
                 />
@@ -946,7 +946,7 @@ export default function LandingPage() {
                   type="password"
                   fullWidth
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e: any) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
                 />
@@ -954,7 +954,7 @@ export default function LandingPage() {
                   control={
                     <Checkbox
                       checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
+                      onChange={(e: any) => setRememberMe(e.target.checked)}
                     />
                   }
                   label="Remember me"
@@ -1004,7 +1004,7 @@ export default function LandingPage() {
                   type="email"
                   fullWidth
                   value={signupEmail}
-                  onChange={(e) => setSignupEmail(e.target.value)}
+                  onChange={(e: any) => setSignupEmail(e.target.value)}
                   required
                   autoComplete="email"
                 />
@@ -1013,7 +1013,7 @@ export default function LandingPage() {
                   type="password"
                   fullWidth
                   value={signupPassword}
-                  onChange={(e) => setSignupPassword(e.target.value)}
+                  onChange={(e: any) => setSignupPassword(e.target.value)}
                   required
                   autoComplete="new-password"
                 />
@@ -1022,7 +1022,7 @@ export default function LandingPage() {
                   type="password"
                   fullWidth
                   value={signupConfirm}
-                  onChange={(e) => setSignupConfirm(e.target.value)}
+                  onChange={(e: any) => setSignupConfirm(e.target.value)}
                   required
                 />
                 {signupError && (

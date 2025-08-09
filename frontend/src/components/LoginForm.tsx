@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React from "react";
+import { useState } from "react";
 import { login, testDatabaseConnection } from "../services/api";
 
 interface LoginFormProps {
@@ -76,7 +77,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
             type="email"
             id="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e: any) => setEmail(e.target.value)}
             required
             style={{ width: "100%", padding: "8px", marginTop: "5px" }}
             autoComplete="email"
@@ -89,7 +90,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
             type="password"
             id="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e: any) => setPassword(e.target.value)}
             required
             style={{ width: "100%", padding: "8px", marginTop: "5px" }}
             autoComplete="current-password"

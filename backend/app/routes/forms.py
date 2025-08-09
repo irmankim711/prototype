@@ -5,8 +5,10 @@ from flask_limiter import Limiter
 from datetime import datetime
 from sqlalchemy import desc, func
 from sqlalchemy.exc import SQLAlchemyError
+from marshmallow import ValidationError
 from ..models import db, Form, FormSubmission, Permission, User, FormQRCode, QuickAccessToken, FormAccessCode
 from ..decorators import require_permission, get_current_user_id, get_current_user
+from ..validation import validate_json, FormCreationSchema, FormUpdateSchema, FormSubmissionSchema, ErrorHandler
 from .quick_auth import check_quick_access_permission
 import json
 import uuid
@@ -345,39 +347,25 @@ def get_form(form_id):
 @forms_bp.route('/', methods=['POST'])
 @jwt_required()
 @limiter.limit("10 per hour")
-def create_form():
-    """Create a new form with validation and QR code generation."""
+@validate_json(FormCreationSchema)
+def create_form(validated_data):
+    """Create a new form with comprehensive validation."""
     try:
         user = get_current_user()
         if not user:
-            return jsonify({'error': 'User not found'}), 401
-            
-        data = request.get_json()
+            return ErrorHandler.unauthorized_error("User not found")
         
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-        
-        # Validate required fields
-        if not data.get('title'):
-            return jsonify({'error': 'Form title is required'}), 400
-        
-        if not data.get('schema'):
-            return jsonify({'error': 'Form schema is required'}), 400
-        
-        # Validate schema structure
-        try:
-            validate_form_schema(data['schema'])
-        except BadRequest as e:
-            return jsonify({'error': str(e)}), 400
-        
-        # Create form
-        form = Form(  # type: ignore
-            title=data['title'].strip(),
-            description=data.get('description', '').strip(),
-            schema=data['schema'],
-            is_active=data.get('is_active', True),
-            is_public=data.get('is_public', False),
-            creator_id=user.id
+        # Create form with validated data
+        form = Form(
+            title=validated_data['title'],
+            description=validated_data.get('description'),
+            schema=validated_data['schema'],
+            is_active=validated_data.get('is_active', True),
+            is_public=validated_data.get('is_public', False),
+            creator_id=user.id,
+            form_settings=validated_data.get('form_settings'),
+            submission_limit=validated_data.get('submission_limit'),
+            expires_at=validated_data.get('expires_at')
         )
         
         db.session.add(form)
@@ -402,52 +390,52 @@ def create_form():
     except SQLAlchemyError as e:
         db.session.rollback()
         current_app.logger.error(f"Database error in create_form: {str(e)}")
-        return jsonify({'error': 'Database error occurred'}), 500
+        return ErrorHandler.internal_error("Database error occurred")
     except Exception as e:
         current_app.logger.error(f"Error in create_form: {str(e)}")
-        return jsonify({'error': 'Failed to create form'}), 500
+        return ErrorHandler.internal_error("Failed to create form")
 
 @forms_bp.route('/<int:form_id>', methods=['PUT'])
 @jwt_required()
 @limiter.limit("50 per hour")
-def update_form(form_id):
-    """Update a form with validation."""
+@validate_json(FormUpdateSchema)
+def update_form(validated_data, form_id):
+    """Update a form with comprehensive validation."""
     try:
         user = get_current_user()
         if not user:
-            return jsonify({'error': 'User not found'}), 401
+            return ErrorHandler.unauthorized_error("User not found")
             
         form = Form.query.get_or_404(form_id)
         
         # Check permissions
         if form.creator_id != user.id and not user.has_permission(Permission.UPDATE_TEMPLATE):
-            return jsonify({'error': 'Access denied'}), 403
+            return ErrorHandler.forbidden_error("Access denied")
         
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
+        # Update fields with validated data
+        if 'title' in validated_data:
+            form.title = validated_data['title']
         
-        # Update fields
-        if 'title' in data:
-            if not data['title'].strip():
-                return jsonify({'error': 'Form title cannot be empty'}), 400
-            form.title = data['title'].strip()
+        if 'description' in validated_data:
+            form.description = validated_data['description']
         
-        if 'description' in data:
-            form.description = data['description'].strip()
+        if 'schema' in validated_data:
+            form.schema = validated_data['schema']
         
-        if 'schema' in data:
-            try:
-                validate_form_schema(data['schema'])
-                form.schema = data['schema']
-            except BadRequest as e:
-                return jsonify({'error': str(e)}), 400
+        if 'is_active' in validated_data:
+            form.is_active = bool(validated_data['is_active'])
         
-        if 'is_active' in data:
-            form.is_active = bool(data['is_active'])
+        if 'is_public' in validated_data:
+            form.is_public = bool(validated_data['is_public'])
         
-        if 'is_public' in data:
-            form.is_public = bool(data['is_public'])
+        if 'form_settings' in validated_data:
+            form.form_settings = validated_data['form_settings']
+        
+        if 'submission_limit' in validated_data:
+            form.submission_limit = validated_data['submission_limit']
+        
+        if 'expires_at' in validated_data:
+            form.expires_at = validated_data['expires_at']
         
         form.updated_at = datetime.utcnow()
         db.session.commit()
@@ -527,37 +515,43 @@ def get_field_types():
 
 @forms_bp.route('/<int:form_id>/submissions', methods=['POST'])
 @limiter.limit("10 per minute")
-def submit_form(form_id):
-    """Submit a form (public endpoint with validation)."""
+@validate_json(FormSubmissionSchema)
+def submit_form(validated_data, form_id):
+    """Submit a form with comprehensive validation."""
     try:
         form = Form.query.filter_by(id=form_id, is_active=True).first_or_404()
-        data = request.get_json()
         
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
+        # Check if form has expired
+        if form.expires_at and form.expires_at < datetime.utcnow():
+            return ErrorHandler.format_error_response(
+                "Form has expired",
+                code="FORM_EXPIRED",
+                status_code=400
+            )
         
-        # Validate form data
-        validation_errors = validate_form_data(form.schema, data.get('data', {}))
-        if validation_errors:
-            return jsonify({
-                'error': 'Validation failed',
-                'details': validation_errors
-            }), 400
+        # Check submission limit
+        if form.submission_limit:
+            current_submissions = FormSubmission.query.filter_by(form_id=form.id).count()
+            if current_submissions >= form.submission_limit:
+                return ErrorHandler.format_error_response(
+                    "Form submission limit reached",
+                    code="SUBMISSION_LIMIT_REACHED", 
+                    status_code=400
+                )
         
         # Get current user if authenticated
         user_id = get_current_user_id()
-        submitter_email = data.get('email')
         
         # For public forms, allow anonymous submissions
         if not form.is_public and not user_id:
-            return jsonify({'error': 'Authentication required'}), 401
+            return ErrorHandler.unauthorized_error("Authentication required")
         
-        # Create submission
-        submission = FormSubmission(  # type: ignore
+        # Create submission with validated data
+        submission = FormSubmission(
             form_id=form.id,
-            data=data['data'],
+            data=validated_data.get('data', {}),
             submitter_id=user_id,
-            submitter_email=submitter_email
+            submitter_email=validated_data.get('submitter_email')
         )
         
         db.session.add(submission)

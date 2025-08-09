@@ -476,7 +476,7 @@ export const formBuilderUtils = {
   ): string[] => {
     const errors: string[] = [];
 
-    schema.fields.forEach((field) => {
+    schema.fields.forEach((field: any) => {
       const value = data[field.id];
 
       // Check required fields
@@ -573,7 +573,7 @@ export const formBuilderUtils = {
   generatePreviewData: (schema: FormSchema): Record<string, any> => {
     const previewData: Record<string, any> = {};
 
-    schema.fields.forEach((field) => {
+    schema.fields.forEach((field: any) => {
       switch (field.type) {
         case "text":
           previewData[field.id] = "Sample text input";
@@ -631,11 +631,11 @@ export const formBuilderUtils = {
       const form = JSON.parse(jsonString);
       // Validate the imported form structure
       if (!form.title || !form.schema) {
-        throw new Error("Invalid form structure");
+        throw Error("Invalid form structure");
       }
       return form;
     } catch (error) {
-      throw new Error("Invalid JSON format");
+      throw Error("Invalid JSON format");
     }
   },
 

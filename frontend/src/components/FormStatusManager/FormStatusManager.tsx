@@ -1,3 +1,4 @@
+import React from "react";
 import { useState, useEffect, useContext, useCallback } from "react";
 import {
   Card,
@@ -115,7 +116,7 @@ export default function FormStatusManager({
       }
 
       // Convert external forms to ExtendedForm format
-      const externalFormsData: ExtendedForm[] = externalForms.map((form) => ({
+      const externalFormsData: ExtendedForm[] = externalForms.map((form: any) => ({
         id: `external_${form.id}`,
         title: form.title,
         description: form.description,
@@ -177,8 +178,8 @@ export default function FormStatusManager({
       console.log("Form status updated:", data);
 
       // Update local state
-      setCombinedForms((prevForms) =>
-        prevForms.map((form) =>
+      setCombinedForms((prevForms: any) =>
+        prevForms.map((form: any) =>
           form.id === formId
             ? {
                 ...form,
@@ -295,7 +296,7 @@ export default function FormStatusManager({
       )}
 
       <Grid container spacing={2}>
-        {combinedForms.map((form) => (
+        {combinedForms.map((form: any) => (
           <Grid item xs={12} md={6} lg={4} key={form.id}>
             <Card sx={{ height: "100%", position: "relative" }}>
               <CardContent>
@@ -336,7 +337,7 @@ export default function FormStatusManager({
                     control={
                       <Switch
                         checked={form.is_public}
-                        onChange={(e) =>
+                        onChange={(e: any) =>
                           form.is_external
                             ? undefined
                             : toggleFormStatus(
@@ -377,7 +378,7 @@ export default function FormStatusManager({
                     control={
                       <Switch
                         checked={form.is_active}
-                        onChange={(e) =>
+                        onChange={(e: any) =>
                           form.is_external
                             ? undefined
                             : toggleFormStatus(

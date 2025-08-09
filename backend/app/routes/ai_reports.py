@@ -23,8 +23,9 @@ from io import BytesIO
 
 ai_reports_bp = Blueprint('ai_reports', __name__)
 
-# Initialize OpenAI client
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+# Initialize OpenAI client conditionally
+openai_api_key = os.getenv('OPENAI_API_KEY')
+client = OpenAI(api_key=openai_api_key) if openai_api_key else None
 
 @ai_reports_bp.route('/reports/<int:report_id>/ai-suggestions', methods=['POST'])
 @jwt_required()
@@ -65,6 +66,13 @@ def generate_ai_suggestions(report_id):
         - reasoning: explanation of why this suggestion would improve the report
         """
         
+        # Check if OpenAI client is available
+        if not client:
+            return jsonify({
+                'success': False,
+                'error': 'AI service is not configured. Please set OPENAI_API_KEY environment variable.'
+            }), 503
+            
         # Call OpenAI API
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -479,6 +487,13 @@ def enhance_report_with_ai(report_id):
             Original content:
             {report.content}
             """
+        
+        # Check if OpenAI client is available
+        if not client:
+            return jsonify({
+                'success': False,
+                'error': 'AI service is not configured. Please set OPENAI_API_KEY environment variable.'
+            }), 503
         
         # Call OpenAI API
         response = client.chat.completions.create(

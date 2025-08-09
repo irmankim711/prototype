@@ -21,7 +21,7 @@ export const observeElementPerformance = (
   callback: (entry: IntersectionObserverEntry) => void
 ) => {
   const observer = new IntersectionObserver(
-    (entries) => {
+    (entries: any) => {
       entries.forEach(callback);
     },
     {
@@ -38,8 +38,8 @@ export const observeElementPerformance = (
 
 export const preloadImages = (urls: string[]): Promise<void[]> => {
   return Promise.all(
-    urls.map((url) => {
-      return new Promise<void>((resolve) => {
+    urls.map((url: any) => {
+      return new Promise<void>((resolve: any) => {
         const img = new Image();
         img.onload = () => resolve();
         img.onerror = () => resolve(); // Still resolve to avoid blocking

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Button, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from '@mui/material';
+import { Box, Button, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from "@mui/material";
 // @ts-ignore
 import GooglePicker from 'react-google-picker';
 
@@ -54,7 +54,7 @@ export default function GoogleSheetImport({ onDataParsed, apiKey, clientId }: Go
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  {preview.headers.map((header) => (
+                  {preview.headers.map((header: any) => (
                     <TableCell key={header}>{header}</TableCell>
                   ))}
                 </TableRow>

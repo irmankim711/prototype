@@ -2,6 +2,7 @@ from . import db
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from enum import Enum
+from typing import Optional
 
 # Role and Permission Models for RBAC
 class UserRole(Enum):
@@ -110,6 +111,20 @@ class Report(db.Model):
     template_id = db.Column(db.String(120))
     data = db.Column(db.JSON)
     output_url = db.Column(db.String(500))
+    
+    # ✅ FIXED: Explicit constructor for proper type checking
+    def __init__(self, title: str, user_id: int, description: Optional[str] = None, 
+                 template_id: Optional[str] = None, data: Optional[dict] = None, 
+                 status: str = 'draft', output_url: Optional[str] = None, **kwargs):
+        """Report model constructor with proper type hints"""
+        super(Report, self).__init__(**kwargs)
+        self.title = title
+        self.user_id = user_id
+        self.description = description
+        self.template_id = template_id
+        self.data = data or {}
+        self.status = status
+        self.output_url = output_url
 
 class ReportTemplate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -163,8 +178,21 @@ class FormSubmission(db.Model):
     location_data = db.Column(db.JSON)  # Optional location information
     processing_notes = db.Column(db.Text)  # Admin notes for processing
 
-    def __init__(self, **kwargs):
+    # ✅ FIXED: Explicit constructor for FormSubmission 
+    def __init__(self, form_id: int, data: Optional[dict] = None, 
+                 submitter_id: Optional[int] = None, submitter_email: Optional[str] = None,
+                 ip_address: Optional[str] = None, user_agent: Optional[str] = None,
+                 submission_source: str = 'web', status: str = 'submitted', **kwargs):
+        """FormSubmission model constructor with proper type hints"""
         super(FormSubmission, self).__init__(**kwargs)
+        self.form_id = form_id
+        self.data = data or {}
+        self.submitter_id = submitter_id
+        self.submitter_email = submitter_email
+        self.ip_address = ip_address
+        self.user_agent = user_agent
+        self.submission_source = submission_source
+        self.status = status
 
 # New model for QR Code management
 class FormQRCode(db.Model):

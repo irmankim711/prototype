@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Button,
@@ -48,7 +49,7 @@ const GoogleFormsImport: React.FC<GoogleFormsImportProps> = ({
   // Handle form selection
   useEffect(() => {
     if (selectedFormId && forms.length > 0) {
-      const form = forms.find((f) => f.id === selectedFormId);
+      const form = forms.find((f: any) => f.id === selectedFormId);
       if (form) {
         setSelectedForm(form);
         loadFormAnalytics(form.id);
@@ -245,8 +246,8 @@ const GoogleFormsImport: React.FC<GoogleFormsImportProps> = ({
               fullWidth
               label="Select Google Form"
               value={selectedForm?.id || ""}
-              onChange={(e) => {
-                const form = forms.find((f) => f.id === e.target.value);
+              onChange={(e: any) => {
+                const form = forms.find((f: any) => f.id === e.target.value);
                 if (form) handleFormSelect(form);
               }}
               variant="outlined"
@@ -255,7 +256,7 @@ const GoogleFormsImport: React.FC<GoogleFormsImportProps> = ({
               <MenuItem value="">
                 <em>Choose a form to analyze...</em>
               </MenuItem>
-              {forms.map((form) => (
+              {forms.map((form: any) => (
                 <MenuItem key={form.id} value={form.id}>
                   <Box
                     display="flex"

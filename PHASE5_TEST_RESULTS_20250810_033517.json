@@ -1,0 +1,84 @@
+{
+  "start_time": "2025-08-10T03:35:09.148283",
+  "tests": {
+    "backend_health": {
+      "status": "FAIL",
+      "message": "Cannot connect to backend service",
+      "details": {
+        "backend_url": "http://localhost:5000"
+      }
+    },
+    "frontend_build": {
+      "status": "WARN",
+      "message": "Frontend not running (this is acceptable for production)"
+    },
+    "malay_template": {
+      "status": "ERROR",
+      "message": "Malay template test error: rgb color value must be RGBColor object, got <class 'tuple'> (31, 78, 121)"
+    },
+    "gdpr_compliance": {
+      "status": "PASS",
+      "message": "GDPR compliance features working",
+      "details": {
+        "consent_recorded": true,
+        "export_keys": [
+          "user_id",
+          "export_date",
+          "consent_records",
+          "processing_records",
+          "data_portability_notice"
+        ]
+      }
+    },
+    "accessibility": {
+      "status": "PASS",
+      "message": "Accessibility features implemented",
+      "details": {
+        "css_features": [
+          "prefers-reduced-motion",
+          "prefers-contrast",
+          "focus-visible",
+          "sr-only"
+        ],
+        "cypress_tests": true
+      }
+    },
+    "mobile_responsiveness": {
+      "status": "PASS",
+      "message": "Mobile responsiveness implemented",
+      "details": {
+        "mobile_css_features": 3,
+        "pwa_manifest": true,
+        "cypress_tests": true
+      }
+    },
+    "performance": {
+      "status": "PASS",
+      "message": "Performance testing setup complete",
+      "details": {
+        "locust_file_exists": true,
+        "css_optimizations": 3
+      }
+    },
+    "security": {
+      "status": "PASS",
+      "message": "Security measures implemented",
+      "details": {
+        "css_security": true,
+        "config_files": 1,
+        "compliance_service": true
+      }
+    }
+  },
+  "overall_status": "ACCEPTABLE",
+  "summary": {
+    "total_tests": 8,
+    "passed": 5,
+    "failed": 1,
+    "errors": 1,
+    "warnings": 1,
+    "pass_rate": 62.5
+  },
+  "end_time": "2025-08-10T03:35:17.400439",
+  "duration": "0:00:08.252156"
+}

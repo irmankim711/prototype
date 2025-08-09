@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React from "react";
+import { useState } from "react";
 import {
   Box,
   Container,
@@ -7,7 +8,7 @@ import {
   CardContent,
   Grid,
 } from "@mui/material";
-import { Psychology as BrainIcon } from "@mui/icons-material";
+import { BrainIcon } from "@mui/icons-material";
 import {
   AIHub,
   AIAnalysisDashboard,

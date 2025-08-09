@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React from "react";
+import { useState } from "react";
 import {
   Box,
   Container,
@@ -101,22 +102,22 @@ const PublicFormBuilder: React.FC = () => {
 
   const updateField = (id: string, updates: Partial<FormField>) => {
     setFormFields(
-      formFields.map((field) =>
+      formFields.map((field: any) =>
         field.id === id ? { ...field, ...updates } : field
       )
     );
   };
 
   const deleteField = (id: string) => {
-    setFormFields(formFields.filter((field) => field.id !== id));
+    setFormFields(formFields.filter((field: any) => field.id !== id));
   };
 
   const handleNext = () => {
-    setActiveStep((prevActiveStep) => prevActiveStep + 1);
+    setActiveStep((prevActiveStep: any) => prevActiveStep + 1);
   };
 
   const handleBack = () => {
-    setActiveStep((prevActiveStep) => prevActiveStep - 1);
+    setActiveStep((prevActiveStep: any) => prevActiveStep - 1);
   };
 
   const renderFieldEditor = (field: FormField) => (
@@ -143,7 +144,7 @@ const PublicFormBuilder: React.FC = () => {
               fullWidth
               label="Field Label"
               value={field.label}
-              onChange={(e) => updateField(field.id, { label: e.target.value })}
+              onChange={(e: any) => updateField(field.id, { label: e.target.value })}
             />
           </Grid>
           <Grid item xs={12} md={6}>
@@ -151,7 +152,7 @@ const PublicFormBuilder: React.FC = () => {
               fullWidth
               label="Placeholder"
               value={field.placeholder || ""}
-              onChange={(e) =>
+              onChange={(e: any) =>
                 updateField(field.id, { placeholder: e.target.value })
               }
             />
@@ -171,7 +172,7 @@ const PublicFormBuilder: React.FC = () => {
                   <TextField
                     size="small"
                     value={option}
-                    onChange={(e) => {
+                    onChange={(e: any) => {
                       const newOptions = [...(field.options || [])];
                       newOptions[index] = e.target.value;
                       updateField(field.id, { options: newOptions });
@@ -211,7 +212,7 @@ const PublicFormBuilder: React.FC = () => {
               control={
                 <Switch
                   checked={field.required}
-                  onChange={(e) =>
+                  onChange={(e: any) =>
                     updateField(field.id, { required: e.target.checked })
                   }
                 />
@@ -251,7 +252,7 @@ const PublicFormBuilder: React.FC = () => {
               Add Fields
             </Typography>
             <Grid container spacing={1}>
-              {fieldTypes.map((fieldType) => (
+              {fieldTypes.map((fieldType: any) => (
                 <Grid item key={fieldType.value}>
                   <Button
                     variant="outlined"
@@ -295,7 +296,7 @@ const PublicFormBuilder: React.FC = () => {
             </Typography>
           )}
 
-          {formFields.map((field) => (
+          {formFields.map((field: any) => (
             <Box key={field.id} sx={{ mb: 2 }}>
               <Typography variant="subtitle2" gutterBottom>
                 {field.label}{" "}
@@ -350,7 +351,7 @@ const PublicFormBuilder: React.FC = () => {
             fullWidth
             label="Form Title"
             value={formSettings.title}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setFormSettings({ ...formSettings, title: e.target.value })
             }
           />
@@ -360,7 +361,7 @@ const PublicFormBuilder: React.FC = () => {
             fullWidth
             label="Submit Button Text"
             value={formSettings.submitButtonText}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setFormSettings({
                 ...formSettings,
                 submitButtonText: e.target.value,
@@ -375,7 +376,7 @@ const PublicFormBuilder: React.FC = () => {
             rows={3}
             label="Form Description"
             value={formSettings.description}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setFormSettings({ ...formSettings, description: e.target.value })
             }
           />
@@ -385,7 +386,7 @@ const PublicFormBuilder: React.FC = () => {
             fullWidth
             label="Success Message"
             value={formSettings.successMessage}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setFormSettings({
                 ...formSettings,
                 successMessage: e.target.value,
@@ -398,7 +399,7 @@ const PublicFormBuilder: React.FC = () => {
             control={
               <Switch
                 checked={formSettings.allowMultipleSubmissions}
-                onChange={(e) =>
+                onChange={(e: any) =>
                   setFormSettings({
                     ...formSettings,
                     allowMultipleSubmissions: e.target.checked,
@@ -414,7 +415,7 @@ const PublicFormBuilder: React.FC = () => {
             control={
               <Switch
                 checked={formSettings.collectEmail}
-                onChange={(e) =>
+                onChange={(e: any) =>
                   setFormSettings({
                     ...formSettings,
                     collectEmail: e.target.checked,
@@ -430,7 +431,7 @@ const PublicFormBuilder: React.FC = () => {
             control={
               <Switch
                 checked={formSettings.requireAuth}
-                onChange={(e) =>
+                onChange={(e: any) =>
                   setFormSettings({
                     ...formSettings,
                     requireAuth: e.target.checked,
@@ -510,7 +511,7 @@ const PublicFormBuilder: React.FC = () => {
         </Typography>
 
         <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-          {steps.map((label) => (
+          {steps.map((label: any) => (
             <Step key={label}>
               <StepLabel>{label}</StepLabel>
             </Step>

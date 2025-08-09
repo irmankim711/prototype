@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AuthContext } from '../../context/AuthContext';
+import React from "react";
+import { useState, useEffect, useContext } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { AuthContext } from "../../context/AuthContext";
 import {
   Box,
   Typography,
@@ -57,7 +58,7 @@ import {
   Pending,
   Stop,
 } from '@mui/icons-material';
-import { formBuilderAPI } from '../../services/formBuilder';
+import { formBuilderAPI } from "../../services/formBuilder";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -190,7 +191,7 @@ export default function AutomatedReports() {
           'Authorization': `Bearer ${accessToken}`,
         },
       });
-      if (!response.ok) throw new Error('Failed to fetch reports');
+      if (!response.ok) throw Error('Failed to fetch reports');
       return response.json();
     },
     enabled: !!accessToken,
@@ -207,7 +208,7 @@ export default function AutomatedReports() {
         },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to generate report');
+      if (!response.ok) throw Error('Failed to generate report');
       return response.json();
     },
     onSuccess: () => {
@@ -219,7 +220,7 @@ export default function AutomatedReports() {
       setGenerateDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ['automated-reports'] });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       setSnackbar({
         open: true,
         message: `Failed to generate report: ${error.message}`,
@@ -236,7 +237,7 @@ export default function AutomatedReports() {
           'Authorization': `Bearer ${accessToken}`,
         },
       });
-      if (!response.ok) throw new Error('Failed to check status');
+      if (!response.ok) throw Error('Failed to check status');
       return response.json();
     } catch (error) {
       console.error('Error checking report status:', error);
@@ -510,7 +511,7 @@ export default function AutomatedReports() {
                   <InputLabel>Select Form</InputLabel>
                   <Select
                     value={reportForm.form_id}
-                    onChange={(e) => setReportForm({ ...reportForm, form_id: e.target.value })}
+                    onChange={(e: any) => setReportForm({ ...reportForm, form_id: e.target.value })}
                     disabled={formsLoading}
                   >
                     {formsData?.forms?.map((form: Form) => (
@@ -527,7 +528,7 @@ export default function AutomatedReports() {
                   <InputLabel>Report Type</InputLabel>
                   <Select
                     value={reportForm.report_type}
-                    onChange={(e) => setReportForm({ ...reportForm, report_type: e.target.value })}
+                    onChange={(e: any) => setReportForm({ ...reportForm, report_type: e.target.value })}
                   >
                     <MenuItem value="summary">Summary Report</MenuItem>
                     <MenuItem value="detailed">Detailed Analysis</MenuItem>
@@ -541,7 +542,7 @@ export default function AutomatedReports() {
                   <InputLabel>Date Range</InputLabel>
                   <Select
                     value={reportForm.date_range}
-                    onChange={(e) => setReportForm({ ...reportForm, date_range: e.target.value })}
+                    onChange={(e: any) => setReportForm({ ...reportForm, date_range: e.target.value })}
                   >
                     <MenuItem value="last_7_days">Last 7 Days</MenuItem>
                     <MenuItem value="last_30_days">Last 30 Days</MenuItem>

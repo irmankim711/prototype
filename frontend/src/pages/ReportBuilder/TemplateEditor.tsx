@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -217,7 +218,7 @@ export default function TemplateEditor({
 
   // Handle adding suggestion to preview
   const handleAddToPreview = (content: string) => {
-    setEditableContent((prev) => prev + "\n\n" + content);
+    setEditableContent((prev: any) => prev + "\n\n" + content);
   };
 
   if (isLoadingContent) {
@@ -323,7 +324,7 @@ Welcome to your report template. Start editing...`);
             }}
           >
             <List sx={{ p: 0 }}>
-              {aiSuggestions.map((suggestion) => (
+              {aiSuggestions.map((suggestion: any) => (
                 <ListItem
                   key={suggestion.id}
                   sx={{
@@ -381,7 +382,7 @@ Welcome to your report template. Start editing...`);
                     <Button
                       size="small"
                       startIcon={<AddIcon />}
-                      onClick={(e) => {
+                      onClick={(e: any) => {
                         e.stopPropagation();
                         handleAddToPreview(suggestion.content);
                       }}
@@ -476,7 +477,7 @@ Welcome to your report template. Start editing...`);
                   multiline
                   rows={20}
                   value={editableContent}
-                  onChange={(e) => setEditableContent(e.target.value)}
+                  onChange={(e: any) => setEditableContent(e.target.value)}
                   variant="outlined"
                   placeholder="Start typing or add AI suggestions..."
                   sx={{

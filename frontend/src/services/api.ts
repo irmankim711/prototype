@@ -539,7 +539,7 @@ export const downloadReport = async (
     // Fetch the file
     const response = await fetch(fullUrl);
     if (!response.ok) {
-      throw new Error(`Download failed: ${response.statusText}`);
+      throw Error(`Download failed: ${response.statusText}`);
     }
 
     // Get the blob
@@ -587,8 +587,8 @@ export const analyzeData = async (
 
 // Error handler
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response: any) => response,
+  (error: any) => {
     if (error.response?.status === 401) {
       // Handle unauthorized access
       localStorage.removeItem("token");
@@ -599,8 +599,8 @@ api.interceptors.response.use(
 );
 
 authApi.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response: any) => response,
+  (error: any) => {
     if (error.response?.status === 401) {
       // Handle unauthorized access
       localStorage.removeItem("token");

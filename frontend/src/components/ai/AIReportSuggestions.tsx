@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -26,7 +27,7 @@ import {
   TrendingUp,
   Analytics
 } from '@mui/icons-material';
-import { AIService } from '../../services/aiService';
+import { AIService } from "../../services/aiService";
 import type { AIReportSuggestion, AIReportSuggestionsResult } from '../../services/aiService';
 
 interface AIReportSuggestionsProps {

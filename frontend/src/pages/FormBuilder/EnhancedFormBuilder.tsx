@@ -1,3 +1,4 @@
+import React from "react";
 import { useState, useCallback } from "react";
 import {
   Box,
@@ -88,7 +89,7 @@ const EnhancedFormBuilder = () => {
       placeholder: "",
     };
 
-    setFormData((prev) => ({
+    setFormData((prev: any) => ({
       ...prev,
       schema: [...prev.schema, newField],
     }));
@@ -96,7 +97,7 @@ const EnhancedFormBuilder = () => {
 
   const updateField = useCallback(
     (index: number, updates: Partial<FormField>) => {
-      setFormData((prev) => ({
+      setFormData((prev: any) => ({
         ...prev,
         schema: prev.schema.map((field, i) =>
           i === index ? { ...field, ...updates } : field
@@ -107,14 +108,14 @@ const EnhancedFormBuilder = () => {
   );
 
   const deleteField = useCallback((index: number) => {
-    setFormData((prev) => ({
+    setFormData((prev: any) => ({
       ...prev,
       schema: prev.schema.filter((_, i) => i !== index),
     }));
   }, []);
 
   const moveField = useCallback((fromIndex: number, toIndex: number) => {
-    setFormData((prev) => {
+    setFormData((prev: any) => {
       const newSchema = [...prev.schema];
       const [removed] = newSchema.splice(fromIndex, 1);
       newSchema.splice(toIndex, 0, removed);
@@ -195,9 +196,9 @@ const EnhancedFormBuilder = () => {
               <Select
                 value={field.type}
                 label="Field Type"
-                onChange={(e) => updateField(index, { type: e.target.value })}
+                onChange={(e: any) => updateField(index, { type: e.target.value })}
               >
-                {FIELD_TYPES.map((type) => (
+                {FIELD_TYPES.map((type: any) => (
                   <MenuItem key={type.value} value={type.value}>
                     {type.label}
                   </MenuItem>
@@ -211,7 +212,7 @@ const EnhancedFormBuilder = () => {
               fullWidth
               label="Field Label"
               value={field.label}
-              onChange={(e) => updateField(index, { label: e.target.value })}
+              onChange={(e: any) => updateField(index, { label: e.target.value })}
             />
           </Grid>
 
@@ -220,7 +221,7 @@ const EnhancedFormBuilder = () => {
               fullWidth
               label="Placeholder"
               value={field.placeholder || ""}
-              onChange={(e) =>
+              onChange={(e: any) =>
                 updateField(index, { placeholder: e.target.value })
               }
             />
@@ -231,7 +232,7 @@ const EnhancedFormBuilder = () => {
               control={
                 <Checkbox
                   checked={field.required || false}
-                  onChange={(e) =>
+                  onChange={(e: any) =>
                     updateField(index, { required: e.target.checked })
                   }
                 />
@@ -248,11 +249,11 @@ const EnhancedFormBuilder = () => {
                 multiline
                 rows={3}
                 value={(field.options || []).join("\n")}
-                onChange={(e) =>
+                onChange={(e: any) =>
                   updateField(index, {
                     options: e.target.value
                       .split("\n")
-                      .filter((option) => option.trim()),
+                      .filter((option: any) => option.trim()),
                   })
                 }
                 placeholder="Option 1&#10;Option 2&#10;Option 3"
@@ -295,8 +296,8 @@ const EnhancedFormBuilder = () => {
               fullWidth
               label="Form Title"
               value={formData.title}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, title: e.target.value }))
+              onChange={(e: any) =>
+                setFormData((prev: any) => ({ ...prev, title: e.target.value }))
               }
               sx={{ mb: 2 }}
               required
@@ -306,8 +307,8 @@ const EnhancedFormBuilder = () => {
               fullWidth
               label="Description"
               value={formData.description}
-              onChange={(e) =>
-                setFormData((prev) => ({
+              onChange={(e: any) =>
+                setFormData((prev: any) => ({
                   ...prev,
                   description: e.target.value,
                 }))
@@ -321,8 +322,8 @@ const EnhancedFormBuilder = () => {
               fullWidth
               label="External URL (optional)"
               value={formData.external_url}
-              onChange={(e) =>
-                setFormData((prev) => ({
+              onChange={(e: any) =>
+                setFormData((prev: any) => ({
                   ...prev,
                   external_url: e.target.value,
                 }))
@@ -336,8 +337,8 @@ const EnhancedFormBuilder = () => {
                 control={
                   <Switch
                     checked={formData.is_public}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
+                    onChange={(e: any) =>
+                      setFormData((prev: any) => ({
                         ...prev,
                         is_public: e.target.checked,
                       }))
@@ -357,8 +358,8 @@ const EnhancedFormBuilder = () => {
                 control={
                   <Switch
                     checked={formData.is_active}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
+                    onChange={(e: any) =>
+                      setFormData((prev: any) => ({
                         ...prev,
                         is_active: e.target.checked,
                       }))
@@ -416,7 +417,7 @@ const EnhancedFormBuilder = () => {
               </Typography>
               <Typography variant="body2">
                 Required Fields:{" "}
-                {formData.schema.filter((f) => f.required).length}
+                {formData.schema.filter((f: any) => f.required).length}
               </Typography>
               <Typography variant="body2">
                 Status: {formData.is_active ? "Active" : "Inactive"}

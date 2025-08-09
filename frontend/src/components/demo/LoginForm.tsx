@@ -1,3 +1,4 @@
+import React from "react";
 import { useState } from "react";
 import {
   Paper,
@@ -41,7 +42,7 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({
+    setFormData((prev: any) => ({
       ...prev,
       [e.target.name]: e.target.value,
     }));

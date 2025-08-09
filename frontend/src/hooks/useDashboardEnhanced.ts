@@ -30,7 +30,7 @@ export const useDashboardEnhanced = ({
   const processItems = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (items: any[]) => {
-      const filtered = items.filter((item) => {
+      const filtered = items.filter((item: any) => {
         const matchesSearch =
           item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           item.description?.toLowerCase().includes(searchQuery.toLowerCase());

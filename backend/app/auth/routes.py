@@ -1,4 +1,4 @@
-from flask import request, jsonify, make_response
+from flask import request, jsonify, make_response, current_app
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -22,7 +22,15 @@ def register():
     if User.query.filter_by(email=email).first():
         return jsonify({"msg": "Email already registered"}), 409
 
-    user = User(email=email)
+    # ✅ FIXED: Using proper SQLAlchemy instantiation
+    user = User()  # Create instance first
+    user.email = email
+    user.first_name = payload.get("first_name", "")
+    user.last_name = payload.get("last_name", "")
+    user.username = payload.get("username", "")
+    user.phone = payload.get("phone", "")
+    user.company = payload.get("company", "")
+    user.job_title = payload.get("job_title", "")
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
@@ -78,8 +86,12 @@ def login():
         return resp
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         print(f"Login error: {str(e)}")
-        return jsonify({"msg": "Internal server error"}), 500
+        print(f"Full traceback: {error_details}")
+        current_app.logger.error(f"Login failed: {str(e)} - {error_details}")
+        return jsonify({"msg": "Internal server error", "error": str(e)}), 500
 
 @auth_bp.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True)

@@ -19,7 +19,7 @@ const authApi = axios.create({
 });
 
 // Add request interceptor to include auth token
-api.interceptors.request.use((config) => {
+api.interceptors.request.use((config: any) => {
   const token = localStorage.getItem("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -27,7 +27,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-authApi.interceptors.request.use((config) => {
+authApi.interceptors.request.use((config: any) => {
   const token = localStorage.getItem("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -433,8 +433,8 @@ export const analyzeData = async (
 
 // Error handler
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response: any) => response,
+  (error: any) => {
     if (error.response?.status === 401) {
       // Handle unauthorized access
       localStorage.removeItem("token");
@@ -445,8 +445,8 @@ api.interceptors.response.use(
 );
 
 authApi.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response: any) => response,
+  (error: any) => {
     if (error.response?.status === 401) {
       // Handle unauthorized access
       localStorage.removeItem("token");

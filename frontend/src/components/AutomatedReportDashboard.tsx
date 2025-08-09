@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Card,
@@ -89,18 +90,18 @@ const AutomatedReportDashboard: React.FC = () => {
 
     if (searchTerm) {
       filtered = filtered.filter(
-        (report) =>
+        (report: any) =>
           report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
           report.description.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     if (filterStatus !== "all") {
-      filtered = filtered.filter((report) => report.status === filterStatus);
+      filtered = filtered.filter((report: any) => report.status === filterStatus);
     }
 
     if (filterType !== "all") {
-      filtered = filtered.filter((report) => report.type === filterType);
+      filtered = filtered.filter((report: any) => report.type === filterType);
     }
 
     setFilteredReports(filtered);
@@ -163,7 +164,7 @@ const AutomatedReportDashboard: React.FC = () => {
         });
 
         if (response.ok) {
-          setReports((prev) => prev.filter((r) => r.id !== reportId));
+          setReports((prev: any) => prev.filter((r: any) => r.id !== reportId));
         }
       } catch (error) {
         console.error("Error deleting report:", error);
@@ -306,7 +307,7 @@ const AutomatedReportDashboard: React.FC = () => {
               fullWidth
               placeholder="Search reports..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e: any) => setSearchTerm(e.target.value)}
               InputProps={{
                 startAdornment: (
                   <Search sx={{ mr: 1, color: "text.secondary" }} />
@@ -319,7 +320,7 @@ const AutomatedReportDashboard: React.FC = () => {
               <InputLabel>Status</InputLabel>
               <Select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+                onChange={(e: any) => setFilterStatus(e.target.value)}
                 label="Status"
               >
                 <MenuItem value="all">All Status</MenuItem>
@@ -335,7 +336,7 @@ const AutomatedReportDashboard: React.FC = () => {
               <InputLabel>Type</InputLabel>
               <Select
                 value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
+                onChange={(e: any) => setFilterType(e.target.value)}
                 label="Type"
               >
                 <MenuItem value="all">All Types</MenuItem>
@@ -370,7 +371,7 @@ const AutomatedReportDashboard: React.FC = () => {
         </Alert>
       ) : (
         <Grid container spacing={3}>
-          {filteredReports.map((report) => (
+          {filteredReports.map((report: any) => (
             <Grid item xs={12} md={6} lg={4} key={report.id}>
               <Card
                 sx={{
@@ -400,7 +401,7 @@ const AutomatedReportDashboard: React.FC = () => {
                     </Box>
                     <IconButton
                       size="small"
-                      onClick={(e) => handleMenuClick(e, report.id)}
+                      onClick={(e: any) => handleMenuClick(e, report.id)}
                     >
                       <MoreVert />
                     </IconButton>
@@ -627,7 +628,7 @@ const AutomatedReportDashboard: React.FC = () => {
         }}
       >
         <Badge
-          badgeContent={reports.filter((r) => !r.generated_by_ai).length}
+          badgeContent={reports.filter((r: any) => !r.generated_by_ai).length}
           color="error"
         >
           <Analytics />

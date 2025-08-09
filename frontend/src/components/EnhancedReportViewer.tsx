@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Card,
@@ -134,7 +135,7 @@ const EnhancedReportViewer: React.FC<ReportViewerProps> = ({
       });
 
       if (response.ok) {
-        setReport((prev) =>
+        setReport((prev: any) =>
           prev
             ? {
                 ...prev,
@@ -178,7 +179,7 @@ const EnhancedReportViewer: React.FC<ReportViewerProps> = ({
 
   const applyAISuggestion = (suggestion: AIReportSuggestion) => {
     if (suggestion.type === "content") {
-      setEditedContent((prev) => prev + "\n\n" + suggestion.suggestion);
+      setEditedContent((prev: any) => prev + "\n\n" + suggestion.suggestion);
     }
     // Add more logic for different suggestion types
   };
@@ -260,7 +261,7 @@ const EnhancedReportViewer: React.FC<ReportViewerProps> = ({
             {isEditing ? (
               <TextField
                 value={editedTitle}
-                onChange={(e) => setEditedTitle(e.target.value)}
+                onChange={(e: any) => setEditedTitle(e.target.value)}
                 variant="outlined"
                 size="small"
                 fullWidth
@@ -353,7 +354,7 @@ const EnhancedReportViewer: React.FC<ReportViewerProps> = ({
               <TextField
                 label="Description"
                 value={editedDescription}
-                onChange={(e) => setEditedDescription(e.target.value)}
+                onChange={(e: any) => setEditedDescription(e.target.value)}
                 multiline
                 rows={2}
                 fullWidth
@@ -362,7 +363,7 @@ const EnhancedReportViewer: React.FC<ReportViewerProps> = ({
               <TextField
                 label="Content (Markdown supported)"
                 value={editedContent}
-                onChange={(e) => setEditedContent(e.target.value)}
+                onChange={(e: any) => setEditedContent(e.target.value)}
                 multiline
                 rows={20}
                 fullWidth
@@ -526,7 +527,7 @@ const EnhancedReportViewer: React.FC<ReportViewerProps> = ({
                     icon: <TableChart />,
                   },
                   { format: "html", label: "HTML Page", icon: <Visibility /> },
-                ].map((item) => (
+                ].map((item: any) => (
                   <ListItem key={item.format}>
                     <ListItemIcon>{item.icon}</ListItemIcon>
                     <ListItemText primary={item.label} />

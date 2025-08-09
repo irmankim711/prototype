@@ -1,6 +1,6 @@
 declare module 'react-grid-layout' {
   import * as React from 'react';
-  import { CSSProperties } from 'react';
+import { CSSProperties } from "react";
 
   export interface Layout {
     i: string;

@@ -1,4 +1,5 @@
-import React, { useState, useContext } from "react";
+import React from "react";
+import { useState, useContext } from "react";
 import {
   Drawer,
   List,
@@ -88,7 +89,7 @@ export default function Sidebar() {
   };
 
   const handleReportsClick = () => {
-    setOpenReports((prev) => !prev);
+    setOpenReports((prev: any) => !prev);
   };
 
   const handleLogout = async () => {
@@ -142,10 +143,10 @@ export default function Sidebar() {
         </Box>
         <Divider sx={{ borderColor: "rgba(255,255,255,0.10)", mb: 1 }} />
         <List>
-          {navItems.map((item) => {
+          {navItems.map((item: any) => {
             if (item.children) {
               const isActive = item.children.some(
-                (child) => location.pathname === child.path
+                (child: any) => location.pathname === child.path
               );
               return (
                 <React.Fragment key={item.label}>
@@ -169,7 +170,7 @@ export default function Sidebar() {
                   </ListItemButton>
                   <Collapse in={openReports} timeout="auto" unmountOnExit>
                     <List component="div" disablePadding>
-                      {item.children.map((child) => {
+                      {item.children.map((child: any) => {
                         const childActive = location.pathname === child.path;
                         return (
                           <ListItemButton

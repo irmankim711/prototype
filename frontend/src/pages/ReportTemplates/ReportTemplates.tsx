@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import React from "react";
+import { useState } from "react";
 import {
   Box,
   Typography,
@@ -17,35 +18,35 @@ import {
   CardContent,
   CardActions,
   Alert,
-} from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchReportTemplates, updateReportTemplate } from '../../services/api';
-import type { ReportTemplate } from '../../services/api';
+} from "@mui/material";
+import { Edit as EditIcon, Delete as DeleteIcon } from "@mui/icons-material";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchReportTemplates, updateReportTemplate } from "../../services/api";
+import type { ReportTemplate } from "../../services/api";
 
 // Mock data for fallback
 const mockTemplates = [
   {
-    id: '1',
-    name: 'Financial Report',
-    description: 'Standard financial report template',
+    id: "1",
+    name: "Financial Report",
+    description: "Standard financial report template",
     schema: { fields: [] as any[] },
-    isActive: true
+    isActive: true,
   },
   {
-    id: '2',
-    name: 'Performance Report',
-    description: 'Performance analysis template',
+    id: "2",
+    name: "Performance Report",
+    description: "Performance analysis template",
     schema: { fields: [] as any[] },
-    isActive: true
+    isActive: true,
   },
   {
-    id: '3',
-    name: 'Sales Report',
-    description: 'Sales and revenue analysis',
+    id: "3",
+    name: "Sales Report",
+    description: "Sales and revenue analysis",
     schema: { fields: [] as any[] },
-    isActive: false
-  }
+    isActive: false,
+  },
 ];
 
 export default function ReportTemplates() {
@@ -53,13 +54,17 @@ export default function ReportTemplates() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: templates, isLoading, error } = useQuery({
-    queryKey: ['reportTemplates'],
+  const {
+    data: templates,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["reportTemplates"],
     queryFn: fetchReportTemplates,
     retry: 1,
-    onError: (error) => {
-      console.log('API Error, using mock data:', error);
-    }
+    onError: (error: any) => {
+      console.log("API Error, using mock data:", error);
+    },
   });
 
   // Use mock data if API fails
@@ -69,15 +74,15 @@ export default function ReportTemplates() {
     mutationFn: ({ id, data }: { id: string; data: Partial<ReportTemplate> }) =>
       updateReportTemplate(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reportTemplates'] });
+      queryClient.invalidateQueries({ queryKey: ["reportTemplates"] });
       handleCloseDialog();
     },
-    onError: (error) => {
-      console.log('Update template error:', error);
+    onError: (error: any) => {
+      console.log("Update template error:", error);
       // Show success message even if API fails (for demo)
-      alert('Template updated successfully! (Demo mode)');
+      alert("Template updated successfully! (Demo mode)");
       handleCloseDialog();
-    }
+    },
   });
 
   const handleOpenDialog = (template: ReportTemplate) => {
@@ -96,9 +101,9 @@ export default function ReportTemplates() {
 
     const formData = new FormData(event.target as HTMLFormElement);
     const data = {
-      name: formData.get('name') as string,
-      description: formData.get('description') as string,
-      isActive: formData.get('isActive') === 'true',
+      name: formData.get("name") as string,
+      description: formData.get("description") as string,
+      isActive: formData.get("isActive") === "true",
     };
 
     updateTemplateMutation.mutate({
@@ -109,7 +114,12 @@ export default function ReportTemplates() {
 
   if (isLoading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="400px"
+      >
         <CircularProgress />
       </Box>
     );
@@ -122,8 +132,13 @@ export default function ReportTemplates() {
           Using demo templates (API connection failed)
         </Alert>
       ) : null}
-      
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={4}
+      >
         <Typography variant="h4">Report Templates</Typography>
         <Button variant="contained" color="primary">
           Create Template
@@ -131,7 +146,7 @@ export default function ReportTemplates() {
       </Box>
 
       <Grid container spacing={3}>
-        {displayTemplates?.map((template) => (
+        {displayTemplates?.map((template: any) => (
           <Grid item xs={12} sm={6} md={4} key={template.id}>
             <Card>
               <CardContent>
@@ -142,7 +157,10 @@ export default function ReportTemplates() {
                   {template.description}
                 </Typography>
                 <Typography variant="body2" color="textSecondary">
-                  Fields: {Array.isArray(template.schema?.fields) ? template.schema.fields.length : 0}
+                  Fields:{" "}
+                  {Array.isArray(template.schema?.fields)
+                    ? template.schema.fields.length
+                    : 0}
                 </Typography>
                 <FormControlLabel
                   control={
@@ -152,7 +170,7 @@ export default function ReportTemplates() {
                       disabled
                     />
                   }
-                  label={template.isActive ? 'Active' : 'Inactive'}
+                  label={template.isActive ? "Active" : "Inactive"}
                 />
               </CardContent>
               <CardActions>
@@ -171,7 +189,12 @@ export default function ReportTemplates() {
         ))}
       </Grid>
 
-      <Dialog open={isDialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog
+        open={isDialogOpen}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+      >
         <form onSubmit={handleSaveTemplate}>
           <DialogTitle>Edit Template</DialogTitle>
           <DialogContent>
@@ -214,7 +237,7 @@ export default function ReportTemplates() {
               {updateTemplateMutation.isLoading ? (
                 <CircularProgress size={24} />
               ) : (
-                'Save Changes'
+                "Save Changes"
               )}
             </Button>
           </DialogActions>

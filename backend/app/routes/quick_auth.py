@@ -38,7 +38,7 @@ def verify_google_token(token):
             token_info = response.json()
             
             # Verify the token is for our app
-            client_id = os.getenv('client_id')
+            client_id = os.getenv('GOOGLE_CLIENT_ID')
             if token_info.get('aud') == client_id:
                 return {
                     'valid': True,
@@ -149,25 +149,20 @@ def request_otp():
         # Send OTP via email or SMS
         try:
             if contact_method == 'phone':
-                # BYPASS MODE: Skip Twilio in debug mode
-                if current_app.debug:
-                    current_app.logger.info(f"DEBUG MODE: Bypassing Twilio for {phone}, using OTP: {otp_code}")
-                    message = f'DEBUG MODE: Verification code is {otp_code}'
-                else:
-                    # Send SMS using Twilio Verify
-                    if twilio_service.is_verify_configured():
-                        verify_result = twilio_service.send_verification_code(phone)
-                        if verify_result['success']:
-                            current_app.logger.info(f"Verification code sent successfully to {phone}")
-                            message = 'Verification code sent via SMS'
-                            # For Twilio Verify, use a shorter marker that fits in 6 chars
-                            token_record.otp_code = 'TWILIO'  # Shorter marker
-                            token_record.phone = phone  # Ensure phone is set
-                            db.session.commit()  # Save the updated record
-                        else:
-                            current_app.logger.error(f"Verification sending failed: {verify_result['error']}")
-                            return jsonify({'error': f'Failed to send verification code: {verify_result["error"]}'}), 500
+                # Send SMS using Twilio Verify
+                if twilio_service.is_verify_configured():
+                    verify_result = twilio_service.send_verification_code(phone)
+                    if verify_result['success']:
+                        current_app.logger.info(f"Verification code sent successfully to {phone}")
+                        message = 'Verification code sent via SMS'
+                        # For Twilio Verify, use a shorter marker that fits in 6 chars
+                        token_record.otp_code = 'TWILIO'  # Shorter marker
+                        token_record.phone = phone  # Ensure phone is set
+                        db.session.commit()  # Save the updated record
                     else:
+                        current_app.logger.error(f"Verification sending failed: {verify_result['error']}")
+                        return jsonify({'error': f'Failed to send verification code: {verify_result["error"]}'}), 500
+                else:
                         current_app.logger.error("Twilio Verify not configured properly")
                         return jsonify({'error': 'SMS verification service not configured'}), 500
             else:
@@ -178,8 +173,7 @@ def request_otp():
                 'message': message,
                 'token_id': token_record.id,
                 'contact_method': contact_method,
-                'expires_in': 600,  # 10 minutes
-                'debug_otp': otp_code if current_app.debug else None  # Show OTP in debug mode for testing
+                'expires_in': 600  # 10 minutes
             }), 200
             
         except Exception as e:
@@ -226,13 +220,6 @@ def verify_otp():
         if not token_record:
             return jsonify({'error': 'Invalid token'}), 400
         
-        # BYPASS MODE: Accept any OTP in debug mode
-        if current_app.debug:
-            current_app.logger.info(f"DEBUG MODE: Bypassing OTP verification for token {token_id}, any code accepted")
-            # Mark OTP as verified
-            token_record.otp_verified = True
-            token_record.last_used = datetime.utcnow()
-            db.session.commit()
         # For phone-based verification using Twilio Verify
         elif token_record.phone and token_record.otp_code == 'TWILIO':
             # Use Twilio Verify to check the code
@@ -481,8 +468,8 @@ def bypass_login():
     """Development bypass login - creates a temporary user session"""
     try:
         # Only allow in development mode
-        if not current_app.config.get('DEBUG', False):
-            return jsonify({'error': 'Bypass login only available in debug mode'}), 403
+        if not current_app.config.get('TESTING', False):
+            return jsonify({'error': 'Bypass login not available'}), 403
         
         # Create a JWT token for bypass user
         jwt_token = create_access_token(

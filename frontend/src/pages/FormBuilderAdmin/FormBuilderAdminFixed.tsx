@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { formBuilderAPI, type Form } from "../../services/formBuilder";
+import { formBuilderAPI } from "../../services/formBuilder";
 import {
   Box,
   Typography,
@@ -239,7 +240,7 @@ export default function FormBuilderAdmin() {
 
   const handleDeleteExternalForm = (formId: string) => {
     if (window.confirm("Are you sure you want to remove this external form?")) {
-      const updatedForms = externalForms.filter((form) => form.id !== formId);
+      const updatedForms = externalForms.filter((form: any) => form.id !== formId);
       setExternalForms(updatedForms);
       localStorage.setItem("externalForms", JSON.stringify(updatedForms));
       setSnackbar({
@@ -385,7 +386,7 @@ export default function FormBuilderAdmin() {
                       </Typography>
                       <IconButton
                         size="small"
-                        onClick={(e) => handleMenuOpen(e, form)}
+                        onClick={(e: any) => handleMenuOpen(e, form)}
                       >
                         <MoreVert />
                       </IconButton>
@@ -503,7 +504,7 @@ export default function FormBuilderAdmin() {
           </Paper>
         ) : (
           <Grid container spacing={3}>
-            {externalForms.map((form) => (
+            {externalForms.map((form: any) => (
               <Grid item xs={12} md={6} lg={4} key={form.id}>
                 <Card>
                   <CardContent>
@@ -701,7 +702,7 @@ export default function FormBuilderAdmin() {
             fullWidth
             label="Form Title *"
             value={newExternalForm.title}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setNewExternalForm({ ...newExternalForm, title: e.target.value })
             }
             margin="normal"
@@ -710,7 +711,7 @@ export default function FormBuilderAdmin() {
             fullWidth
             label="Form URL *"
             value={newExternalForm.url}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setNewExternalForm({ ...newExternalForm, url: e.target.value })
             }
             margin="normal"
@@ -720,7 +721,7 @@ export default function FormBuilderAdmin() {
             fullWidth
             label="Description"
             value={newExternalForm.description}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setNewExternalForm({
                 ...newExternalForm,
                 description: e.target.value,

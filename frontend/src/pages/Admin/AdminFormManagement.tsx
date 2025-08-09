@@ -1,3 +1,4 @@
+import React from "react";
 import { useState, useEffect, useCallback } from "react";
 import {
   Box,
@@ -491,7 +492,7 @@ const AdminFormManagement = () => {
             <TextField
               placeholder="Search forms..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e: any) => setSearchTerm(e.target.value)}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -506,7 +507,7 @@ const AdminFormManagement = () => {
               select
               label="Public Status"
               value={filterPublic}
-              onChange={(e) => setFilterPublic(e.target.value)}
+              onChange={(e: any) => setFilterPublic(e.target.value)}
               sx={{ minWidth: 120 }}
             >
               <MenuItem value="all">All</MenuItem>
@@ -518,7 +519,7 @@ const AdminFormManagement = () => {
               select
               label="Active Status"
               value={filterActive}
-              onChange={(e) => setFilterActive(e.target.value)}
+              onChange={(e: any) => setFilterActive(e.target.value)}
               sx={{ minWidth: 120 }}
             >
               <MenuItem value="all">All</MenuItem>
@@ -590,7 +591,7 @@ const AdminFormManagement = () => {
                   </TableCell>
                 </TableRow>
               ) : (
-                forms.map((form) => (
+                forms.map((form: any) => (
                   <TableRow key={form.id} hover>
                     <TableCell>
                       <Box>
@@ -714,7 +715,7 @@ const AdminFormManagement = () => {
             fullWidth
             label="Form Title"
             value={formData.title}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setFormData({ ...formData, title: e.target.value })
             }
             margin="normal"
@@ -724,7 +725,7 @@ const AdminFormManagement = () => {
             fullWidth
             label="Description"
             value={formData.description}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setFormData({ ...formData, description: e.target.value })
             }
             margin="normal"
@@ -735,7 +736,7 @@ const AdminFormManagement = () => {
             fullWidth
             label="External URL (optional)"
             value={formData.external_url}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setFormData({ ...formData, external_url: e.target.value })
             }
             margin="normal"
@@ -746,7 +747,7 @@ const AdminFormManagement = () => {
               control={
                 <Checkbox
                   checked={formData.is_public}
-                  onChange={(e) =>
+                  onChange={(e: any) =>
                     setFormData({ ...formData, is_public: e.target.checked })
                   }
                 />
@@ -759,7 +760,7 @@ const AdminFormManagement = () => {
               control={
                 <Checkbox
                   checked={formData.is_active}
-                  onChange={(e) =>
+                  onChange={(e: any) =>
                     setFormData({ ...formData, is_active: e.target.checked })
                   }
                 />
@@ -793,7 +794,7 @@ const AdminFormManagement = () => {
             fullWidth
             label="Form Title"
             value={formData.title}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setFormData({ ...formData, title: e.target.value })
             }
             margin="normal"
@@ -803,7 +804,7 @@ const AdminFormManagement = () => {
             fullWidth
             label="Description"
             value={formData.description}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setFormData({ ...formData, description: e.target.value })
             }
             margin="normal"
@@ -814,7 +815,7 @@ const AdminFormManagement = () => {
             fullWidth
             label="External URL (optional)"
             value={formData.external_url}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setFormData({ ...formData, external_url: e.target.value })
             }
             margin="normal"
@@ -825,7 +826,7 @@ const AdminFormManagement = () => {
               control={
                 <Checkbox
                   checked={formData.is_public}
-                  onChange={(e) =>
+                  onChange={(e: any) =>
                     setFormData({ ...formData, is_public: e.target.checked })
                   }
                 />
@@ -838,7 +839,7 @@ const AdminFormManagement = () => {
               control={
                 <Checkbox
                   checked={formData.is_active}
-                  onChange={(e) =>
+                  onChange={(e: any) =>
                     setFormData({ ...formData, is_active: e.target.checked })
                   }
                 />

@@ -23,6 +23,10 @@ python-jose>=3.3.0
 pyjwt>=2.7.0
 cryptography>=41.0.0
 
+# Validation and Serialization
+marshmallow>=3.19.0
+bleach>=6.0.0
+
 # Email and Communication
 sendgrid>=6.10.0
 twilio>=8.0.0

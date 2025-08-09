@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Box,
@@ -139,7 +140,7 @@ export default function FormBuilder({
   // Mutations
   const createMutation = useMutation({
     mutationFn: formBuilderAPI.createForm,
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       setSnackbar({
         open: true,
         message: "Form created successfully!",
@@ -159,7 +160,7 @@ export default function FormBuilder({
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       formBuilderAPI.updateForm(id, data),
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       setSnackbar({
         open: true,
         message: "Form updated successfully!",
@@ -196,7 +197,7 @@ export default function FormBuilder({
       field.order = index;
     });
 
-    setFormData((prev) => ({
+    setFormData((prev: any) => ({
       ...prev,
       schema: { ...prev.schema!, fields },
     }));
@@ -218,7 +219,7 @@ export default function FormBuilder({
           : undefined,
     };
 
-    setFormData((prev) => ({
+    setFormData((prev: any) => ({
       ...prev,
       schema: {
         ...prev.schema!,
@@ -232,12 +233,12 @@ export default function FormBuilder({
 
   // Update field
   const handleUpdateField = (fieldId: string, updates: Partial<FormField>) => {
-    setFormData((prev) => ({
+    setFormData((prev: any) => ({
       ...prev,
       schema: {
         ...prev.schema!,
         fields:
-          prev.schema?.fields.map((field) =>
+          prev.schema?.fields.map((field: any) =>
             field.id === fieldId ? { ...field, ...updates } : field
           ) || [],
       },
@@ -246,12 +247,12 @@ export default function FormBuilder({
 
   // Delete field
   const handleDeleteField = (fieldId: string) => {
-    setFormData((prev) => ({
+    setFormData((prev: any) => ({
       ...prev,
       schema: {
         ...prev.schema!,
         fields:
-          prev.schema?.fields.filter((field) => field.id !== fieldId) || [],
+          prev.schema?.fields.filter((field: any) => field.id !== fieldId) || [],
       },
     }));
   };
@@ -314,7 +315,7 @@ export default function FormBuilder({
                 <TextField
                   label="Field Label"
                   value={selectedField.label}
-                  onChange={(e) =>
+                  onChange={(e: any) =>
                     handleUpdateField(selectedField.id, {
                       label: e.target.value,
                     })
@@ -328,7 +329,7 @@ export default function FormBuilder({
                 <TextField
                   label="Placeholder"
                   value={selectedField.placeholder || ""}
-                  onChange={(e) =>
+                  onChange={(e: any) =>
                     handleUpdateField(selectedField.id, {
                       placeholder: e.target.value,
                     })
@@ -342,7 +343,7 @@ export default function FormBuilder({
                 <TextField
                   label="Description"
                   value={selectedField.description || ""}
-                  onChange={(e) =>
+                  onChange={(e: any) =>
                     handleUpdateField(selectedField.id, {
                       description: e.target.value,
                     })
@@ -359,7 +360,7 @@ export default function FormBuilder({
                   control={
                     <Switch
                       checked={selectedField.required}
-                      onChange={(e) =>
+                      onChange={(e: any) =>
                         handleUpdateField(selectedField.id, {
                           required: e.target.checked,
                         })
@@ -380,7 +381,7 @@ export default function FormBuilder({
                     <TextField
                       key={index}
                       value={option}
-                      onChange={(e) => {
+                      onChange={(e: any) => {
                         const newOptions = [...(selectedField.options || [])];
                         newOptions[index] = e.target.value;
                         handleUpdateField(selectedField.id, {
@@ -504,7 +505,7 @@ export default function FormBuilder({
           <FormControl fullWidth size="small">
             <InputLabel>{field.label}</InputLabel>
             <Select value={value} label={field.label} disabled>
-              {field.options?.map((option) => (
+              {field.options?.map((option: any) => (
                 <MenuItem key={option} value={option}>
                   {option}
                 </MenuItem>
@@ -518,7 +519,7 @@ export default function FormBuilder({
             <Typography variant="subtitle2" gutterBottom>
               {field.label}
             </Typography>
-            {field.options?.map((option) => (
+            {field.options?.map((option: any) => (
               <FormControlLabel
                 key={option}
                 control={<Radio disabled />}
@@ -533,7 +534,7 @@ export default function FormBuilder({
             <Typography variant="subtitle2" gutterBottom>
               {field.label}
             </Typography>
-            {field.options?.slice(0, 2).map((option) => (
+            {field.options?.slice(0, 2).map((option: any) => (
               <FormControlLabel
                 key={option}
                 control={<Checkbox disabled />}
@@ -549,7 +550,7 @@ export default function FormBuilder({
               {field.label}
             </Typography>
             <Box display="flex" gap={0.5}>
-              {[1, 2, 3, 4, 5].map((star) => (
+              {[1, 2, 3, 4, 5].map((star: any) => (
                 <Star
                   key={star}
                   color={star <= value ? "primary" : "disabled"}
@@ -771,8 +772,8 @@ export default function FormBuilder({
           <TextField
             label="Form Title"
             value={formData.title}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, title: e.target.value }))
+            onChange={(e: any) =>
+              setFormData((prev: any) => ({ ...prev, title: e.target.value }))
             }
             fullWidth
             margin="normal"
@@ -805,8 +806,8 @@ export default function FormBuilder({
           <TextField
             label="Description"
             value={formData.description || ""}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, description: e.target.value }))
+            onChange={(e: any) =>
+              setFormData((prev: any) => ({ ...prev, description: e.target.value }))
             }
             fullWidth
             margin="normal"
@@ -843,8 +844,8 @@ export default function FormBuilder({
               control={
                 <Switch
                   checked={formData.is_active}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
+                  onChange={(e: any) =>
+                    setFormData((prev: any) => ({
                       ...prev,
                       is_active: e.target.checked,
                     }))
@@ -870,8 +871,8 @@ export default function FormBuilder({
               control={
                 <Switch
                   checked={formData.is_public}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
+                  onChange={(e: any) =>
+                    setFormData((prev: any) => ({
                       ...prev,
                       is_public: e.target.checked,
                     }))
@@ -944,7 +945,7 @@ export default function FormBuilder({
 
           <TabPanel value={tabValue} index={0}>
             <List dense>
-              {fieldTypes?.categories?.Basic?.map((type) => (
+              {fieldTypes?.categories?.Basic?.map((type: any) => (
                 <ListItem key={type} disablePadding>
                   <ListItemButton onClick={() => handleAddField(type)}>
                     <ListItemIcon>{getFieldIcon(type)}</ListItemIcon>
@@ -967,7 +968,7 @@ export default function FormBuilder({
                     </AccordionSummary>
                     <AccordionDetails>
                       <List dense>
-                        {types.map((type) => (
+                        {types.map((type: any) => (
                           <ListItem key={type} disablePadding>
                             <ListItemButton
                               onClick={() => handleAddField(type)}
@@ -1067,7 +1068,7 @@ export default function FormBuilder({
                 minHeight: "400px",
               }}
             >
-              {formData.schema?.fields.map((field) => (
+              {formData.schema?.fields.map((field: any) => (
                 <Box key={field.id} sx={{ mb: 2 }}>
                   {renderFieldPreview(field)}
                 </Box>
@@ -1208,7 +1209,7 @@ export default function FormBuilder({
                                 </Box>
                                 <IconButton
                                   size="small"
-                                  onClick={(e) => {
+                                  onClick={(e: any) => {
                                     e.stopPropagation();
                                     handleDeleteField(field.id);
                                   }}

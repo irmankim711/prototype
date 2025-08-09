@@ -768,6 +768,76 @@ def get_google_form_analytics(form_id):
         current_app.logger.error(f"Error generating Google Form analytics: {str(e)}")
         return jsonify({'error': 'Failed to generate Google Form analytics'}), 500
 
+@api.route('/reports/export/pdf/<int:report_id>', methods=['GET'])
+@jwt_required()
+def export_report_pdf(report_id):
+    """Export report as PDF"""
+    try:
+        from flask import send_file
+        from ..services.report_generator import create_pdf_report, format_report_data_for_pdf
+        
+        # Get current user
+        user_id = get_jwt_identity()
+        
+        # Fetch report data
+        report = Report.query.filter_by(
+            id=report_id, 
+            user_id=user_id
+        ).first_or_404()
+        
+        # Prepare data for PDF
+        report_data = {
+            'form_name': getattr(report, 'title', 'Report'),
+            'generated_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'user_name': report.author.full_name if report.author else 'System',
+            'entry_count': 0,
+            'table_data': format_report_data_for_pdf(report),
+            'response_rate': 0.0,
+            'title': report.title or 'Report',
+            'description': report.description or '',
+        }
+        
+        # Add statistics if available
+        if report.data and isinstance(report.data, dict):
+            if 'statistics' in report.data:
+                report_data['statistics'] = report.data['statistics']
+            if 'ai_insights' in report.data:
+                report_data['ai_insights'] = report.data['ai_insights']
+            if 'entry_count' in report.data:
+                report_data['entry_count'] = report.data['entry_count']
+            if 'response_rate' in report.data:
+                report_data['response_rate'] = report.data['response_rate']
+        
+        # Generate PDF
+        pdf_filename = f"report_{report_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        
+        # Use uploads directory
+        upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+        pdf_dir = os.path.join(upload_folder, 'pdfs')
+        os.makedirs(pdf_dir, exist_ok=True)
+        pdf_path = os.path.join(pdf_dir, pdf_filename)
+        
+        # Create PDF
+        pdf_path = create_pdf_report('form_analysis', report_data, pdf_path)
+        
+        # Return file as download
+        return send_file(
+            pdf_path,
+            as_attachment=True,
+            download_name=pdf_filename,
+            mimetype='application/pdf'
+        )
+        
+    except ImportError as e:
+        current_app.logger.error(f"PDF generation library error: {e}")
+        return jsonify({'error': 'PDF generation not available. Please install required libraries.'}), 500
+    except Exception as e:
+        current_app.logger.error(f"PDF export error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to generate PDF'}), 500
+
+
 @api.errorhandler(400)
 def bad_request(error):
     return jsonify({'error': 'Bad request'}), 400

@@ -30,24 +30,24 @@ const processQueue = (error: any, token: string | null = null) => {
 
 // Request interceptor to add auth token
 axiosInstance.interceptors.request.use(
-  (config) => {
+  (config: any) => {
     const token = localStorage.getItem("accessToken");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => {
+  (error: any) => {
     return Promise.reject(error);
   }
 );
 
 // Response interceptor to handle 401 errors and token refresh
 axiosInstance.interceptors.response.use(
-  (response) => {
+  (response: any) => {
     return response;
   },
-  async (error) => {
+  async (error: any) => {
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
@@ -56,11 +56,11 @@ axiosInstance.interceptors.response.use(
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
-          .then((token) => {
+          .then((token: any) => {
             originalRequest.headers.Authorization = `Bearer ${token}`;
             return axiosInstance(originalRequest);
           })
-          .catch((err) => {
+          .catch((err: any) => {
             return Promise.reject(err);
           });
       }
@@ -93,7 +93,7 @@ axiosInstance.interceptors.response.use(
           // Retry the original request
           return axiosInstance(originalRequest);
         } else {
-          throw new Error("No access token received");
+          throw Error("No access token received");
         }
       } catch (refreshError) {
         console.log("Token refresh failed:", refreshError);

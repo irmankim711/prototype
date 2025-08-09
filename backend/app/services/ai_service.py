@@ -1422,6 +1422,100 @@ class AIService:
                 'key_metrics': {}
             }
 
+    def generate_insights(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate AI insights from given context data
+        
+        Args:
+            context: Dictionary containing data context for analysis
+            
+        Returns:
+            Dictionary containing AI-generated insights
+        """
+        try:
+            if not self.openai_api_key:
+                return self._fallback_insights(context)
+            
+            # Prepare data for analysis
+            data_summary = self._prepare_context_for_analysis(context)
+            
+            prompt = f"""
+            Analyze the following data context and provide insights:
+            
+            Context Data:
+            {json.dumps(data_summary, indent=2)}
+            
+            Please provide:
+            1. Key insights from the data
+            2. Notable patterns or trends
+            3. Recommendations for action
+            4. Summary of findings
+            
+            Return response in JSON format with keys: insights, patterns, recommendations, summary
+            """
+            
+            response = self.openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a data analyst providing insights from context data."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=1000,
+                temperature=0.7
+            )
+            
+            content = response.choices[0].message.content
+            
+            if not content:
+                return self._fallback_insights(context)
+            
+            # Parse JSON response
+            try:
+                result = json.loads(content)
+                result['timestamp'] = datetime.utcnow().isoformat()
+                return result
+            except json.JSONDecodeError:
+                return self._parse_insights_text(content)
+                
+        except Exception as e:
+            logger.error(f"Error generating insights: {e}")
+            return self._fallback_insights(context)
+
+    def _prepare_context_for_analysis(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare context data for AI analysis"""
+        return {
+            'data_type': context.get('type', 'unknown'),
+            'record_count': len(context.get('data', [])),
+            'fields': list(context.get('data', [{}])[0].keys()) if context.get('data') else [],
+            'summary': context.get('summary', {}),
+            'metadata': context.get('metadata', {})
+        }
+
+    def _parse_insights_text(self, text: str) -> Dict[str, Any]:
+        """Parse text response into structured insights"""
+        return {
+            'insights': [text[:300] + '...' if len(text) > 300 else text],
+            'patterns': ['Analysis completed from text response'],
+            'recommendations': ['Review the analysis for actionable items'],
+            'summary': 'AI analysis generated',
+            'timestamp': datetime.utcnow().isoformat()
+        }
+
+    def _fallback_insights(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Fallback insights when AI is unavailable"""
+        data_count = len(context.get('data', []))
+        return {
+            'insights': [
+                f"Analyzed {data_count} records",
+                "Data structure appears consistent",
+                "Ready for further analysis"
+            ],
+            'patterns': ['Basic data patterns identified'],
+            'recommendations': ['Enable AI service for detailed insights'],
+            'summary': f"Basic analysis of {data_count} records completed",
+            'timestamp': datetime.utcnow().isoformat()
+        }
+
     def _fallback_form_analysis(self, data_summary: Dict[str, Any], report_type: str) -> Dict[str, Any]:
         """Fallback analysis when AI service is unavailable"""
         insights = [

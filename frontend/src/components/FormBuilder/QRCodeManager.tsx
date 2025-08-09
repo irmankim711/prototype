@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useState, useEffect } from "react";
 import QRCode from "qrcode";
 import {
   Box,
@@ -348,7 +349,7 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
                 label="Enter URL"
                 placeholder={`${window.location.origin}/forms/${formId}`}
                 value={quickQRUrl}
-                onChange={(e) => setQuickQRUrl(e.target.value)}
+                onChange={(e: any) => setQuickQRUrl(e.target.value)}
                 variant="outlined"
                 helperText="Enter any URL to generate a QR code"
               />
@@ -430,7 +431,7 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
                     display: "block",
                     margin: "0 auto",
                   }}
-                  onError={(e) => {
+                  onError={(e: any) => {
                     console.error("QR Code image failed to load:", e);
                     console.log("Image src:", quickQR.qrCodeDataUrl);
                   }}
@@ -503,7 +504,7 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
         </Paper>
       ) : (
         <Grid container spacing={3}>
-          {qrCodes?.qr_codes.map((qr) => (
+          {qrCodes?.qr_codes.map((qr: any) => (
             <Grid item xs={12} md={6} lg={4} key={qr.id}>
               <Card>
                 <CardContent>
@@ -632,7 +633,7 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
                 fullWidth
                 label="External URL *"
                 value={formData.external_url}
-                onChange={(e) =>
+                onChange={(e: any) =>
                   setFormData({ ...formData, external_url: e.target.value })
                 }
                 margin="normal"
@@ -644,7 +645,7 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
                 fullWidth
                 label="Title *"
                 value={formData.title}
-                onChange={(e) =>
+                onChange={(e: any) =>
                   setFormData({ ...formData, title: e.target.value })
                 }
                 margin="normal"
@@ -654,7 +655,7 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
                 fullWidth
                 label="Description"
                 value={formData.description}
-                onChange={(e) =>
+                onChange={(e: any) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
                 margin="normal"
@@ -684,7 +685,7 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
                 <InputLabel>Error Correction</InputLabel>
                 <Select
                   value={formData.error_correction}
-                  onChange={(e) =>
+                  onChange={(e: any) =>
                     setFormData({
                       ...formData,
                       error_correction: e.target.value,
@@ -721,7 +722,7 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
                     label="Background Color"
                     type="color"
                     value={formData.background_color}
-                    onChange={(e) =>
+                    onChange={(e: any) =>
                       setFormData({
                         ...formData,
                         background_color: e.target.value,
@@ -735,7 +736,7 @@ const QRCodeManager: React.FC<QRCodeManagerProps> = ({ formId, formTitle }) => {
                     label="Foreground Color"
                     type="color"
                     value={formData.foreground_color}
-                    onChange={(e) =>
+                    onChange={(e: any) =>
                       setFormData({
                         ...formData,
                         foreground_color: e.target.value,

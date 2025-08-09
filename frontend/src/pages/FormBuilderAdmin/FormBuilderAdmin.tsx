@@ -1,6 +1,7 @@
-import React, { useState, useContext } from "react";
+import React from "react";
+import { useState, useContext } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { formBuilderAPI, type Form } from "../../services/formBuilder";
+import { formBuilderAPI } from "../../services/formBuilder";
 import { AuthContext } from "../../context/AuthContext";
 import {
   Box,
@@ -456,7 +457,7 @@ export default function FormBuilderAdmin() {
 
   const handleDeleteExternalForm = (formId: string) => {
     if (window.confirm("Are you sure you want to remove this external form?")) {
-      const updatedForms = externalForms.filter((form) => form.id !== formId);
+      const updatedForms = externalForms.filter((form: any) => form.id !== formId);
       setExternalForms(updatedForms);
       localStorage.setItem("externalForms", JSON.stringify(updatedForms));
       setSnackbar({
@@ -553,7 +554,7 @@ export default function FormBuilderAdmin() {
               label="Email"
               type="email"
               value={loginEmail}
-              onChange={(e) => setLoginEmail(e.target.value)}
+              onChange={(e: any) => setLoginEmail(e.target.value)}
               margin="normal"
               required
             />
@@ -562,7 +563,7 @@ export default function FormBuilderAdmin() {
               label="Password"
               type="password"
               value={loginPassword}
-              onChange={(e) => setLoginPassword(e.target.value)}
+              onChange={(e: any) => setLoginPassword(e.target.value)}
               margin="normal"
               required
             />
@@ -727,7 +728,7 @@ export default function FormBuilderAdmin() {
                       </Typography>
                       <IconButton
                         size="small"
-                        onClick={(e) => handleMenuOpen(e, form)}
+                        onClick={(e: any) => handleMenuOpen(e, form)}
                       >
                         <MoreVert />
                       </IconButton>
@@ -840,7 +841,7 @@ export default function FormBuilderAdmin() {
           </Paper>
         ) : (
           <Grid container spacing={3}>
-            {externalForms.map((form) => (
+            {externalForms.map((form: any) => (
               <Grid item xs={12} md={6} lg={4} key={form.id}>
                 <Card>
                   <CardContent>
@@ -933,7 +934,7 @@ export default function FormBuilderAdmin() {
                   Forms with QR Codes
                 </Typography>
                 <Typography variant="h4">
-                  {externalForms.filter((form) => form.qrCode).length}
+                  {externalForms.filter((form: any) => form.qrCode).length}
                 </Typography>
               </CardContent>
             </Card>
@@ -945,7 +946,7 @@ export default function FormBuilderAdmin() {
                   Forms with Descriptions
                 </Typography>
                 <Typography variant="h4">
-                  {externalForms.filter((form) => form.description).length}
+                  {externalForms.filter((form: any) => form.description).length}
                 </Typography>
               </CardContent>
             </Card>
@@ -1008,7 +1009,7 @@ export default function FormBuilderAdmin() {
           </Paper>
         ) : (
           <Grid container spacing={3}>
-            {accessCodes.map((accessCode) => (
+            {accessCodes.map((accessCode: any) => (
               <Grid item xs={12} md={6} lg={4} key={accessCode.id}>
                 <Card>
                   <CardContent>
@@ -1186,7 +1187,7 @@ export default function FormBuilderAdmin() {
             fullWidth
             label="Form Title *"
             value={newExternalForm.title}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setNewExternalForm({ ...newExternalForm, title: e.target.value })
             }
             margin="normal"
@@ -1195,7 +1196,7 @@ export default function FormBuilderAdmin() {
             fullWidth
             label="Form URL *"
             value={newExternalForm.url}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setNewExternalForm({ ...newExternalForm, url: e.target.value })
             }
             margin="normal"
@@ -1205,7 +1206,7 @@ export default function FormBuilderAdmin() {
             fullWidth
             label="Description"
             value={newExternalForm.description}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setNewExternalForm({
                 ...newExternalForm,
                 description: e.target.value,
@@ -1250,7 +1251,7 @@ export default function FormBuilderAdmin() {
             fullWidth
             label="Access Code Title"
             value={genericCodeSettings.title}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setGenericCodeSettings({
                 ...genericCodeSettings,
                 title: e.target.value,
@@ -1264,7 +1265,7 @@ export default function FormBuilderAdmin() {
             fullWidth
             label="Description (Optional)"
             value={genericCodeSettings.description}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setGenericCodeSettings({
                 ...genericCodeSettings,
                 description: e.target.value,
@@ -1300,7 +1301,7 @@ export default function FormBuilderAdmin() {
                       const updatedForms = e.target.checked
                         ? [...genericCodeSettings.selected_forms, form.id]
                         : genericCodeSettings.selected_forms.filter(
-                            (id) => id !== form.id
+                            (id: any) => id !== form.id
                           );
                       setGenericCodeSettings({
                         ...genericCodeSettings,
@@ -1333,13 +1334,13 @@ export default function FormBuilderAdmin() {
               p: 1,
             }}
           >
-            {externalForms.map((extForm) => (
+            {externalForms.map((extForm: any) => (
               <FormControlLabel
                 key={extForm.id}
                 control={
                   <Checkbox
                     checked={genericCodeSettings.selected_external_forms.some(
-                      (f) => f.id === extForm.id
+                      (f: any) => f.id === extForm.id
                     )}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                       const updatedExternalForms = e.target.checked
@@ -1348,7 +1349,7 @@ export default function FormBuilderAdmin() {
                             extForm,
                           ]
                         : genericCodeSettings.selected_external_forms.filter(
-                            (f) => f.id !== extForm.id
+                            (f: any) => f.id !== extForm.id
                           );
                       setGenericCodeSettings({
                         ...genericCodeSettings,
@@ -1376,7 +1377,7 @@ export default function FormBuilderAdmin() {
             label="Expires in Hours"
             type="number"
             value={genericCodeSettings.expires_in_hours}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setGenericCodeSettings({
                 ...genericCodeSettings,
                 expires_in_hours: parseInt(e.target.value) || 24,
@@ -1392,7 +1393,7 @@ export default function FormBuilderAdmin() {
             label="Maximum Uses"
             type="number"
             value={genericCodeSettings.max_uses}
-            onChange={(e) =>
+            onChange={(e: any) =>
               setGenericCodeSettings({
                 ...genericCodeSettings,
                 max_uses: parseInt(e.target.value) || 10,

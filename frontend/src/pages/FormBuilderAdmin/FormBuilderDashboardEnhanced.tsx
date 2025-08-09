@@ -1,6 +1,7 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { formBuilderAPI, type Form } from "../../services/formBuilder";
+import { formBuilderAPI } from "../../services/formBuilder";
 import {
   Box,
   Typography,
@@ -571,7 +572,7 @@ export default function FormBuilderDashboardEnhanced() {
           <Button
             size="small"
             onClick={() => {
-              setSnackbar((prev) => ({ ...prev, open: false }));
+              setSnackbar((prev: any) => ({ ...prev, open: false }));
               // Implement undo functionality here
             }}
             sx={{ color: "white" }}
@@ -675,7 +676,7 @@ export default function FormBuilderDashboardEnhanced() {
   };
 
   const handleDeleteExternalForm = (formId: string) => {
-    const updatedForms = externalForms.filter((form) => form.id !== formId);
+    const updatedForms = externalForms.filter((form: any) => form.id !== formId);
     setExternalForms(updatedForms);
     localStorage.setItem("externalForms", JSON.stringify(updatedForms));
     setSnackbar({
@@ -888,7 +889,7 @@ export default function FormBuilderDashboardEnhanced() {
               <TextField
                 fullWidth
                 placeholder="Search forms..."
-                onChange={(e) => debouncedSearch(e.target.value)}
+                onChange={(e: any) => debouncedSearch(e.target.value)}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -1107,7 +1108,7 @@ export default function FormBuilderDashboardEnhanced() {
           </Paper>
         ) : (
           <Grid container spacing={3}>
-            {externalForms.map((form) => (
+            {externalForms.map((form: any) => (
               <Grid item xs={12} md={6} lg={4} key={form.id}>
                 <Card sx={{ borderRadius: 4, height: "100%" }}>
                   <CardContent>
@@ -1557,8 +1558,8 @@ export default function FormBuilderDashboardEnhanced() {
               fullWidth
               label="Form Title"
               value={newExternalForm.title}
-              onChange={(e) =>
-                setNewExternalForm((prev) => ({
+              onChange={(e: any) =>
+                setNewExternalForm((prev: any) => ({
                   ...prev,
                   title: e.target.value,
                 }))
@@ -1569,8 +1570,8 @@ export default function FormBuilderDashboardEnhanced() {
               fullWidth
               label="Form URL"
               value={newExternalForm.url}
-              onChange={(e) =>
-                setNewExternalForm((prev) => ({ ...prev, url: e.target.value }))
+              onChange={(e: any) =>
+                setNewExternalForm((prev: any) => ({ ...prev, url: e.target.value }))
               }
               placeholder="https://forms.google.com/..."
               sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
@@ -1581,8 +1582,8 @@ export default function FormBuilderDashboardEnhanced() {
               multiline
               rows={3}
               value={newExternalForm.description}
-              onChange={(e) =>
-                setNewExternalForm((prev) => ({
+              onChange={(e: any) =>
+                setNewExternalForm((prev: any) => ({
                   ...prev,
                   description: e.target.value,
                 }))
@@ -1655,11 +1656,11 @@ export default function FormBuilderDashboardEnhanced() {
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
-        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        onClose={() => setSnackbar((prev: any) => ({ ...prev, open: false }))}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
         <Alert
-          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          onClose={() => setSnackbar((prev: any) => ({ ...prev, open: false }))}
           severity={snackbar.severity}
           action={snackbar.action}
           sx={{ borderRadius: 2 }}

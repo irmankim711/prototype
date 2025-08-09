@@ -1,3 +1,4 @@
+import React from "react";
 import { useState, useEffect } from "react";
 import {
   Grid,
@@ -218,7 +219,7 @@ export default function Dashboard({ user }: DashboardProps) {
           </Typography>
           {recentReports.length > 0 ? (
             <List>
-              {recentReports.map((report) => (
+              {recentReports.map((report: any) => (
                 <ListItem key={report.id} divider>
                   <ListItemText
                     primary={report.title}

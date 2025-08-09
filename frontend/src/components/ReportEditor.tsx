@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React from "react";
+import { useState } from "react";
 import {
   Box,
   Typography,
@@ -54,7 +55,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
   const updateMutation = useMutation({
     mutationFn: (update: ReportUpdateRequest) =>
       reportService.updateReport(report.id, update),
-    onSuccess: (updatedReport) => {
+    onSuccess: (updatedReport: any) => {
       onSave(updatedReport);
     },
   });
@@ -68,11 +69,11 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
   };
 
   const handleTitleChange = (value: string) => {
-    setEditedReport((prev) => ({ ...prev, title: value }));
+    setEditedReport((prev: any) => ({ ...prev, title: value }));
   };
 
   const handleSummaryChange = (value: string) => {
-    setEditedReport((prev) => ({
+    setEditedReport((prev: any) => ({
       ...prev,
       aiInsights: prev.aiInsights
         ? {
@@ -90,7 +91,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
 
   const handleAddTrend = () => {
     if (newTrend.trim()) {
-      setEditedReport((prev) => ({
+      setEditedReport((prev: any) => ({
         ...prev,
         aiInsights: prev.aiInsights
           ? {
@@ -114,7 +115,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
     const updatedTrends = [...editedReport.aiInsights.trends];
     updatedTrends[index] = value;
 
-    setEditedReport((prev) => ({
+    setEditedReport((prev: any) => ({
       ...prev,
       aiInsights: prev.aiInsights
         ? {
@@ -137,7 +138,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
       (_, i) => i !== index
     );
 
-    setEditedReport((prev) => ({
+    setEditedReport((prev: any) => ({
       ...prev,
       aiInsights: prev.aiInsights
         ? {
@@ -155,7 +156,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
 
   const handleAddRecommendation = () => {
     if (newRecommendation.trim()) {
-      setEditedReport((prev) => ({
+      setEditedReport((prev: any) => ({
         ...prev,
         aiInsights: prev.aiInsights
           ? {
@@ -182,7 +183,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
     const updatedRecommendations = [...editedReport.aiInsights.recommendations];
     updatedRecommendations[index] = value;
 
-    setEditedReport((prev) => ({
+    setEditedReport((prev: any) => ({
       ...prev,
       aiInsights: prev.aiInsights
         ? {
@@ -204,7 +205,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
     const updatedRecommendations =
       editedReport.aiInsights.recommendations.filter((_, i) => i !== index);
 
-    setEditedReport((prev) => ({
+    setEditedReport((prev: any) => ({
       ...prev,
       aiInsights: prev.aiInsights
         ? {
@@ -245,7 +246,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
           <TextField
             fullWidth
             value={editedReport.title}
-            onChange={(e) => handleTitleChange(e.target.value)}
+            onChange={(e: any) => handleTitleChange(e.target.value)}
             placeholder="Enter report title"
             variant="outlined"
           />
@@ -274,7 +275,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
               multiline
               rows={4}
               value={editedReport.aiInsights?.summary || ""}
-              onChange={(e) => handleSummaryChange(e.target.value)}
+              onChange={(e: any) => handleSummaryChange(e.target.value)}
               placeholder="Enter analysis summary"
               variant="outlined"
             />
@@ -301,9 +302,9 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
                       <TextField
                         fullWidth
                         value={trend}
-                        onChange={(e) => handleEditTrend(index, e.target.value)}
+                        onChange={(e: any) => handleEditTrend(index, e.target.value)}
                         onBlur={() => setEditingTrend(null)}
-                        onKeyPress={(e) => {
+                        onKeyPress={(e: any) => {
                           if (e.key === "Enter") {
                             setEditingTrend(null);
                           }
@@ -341,9 +342,9 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
                 fullWidth
                 size="small"
                 value={newTrend}
-                onChange={(e) => setNewTrend(e.target.value)}
+                onChange={(e: any) => setNewTrend(e.target.value)}
                 placeholder="Add new trend"
-                onKeyPress={(e) => {
+                onKeyPress={(e: any) => {
                   if (e.key === "Enter") {
                     handleAddTrend();
                   }
@@ -382,11 +383,11 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
                         <TextField
                           fullWidth
                           value={recommendation}
-                          onChange={(e) =>
+                          onChange={(e: any) =>
                             handleEditRecommendation(index, e.target.value)
                           }
                           onBlur={() => setEditingRecommendation(null)}
-                          onKeyPress={(e) => {
+                          onKeyPress={(e: any) => {
                             if (e.key === "Enter") {
                               setEditingRecommendation(null);
                             }
@@ -425,9 +426,9 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
                 fullWidth
                 size="small"
                 value={newRecommendation}
-                onChange={(e) => setNewRecommendation(e.target.value)}
+                onChange={(e: any) => setNewRecommendation(e.target.value)}
                 placeholder="Add new recommendation"
-                onKeyPress={(e) => {
+                onKeyPress={(e: any) => {
                   if (e.key === "Enter") {
                     handleAddRecommendation();
                   }

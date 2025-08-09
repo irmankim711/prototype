@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import React from "react";
+import { useState } from "react";
 import {
   Box,
   Typography,
@@ -186,7 +187,7 @@ export default function SubmissionPage() {
             </TableRow>
           </StyledTableHead>
           <TableBody>
-            {submissions.map((submission) => (
+            {submissions.map((submission: any) => (
               <StyledTableRow key={submission.id}>
                 <StyledTableCell>{submission.name}</StyledTableCell>
                 <StyledTableCell>{submission.email}</StyledTableCell>

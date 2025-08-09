@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect } from "react";
+import { createContext, useState, useEffect, useContext } from "react";
 import type { ReactNode } from "react";
 import axiosInstance from "../services/axiosInstance";
 import { setTokenGetter } from "../services/formBuilder";
@@ -188,7 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         console.log("Token refreshed successfully");
       } else {
-        throw new Error("No access token received");
+        throw Error("No access token received");
       }
     } catch (error: any) {
       console.log("Silent refresh failed:", error.message);
@@ -219,4 +219,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
+}
+
+// useAuth hook for consuming the context
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }

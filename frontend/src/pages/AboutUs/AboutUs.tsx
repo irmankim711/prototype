@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Container,
@@ -340,7 +341,7 @@ export default function AboutUs() {
             Why Choose StratoSys?
           </Typography>
           <Grid container spacing={4}>
-            {features.map((feature) => (
+            {features.map((feature: any) => (
               <Grid item xs={12} md={6} key={feature.title}>
                 <Slide
                   direction="up"

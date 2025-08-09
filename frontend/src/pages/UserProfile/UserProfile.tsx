@@ -1,3 +1,4 @@
+import React from "react";
 import { useState, useEffect } from "react";
 import {
   Box,
@@ -297,14 +298,14 @@ export default function UserProfile() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    setUserData((prev) => ({
+    setUserData((prev: any) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
   };
 
   const handleSelectChange = (name: string, value: string) => {
-    setUserData((prev) => ({ ...prev, [name]: value }));
+    setUserData((prev: any) => ({ ...prev, [name]: value }));
   };
 
   const handleUploadClick = () => {
@@ -601,7 +602,7 @@ export default function UserProfile() {
                 <Select
                   value={userData.timezone}
                   label="Timezone"
-                  onChange={(e) =>
+                  onChange={(e: any) =>
                     handleSelectChange("timezone", e.target.value)
                   }
                 >
@@ -802,7 +803,7 @@ export default function UserProfile() {
                 <Select
                   value={userData.language}
                   label="Language"
-                  onChange={(e) =>
+                  onChange={(e: any) =>
                     handleSelectChange("language", e.target.value)
                   }
                 >
@@ -820,7 +821,7 @@ export default function UserProfile() {
                 <Select
                   value={userData.theme}
                   label="Theme"
-                  onChange={(e) => handleSelectChange("theme", e.target.value)}
+                  onChange={(e: any) => handleSelectChange("theme", e.target.value)}
                 >
                   <MenuItem value="light">Light</MenuItem>
                   <MenuItem value="dark">Dark</MenuItem>

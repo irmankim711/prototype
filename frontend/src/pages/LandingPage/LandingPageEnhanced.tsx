@@ -697,7 +697,7 @@ export default function LandingPageEnhanced() {
                   label="Email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e: any) => setEmail(e.target.value)}
                   required
                 />
                 <StyledTextField
@@ -705,14 +705,14 @@ export default function LandingPageEnhanced() {
                   label="Password"
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e: any) => setPassword(e.target.value)}
                   required
                 />
                 <FormControlLabel
                   control={
                     <Checkbox
                       checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
+                      onChange={(e: any) => setRememberMe(e.target.checked)}
                       sx={{
                         color: "#6366f1",
                         "&.Mui-checked": { color: "#6366f1" },
@@ -824,7 +824,7 @@ export default function LandingPageEnhanced() {
                     label="Phone Number"
                     type="tel"
                     value={quickAccessPhone}
-                    onChange={(e) => setQuickAccessPhone(e.target.value)}
+                    onChange={(e: any) => setQuickAccessPhone(e.target.value)}
                     required
                     sx={{ mb: 3 }}
                     placeholder="+60 123456 7890"
@@ -873,7 +873,7 @@ export default function LandingPageEnhanced() {
                     fullWidth
                     label="Verification Code"
                     value={quickAccessOtp}
-                    onChange={(e) => setQuickAccessOtp(e.target.value)}
+                    onChange={(e: any) => setQuickAccessOtp(e.target.value)}
                     required
                     sx={{ mb: 3 }}
                     placeholder="Enter 6-digit code"
@@ -1015,7 +1015,7 @@ export default function LandingPageEnhanced() {
                   label="Email"
                   type="email"
                   value={signupEmail}
-                  onChange={(e) => setSignupEmail(e.target.value)}
+                  onChange={(e: any) => setSignupEmail(e.target.value)}
                   required
                 />
                 <StyledTextField
@@ -1023,7 +1023,7 @@ export default function LandingPageEnhanced() {
                   label="Password"
                   type="password"
                   value={signupPassword}
-                  onChange={(e) => setSignupPassword(e.target.value)}
+                  onChange={(e: any) => setSignupPassword(e.target.value)}
                   required
                 />
                 <StyledTextField
@@ -1031,7 +1031,7 @@ export default function LandingPageEnhanced() {
                   label="Confirm Password"
                   type="password"
                   value={signupConfirm}
-                  onChange={(e) => setSignupConfirm(e.target.value)}
+                  onChange={(e: any) => setSignupConfirm(e.target.value)}
                   required
                 />
                 <Button
@@ -1239,7 +1239,7 @@ export default function LandingPageEnhanced() {
                           }}
                         />
                         <Grid container spacing={2} sx={{ mb: 3 }}>
-                          {[1, 2, 3, 4].map((i) => (
+                          {[1, 2, 3, 4].map((i: any) => (
                             <Grid item xs={6} key={i}>
                               <Box
                                 sx={{

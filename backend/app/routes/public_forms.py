@@ -11,7 +11,7 @@ import json
 import uuid
 from ..models import db, Form, FormSubmission, User
 from ..utils.data_normalizer import normalize_form_data
-from ..tasks.report_tasks import trigger_auto_report_generation
+# from ..tasks.report_tasks import trigger_auto_report_generation  # Temporarily disabled
 
 # Create blueprint for public forms
 public_forms_bp = Blueprint('public_forms', __name__)
@@ -76,7 +76,8 @@ def submit_public_form():
         
         # Trigger automatic report generation if configured
         if form.form_settings and form.form_settings.get('auto_report_enabled', False):
-            trigger_auto_report_generation.delay(form.id, submission.id)
+            # trigger_auto_report_generation.delay(form.id, submission.id)  # Temporarily disabled
+            pass
         
         return jsonify({
             'success': True,
@@ -283,9 +284,51 @@ def create_dynamic_form(submission_data, form_source):
 
 def submit_public_form_data(submission_data):
     """Helper function to process submission data consistently"""
-    # This function contains the core logic from submit_public_form
-    # but can be called internally without HTTP request context
-    pass
+    # ✅ FIXED: Implement the missing function
+    try:
+        # Extract metadata
+        form_source = submission_data.get('source', 'unknown')
+        form_id = submission_data.get('form_id')
+        data = submission_data.get('data', {})
+        submitter_info = submission_data.get('submitter', {})
+        
+        # Normalize the form data based on source
+        normalized_data = normalize_form_data(data, form_source)
+        
+        # Create or find form record
+        form = None
+        if form_id:
+            form = Form.query.filter_by(id=form_id).first()
+        
+        # If no form found, create a dynamic form entry
+        if not form:
+            form = create_dynamic_form(submission_data, form_source)
+        
+        # Create submission record
+        submission = FormSubmission(
+            form_id=form.id,
+            data=normalized_data,
+            submitter_email=submitter_info.get('email'),
+            ip_address='webhook',  # Since this is called from webhook
+            user_agent='webhook',
+            submission_source=form_source,
+            status='submitted'
+        )
+        
+        db.session.add(submission)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'submission_id': submission.id,
+            'form_id': form.id,
+            'message': 'Form submitted successfully',
+            'timestamp': submission.submitted_at.isoformat()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to submit form: {str(e)}'}), 500
 
 
 def transform_google_response(form_response):

@@ -1,3 +1,4 @@
+import React from "react";
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -21,7 +22,7 @@ import {
   Badge,
   Collapse,
 } from "@mui/material";
-import { MenuItem as MuiMenuItem } from "@mui/material";
+import { MuiMenuItem } from "@mui/material";
 import {
   Menu as MenuIcon,
   Dashboard as DashboardIcon,
@@ -86,8 +87,8 @@ const StyledAppBar = styled(AppBar)(() => ({
 }));
 
 const MenuItem = styled(ListItemButton, {
-  shouldForwardProp: (prop) => prop !== "selected",
-})((props) => ({
+  shouldForwardProp: (prop: any) => prop !== "selected",
+})((props: any) => ({
   margin: "4px 12px",
   borderRadius: "8px",
   color: props.selected ? "white" : "rgba(255, 255, 255, 0.7)",
@@ -311,17 +312,17 @@ export default function Layout({ children }: LayoutProps) {
       </SidebarHeader>
       <Box sx={{ flexGrow: 1, overflowY: "auto", padding: "8px 0" }}>
         <List sx={{ padding: 0 }}>
-          {menuItems.map((item) => (
+          {menuItems.map((item: any) => (
             <Box key={item.text}>
               <MenuItem
                 selected={
                   item.submenu
                     ? item.submenu.some(
-                        (subItem) => location.pathname === subItem.path
+                        (subItem: any) => location.pathname === subItem.path
                       ) || expandedSubmenu === item.text
                     : location.pathname === item.path
                 }
-                onClick={(e) => handleItemClick(e, item)}
+                onClick={(e: any) => handleItemClick(e, item)}
               >
                 <ListItemIcon>{item.icon}</ListItemIcon>
                 <MenuText primary={item.text} />
@@ -347,11 +348,11 @@ export default function Layout({ children }: LayoutProps) {
                   unmountOnExit
                 >
                   <List component="div" disablePadding>
-                    {item.submenu.map((subItem) => (
+                    {item.submenu.map((subItem: any) => (
                       <MenuItem
                         key={subItem.text}
                         selected={location.pathname === subItem.path}
-                        onClick={(e) => handleItemClick(e, subItem)}
+                        onClick={(e: any) => handleItemClick(e, subItem)}
                         sx={{ pl: 4, backgroundColor: "transparent" }}
                       >
                         <ListItemIcon>{subItem.icon}</ListItemIcon>
@@ -429,7 +430,7 @@ export default function Layout({ children }: LayoutProps) {
             component="div"
             sx={{ fontFamily: '"Poppins", sans-serif', fontWeight: 500 }}
           >
-            {menuItems.find((item) => item.path === location.pathname)?.text ||
+            {menuItems.find((item: any) => item.path === location.pathname)?.text ||
               "StratoSys Report"}
           </Typography>
           <Box sx={{ flexGrow: 1 }} />

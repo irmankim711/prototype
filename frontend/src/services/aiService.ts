@@ -175,7 +175,7 @@ export class AIService {
       return response.data;
     } catch (error) {
       console.error("AI Analysis failed:", error);
-      throw new Error(
+      throw Error(
         error instanceof Error ? error.message : "Analysis failed"
       );
     }
@@ -196,7 +196,7 @@ export class AIService {
       return response.data;
     } catch (error) {
       console.error("AI Report Suggestions failed:", error);
-      throw new Error(
+      throw Error(
         error instanceof Error ? error.message : "Report suggestions failed"
       );
     }
@@ -217,7 +217,7 @@ export class AIService {
       return response.data;
     } catch (error) {
       console.error("AI Placeholder generation failed:", error);
-      throw new Error(
+      throw Error(
         error instanceof Error ? error.message : "Placeholder generation failed"
       );
     }
@@ -236,7 +236,7 @@ export class AIService {
       return response.data;
     } catch (error) {
       console.error("AI Data Validation failed:", error);
-      throw new Error(
+      throw Error(
         error instanceof Error ? error.message : "Data validation failed"
       );
     }
@@ -259,7 +259,7 @@ export class AIService {
       return response.data;
     } catch (error) {
       console.error("AI Template Optimization failed:", error);
-      throw new Error(
+      throw Error(
         error instanceof Error ? error.message : "Template optimization failed"
       );
     }

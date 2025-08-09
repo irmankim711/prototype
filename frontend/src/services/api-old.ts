@@ -19,7 +19,7 @@ const authApi = axios.create({
 });
 
 // Add request interceptor to include auth token
-api.interceptors.request.use((config) => {
+api.interceptors.request.use((config: any) => {
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -27,7 +27,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-authApi.interceptors.request.use((config) => {
+authApi.interceptors.request.use((config: any) => {
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -519,7 +519,7 @@ export const updateReportTemplate = async (
   if (isDeployed) {
     const template = mockTemplates.find(t => t.id === templateId);
     if (!template) {
-      throw new Error('Template not found');
+      throw Error('Template not found');
     }
     
     const updatedTemplate = { ...template, ...templateData };
@@ -551,8 +551,8 @@ export const analyzeData = async (data: any): Promise<any> => {
 
 // Error handler
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response: any) => response,
+  (error: any) => {
     if (error.response?.status === 401) {
       // Handle unauthorized access
       localStorage.removeItem('token');

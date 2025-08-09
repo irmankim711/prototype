@@ -15,12 +15,7 @@ import json
 from typing import Dict, List, Any, Optional
 from flask import current_app
 
-# Optional imports for plotting
-PLOTTING_AVAILABLE = False
-plt = None
-sns = None
-
-# Disable matplotlib for now to avoid import issues
+# Optional imports for plotting - temporarily disabled
 # try:
 #     import matplotlib
 #     matplotlib.use('Agg')  # Use non-interactive backend
@@ -28,15 +23,37 @@ sns = None
 #     import seaborn as sns
 #     PLOTTING_AVAILABLE = True
 # except ImportError:
-#     PLOTTING_AVAILABLE = False
-#     plt = None
-#     sns = None
+PLOTTING_AVAILABLE = False
+
+# Mock matplotlib and seaborn when not available
+class MockPlt:
+    @staticmethod
+    def subplots(*args, **kwargs):
+        return None, None
+    @staticmethod 
+    def savefig(*args, **kwargs):
+        pass
+    @staticmethod
+    def close(*args):
+        pass
+    class style:
+        @staticmethod
+        def use(*args):
+            pass
+
+class MockSns:
+    @staticmethod
+    def set_palette(*args):
+        pass
+
+plt = MockPlt()
+sns = MockSns()
 
 from ..models import db, Form, FormSubmission, Report, User
 from ..services.ai_service import AIService
 from ..services.report_generator import create_word_report, create_pdf_report
 from ..services.email_service import send_report_email
-# from ..utils.chart_generator import create_charts_from_data  # TODO: Create this utility
+# Chart generation utilities
 
 
 @shared_task(bind=True, max_retries=3)
@@ -431,11 +448,12 @@ def create_charts_from_submissions(submissions_data: List[Dict[str, Any]]) -> Li
     df = pd.DataFrame(submissions_data)
     
     # Set style for better looking charts
-    try:
-        plt.style.use('seaborn-v0_8')
-        sns.set_palette("husl")
-    except:
-        pass  # Use default style if not available
+    if PLOTTING_AVAILABLE:
+        try:
+            plt.style.use('seaborn-v0_8')
+            sns.set_palette("husl")
+        except:
+            pass  # Use default style if not available
     
     try:
         # 1. Submission timeline chart

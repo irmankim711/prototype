@@ -1,3 +1,4 @@
+import React from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -31,6 +32,7 @@ import UserProfile from "./pages/UserProfile/UserProfile";
 import Settings from "./pages/Settings/Settings";
 import AboutUs from "./pages/AboutUs/AboutUs";
 import PublicFormAccess from "./components/PublicFormAccess/PublicFormAccess";
+import GoogleFormsManager from "./components/GoogleFormsManager";
 
 const queryClient = new QueryClient();
 
@@ -64,6 +66,7 @@ function AppLayout() {
           />
           <Route path="/submission" element={<Submission />} />
           <Route path="/report-builder" element={<ReportBuilder />} />
+          <Route path="/google-forms" element={<GoogleFormsManager />} />
           <Route path="/report-history" element={<ReportHistory />} />
           <Route path="/report-templates" element={<ReportTemplates />} />
           <Route path="/realtime-dashboard" element={<RealtimeDashboard />} />
