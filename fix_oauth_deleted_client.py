@@ -24,7 +24,7 @@ def fix_oauth_configuration():
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
             "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_secret": "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",
+            "client_secret": os.getenv('GOOGLE_CLIENT_SECRET', 'your_google_client_secret_here'),
             "redirect_uris": [
                 "http://localhost:5000/api/google-forms/callback",
                 "http://localhost:3000/forms/auth/callback",
@@ -51,7 +51,7 @@ def fix_oauth_configuration():
         env_content = f"""
 # Google OAuth Configuration
 GOOGLE_CLIENT_ID=1008582896300-sbsrcs6jg32lncrnmmf1ia93vnl81tls.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=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
+GOOGLE_CLIENT_SECRET=your_google_client_secret_here
 GOOGLE_PROJECT_ID=stratosys
 GOOGLE_CREDENTIALS_FILE=credentials.json
 GOOGLE_TOKEN_DIR=tokens

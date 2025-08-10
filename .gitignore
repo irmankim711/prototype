@@ -5,25 +5,64 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Environment variables and secrets
+# Environment variables and secrets - COMPREHENSIVE PROTECTION
 .env
+.env.*
+!.env.example
+!.env.template
+!.env.sample
+*.env
+env.local
+env.production
+env.development
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 .env.*.local
+.env.api_integrations
+.env.real_data
+
+# API Keys and Secrets - CRITICAL SECURITY
+*api*key*
+*secret*
+*token*
+*password*
+*auth*
+apikey*
+client_secret*
+access_token*
+refresh_token*
+private_key*
+api_secret*
 
 # Google OAuth and API credentials
 client_secret_*.json
 credentials.json
 service-account-key.json
+google-credentials*.json
+oauth-config*.json
 tokens/
 backend/tokens/
+frontend/tokens/
 *.pem
 *.key
 *.crt
 *.p12
 *.pfx
+
+# Configuration files with sensitive data
+config/production.json
+config/secrets.json
+secrets/
+credentials/
+**/credentials/
+**/tokens/
+**/backup/
+
+# Specific sensitive files that should never be committed
+fix_oauth_deleted_client.py
+test_real_data_complete.py
 
 # Database files
 *.db

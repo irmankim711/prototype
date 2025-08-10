@@ -24,7 +24,7 @@ def test_google_forms_integration():
         # Set up real environment variables
         os.environ.update({
             'GOOGLE_CLIENT_ID': '1008582896300-sbsrcs6jg32lncrnmmf1ia93vnl81tls.apps.googleusercontent.com',
-            'GOOGLE_CLIENT_SECRET': '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',
+            'GOOGLE_CLIENT_SECRET': 'test_google_client_secret',
             'GOOGLE_PROJECT_ID': 'stratosys',
             'GOOGLE_REDIRECT_URI': 'http://localhost:5000/api/google-forms/callback'
         })

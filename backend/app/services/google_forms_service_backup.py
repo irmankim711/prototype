@@ -26,7 +26,7 @@ class GoogleFormsService:
         self.credentials_file = os.getenv('GOOGLE_CREDENTIALS_FILE', 'credentials.json')
         self.token_file = os.getenv('GOOGLE_TOKEN_FILE', 'token.json')
         self.client_id = os.getenv('GOOGLE_CLIENT_ID', '1008582896300-sbsrcs6jg32lncrnmmf1ia93vnl81tls.apps.googleusercontent.com')
-        self.client_secret = os.getenv('GOOGLE_CLIENT_SECRET', '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')
+        self.client_secret = os.getenv('GOOGLE_CLIENT_SECRET', 'your_google_client_secret_here')
         self.redirect_uri = os.getenv('OAUTH_REDIRECT_URI', 'http://localhost:5000/api/google-forms/callback')
         
         # Check if credentials file exists
