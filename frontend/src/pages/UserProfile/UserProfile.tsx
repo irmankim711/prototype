@@ -1,5 +1,5 @@
 import React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -35,6 +35,7 @@ import {
   Cancel as CancelIcon,
 } from "@mui/icons-material";
 import { fetchUserProfile, updateUserProfile } from "../../services/api";
+import { useUser } from "../../hooks/useUser";
 
 // Styled components
 const ProfileHeader = styled(Box)(() => ({
@@ -168,6 +169,7 @@ export default function UserProfile() {
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const { currentUser, updateUserData, refreshUserData } = useUser();
   const [userData, setUserData] = useState({
     id: "",
     email: "",
@@ -190,44 +192,75 @@ export default function UserProfile() {
   });
   const [originalData, setOriginalData] = useState(userData);
 
-  useEffect(() => {
-    loadUserProfile();
-  }, []);
-
-  const loadUserProfile = async () => {
+  const loadUserProfile = useCallback(async () => {
     try {
       setIsFetching(true);
       setError(null);
-      const profile = await fetchUserProfile();
-      const profileData = {
-        id: profile.id || "",
-        email: profile.email || "",
-        first_name: profile.first_name || "",
-        last_name: profile.last_name || "",
-        username: profile.username || "",
-        phone: profile.phone || "",
-        company: profile.company || "",
-        job_title: profile.job_title || "",
-        bio: profile.bio || "",
-        timezone: profile.timezone || "UTC",
-        language: profile.language || "en",
-        theme: profile.theme || "light",
-        email_notifications: profile.email_notifications !== false,
-        push_notifications: profile.push_notifications === true,
-        role: profile.role || "",
-        created_at: profile.created_at || "",
-        updated_at: profile.updated_at || "",
-        avatar_url: profile.avatar_url || "",
-      };
-      setUserData(profileData);
-      setOriginalData(profileData);
+
+      // Use centralized user data refresh
+      await refreshUserData();
+
+      // Get profile data from centralized context
+      if (currentUser) {
+        const profileData = {
+          id: currentUser.id || "",
+          email: currentUser.email || "",
+          first_name: currentUser.first_name || "",
+          last_name: currentUser.last_name || "",
+          username: currentUser.username || "",
+          phone: currentUser.phone || "",
+          company: currentUser.company || "",
+          job_title: currentUser.job_title || "",
+          bio: currentUser.bio || "",
+          timezone: currentUser.timezone || "UTC",
+          language: currentUser.language || "en",
+          theme: currentUser.theme || "light",
+          email_notifications: currentUser.email_notifications !== false,
+          push_notifications: currentUser.push_notifications === true,
+          role: currentUser.role || "",
+          created_at: currentUser.created_at || "",
+          updated_at: currentUser.updated_at || "",
+          avatar_url: currentUser.avatar_url || "",
+        };
+        setUserData(profileData);
+        setOriginalData(profileData);
+      } else {
+        // Fallback to direct API call if currentUser is not available
+        const profile = await fetchUserProfile();
+        const profileData = {
+          id: profile.id || "",
+          email: profile.email || "",
+          first_name: profile.first_name || "",
+          last_name: profile.last_name || "",
+          username: profile.username || "",
+          phone: profile.phone || "",
+          company: profile.company || "",
+          job_title: profile.job_title || "",
+          bio: profile.bio || "",
+          timezone: profile.timezone || "UTC",
+          language: profile.language || "en",
+          theme: profile.theme || "light",
+          email_notifications: profile.email_notifications !== false,
+          push_notifications: profile.push_notifications === true,
+          role: profile.role || "",
+          created_at: profile.created_at || "",
+          updated_at: profile.updated_at || "",
+          avatar_url: profile.avatar_url || "",
+        };
+        setUserData(profileData);
+        setOriginalData(profileData);
+      }
     } catch (err) {
       setError("Failed to load profile data");
       console.error("Error loading profile:", err);
     } finally {
       setIsFetching(false);
     }
-  };
+  }, [currentUser, refreshUserData]);
+
+  useEffect(() => {
+    loadUserProfile();
+  }, [loadUserProfile]);
 
   const handleChange = (_: React.SyntheticEvent, newValue: number) => {
     setValue(newValue);
@@ -259,13 +292,14 @@ export default function UserProfile() {
         push_notifications: userData.push_notifications,
       };
 
-      const updatedProfile = await updateUserProfile(updateData);
+      // Use centralized user data management
+      const response = await updateUserData(updateData);
 
       // Update local state with the response
       const updatedData = {
         ...userData,
-        ...updatedProfile.user,
-        updated_at: updatedProfile.user.updated_at || new Date().toISOString(),
+        ...response.user,
+        updated_at: response.user.updated_at || new Date().toISOString(),
       };
 
       setUserData(updatedData);
@@ -821,7 +855,9 @@ export default function UserProfile() {
                 <Select
                   value={userData.theme}
                   label="Theme"
-                  onChange={(e: any) => handleSelectChange("theme", e.target.value)}
+                  onChange={(e: any) =>
+                    handleSelectChange("theme", e.target.value)
+                  }
                 >
                   <MenuItem value="light">Light</MenuItem>
                   <MenuItem value="dark">Dark</MenuItem>

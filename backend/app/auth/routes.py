@@ -27,7 +27,7 @@ def register():
     user.email = email
     user.first_name = payload.get("first_name", "")
     user.last_name = payload.get("last_name", "")
-    user.username = payload.get("username", "")
+    user.username = payload.get("username", "").strip() or None  # Convert empty to None
     user.phone = payload.get("phone", "")
     user.company = payload.get("company", "")
     user.job_title = payload.get("job_title", "")

@@ -1,8 +1,9 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from ..models import db, User, UserRole, Permission
 from ..decorators import require_permission, require_role, get_current_user
+from ..validation import validate_json, UserUpdateSchema
 
 users_bp = Blueprint('users', __name__)
 
@@ -41,47 +42,42 @@ def get_profile():
 
 @users_bp.route('/profile', methods=['PUT'])
 @jwt_required()
-def update_profile():
-    """Update current user's profile."""
+@validate_json(UserUpdateSchema)
+def update_profile(validated_data):
+    """Update current user's profile with enhanced validation."""
     user = get_current_user()
     if not user:
         return jsonify({'error': 'User not found'}), 404
     
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
+    # Validate at least one name is provided
+    if not validated_data.get('first_name', '').strip() and not validated_data.get('last_name', '').strip():
+        return jsonify({'error': 'Please provide at least a first name or last name'}), 400
     
-    # Update profile fields
-    if 'first_name' in data:
-        user.first_name = data['first_name'].strip() if data['first_name'] else None
-    if 'last_name' in data:
-        user.last_name = data['last_name'].strip() if data['last_name'] else None
-    if 'username' in data:
-        username = data['username'].strip() if data['username'] else None
-        if username:
-            # Check if username is already taken by another user
+    # Check username uniqueness if provided
+    if 'username' in validated_data and validated_data['username']:
+        username = validated_data['username'].strip()
+        if username != user.username:
             existing_user = User.query.filter_by(username=username).first()
-            if existing_user and existing_user.id != user.id:
-                return jsonify({'error': 'Username already taken'}), 400
-            user.username = username
-    if 'phone' in data:
-        user.phone = data['phone'].strip() if data['phone'] else None
-    if 'company' in data:
-        user.company = data['company'].strip() if data['company'] else None
-    if 'job_title' in data:
-        user.job_title = data['job_title'].strip() if data['job_title'] else None
-    if 'bio' in data:
-        user.bio = data['bio'].strip() if data['bio'] else None
-    if 'timezone' in data:
-        user.timezone = data['timezone'] or 'UTC'
-    if 'language' in data:
-        user.language = data['language'] or 'en'
-    if 'theme' in data:
-        user.theme = data['theme'] or 'light'
-    if 'email_notifications' in data:
-        user.email_notifications = bool(data['email_notifications'])
-    if 'push_notifications' in data:
-        user.push_notifications = bool(data['push_notifications'])
+            if existing_user:
+                return jsonify({'error': 'Username already taken. Please choose a different username.'}), 400
+    
+    # Update profile fields with validated data
+    user.first_name = validated_data.get('first_name', '').strip() or None
+    user.last_name = validated_data.get('last_name', '').strip() or None
+    user.username = validated_data.get('username', '').strip() or user.username
+    user.phone = validated_data.get('phone', '').strip() or None
+    user.company = validated_data.get('company', '').strip() or None
+    user.job_title = validated_data.get('job_title', '').strip() or None
+    user.bio = validated_data.get('bio', '').strip() or None
+    user.timezone = validated_data.get('timezone', 'UTC')
+    user.language = validated_data.get('language', 'en')
+    user.theme = validated_data.get('theme', 'light')
+    
+    # Handle boolean fields
+    if 'email_notifications' in validated_data:
+        user.email_notifications = bool(validated_data['email_notifications'])
+    if 'push_notifications' in validated_data:
+        user.push_notifications = bool(validated_data['push_notifications'])
     
     user.updated_at = datetime.utcnow()
     
@@ -111,7 +107,8 @@ def update_profile():
         }), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': 'Failed to update profile'}), 500
+        current_app.logger.error(f"Error updating user profile: {str(e)}")
+        return jsonify({'error': 'Failed to update profile. Please try again.'}), 500
 
 @users_bp.route('/change-password', methods=['POST'])
 @jwt_required()

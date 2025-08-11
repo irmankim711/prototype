@@ -31,6 +31,7 @@ import {
   AutoAwesome as AutomatedReportsIcon,
 } from "@mui/icons-material";
 import { AuthContext } from "../../context/AuthContext";
+import { useUser } from "../../hooks/useUser";
 
 const drawerWidth = 260;
 
@@ -361,15 +362,14 @@ export default function EnhancedSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [openReports, setOpenReports] = useState(true);
-  const { user, logout } = useContext(AuthContext);
+  const { logout } = useContext(AuthContext);
+  const { currentUser, getUserDisplayName, getUserAvatarUrl } = useUser();
 
-  // Use real user if available, else fallback
+  // Use centralized user data with proper fallbacks
   const displayUser = {
-    name: (user as { name?: string })?.name || "John Doe",
-    email: (user as { email?: string })?.email || "john.doe@company.com",
-    avatar:
-      (user as { avatar?: string })?.avatar ||
-      "https://ui-avatars.com/api/?name=John+Doe&background=6366f1&color=fff",
+    name: currentUser?.display_name || getUserDisplayName(),
+    email: currentUser?.email || "user@company.com",
+    avatar: currentUser?.avatar_display_url || getUserAvatarUrl(),
   };
 
   const handleReportsClick = () => {

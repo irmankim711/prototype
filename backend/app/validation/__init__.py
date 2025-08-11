@@ -12,7 +12,7 @@ from .schemas import (
     FormUpdateSchema,
     FormSubmissionSchema,
     ReportCreationSchema,
-    ValidationUtils
+    get_schema
 )
 
 from .decorators import (
@@ -34,7 +34,7 @@ __all__ = [
     'FormUpdateSchema',
     'FormSubmissionSchema',
     'ReportCreationSchema',
-    'ValidationUtils',
+    'get_schema',
     'validate_json',
     'validate_query_params',
     'validate_file_upload',

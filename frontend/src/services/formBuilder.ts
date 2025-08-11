@@ -102,6 +102,13 @@ export interface FormSubmission {
   submitter_email?: string;
   submitted_at: string;
   status: "submitted" | "reviewed" | "approved" | "rejected";
+  // Additional fields for submissions page
+  name?: string;
+  email?: string;
+  date?: string;
+  score?: number;
+  form_id?: number;
+  form_title?: string;
 }
 
 export interface FieldType {
@@ -262,6 +269,21 @@ export const formBuilderAPI = {
         status,
       }
     );
+    return response.data;
+  },
+
+  // Get all submissions across all forms
+  getAllSubmissions: async (params?: {
+    page?: number;
+    per_page?: number;
+    status?: string;
+    date_from?: string;
+    date_to?: string;
+    form_id?: number;
+  }) => {
+    const response = await api.get("/forms/submissions", {
+      params,
+    });
     return response.data;
   },
 

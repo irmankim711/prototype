@@ -85,43 +85,43 @@ class UserUpdateSchema(BaseSchema):
     push_notifications = fields.Bool(required=True)
 
     @validates('username')
-    def validate_username(self, value, **kwargs):
+    def validate_username(self, value):
         """Validate username format"""
         if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]{2,29}$', value):
             raise ValidationError('Username must start with a letter and contain only letters, numbers, and underscores')
 
     @validates('phone')
-    def validate_phone(self, value, **kwargs):
+    def validate_phone(self, value):
         """Validate phone number format"""
         if value:
-            # Remove spaces and hyphens for validation
-            clean_phone = re.sub(r'[\s\-]', '', value)
-            if not re.match(r'^(\+\d{1,3})?\d{10}$', clean_phone):
+            # Remove spaces and validate format
+            clean_phone = re.sub(r'\s', '', value)
+            if not re.match(r'^(\+\d{1,3}[- ]?)?\d{10}$', clean_phone):
                 raise ValidationError('Please enter a valid phone number')
 
     @validates('first_name')
-    def validate_first_name(self, value, **kwargs):
+    def validate_first_name(self, value):
         """Validate first name format"""
         if value:
             if not re.match(r'^[a-zA-Z\s\'-]{1,50}$', value.strip()):
                 raise ValidationError('First name can only contain letters, spaces, apostrophes, and hyphens')
 
     @validates('last_name')
-    def validate_last_name(self, value, **kwargs):
+    def validate_last_name(self, value):
         """Validate last name format"""
         if value:
             if not re.match(r'^[a-zA-Z\s\'-]{1,50}$', value.strip()):
                 raise ValidationError('Last name can only contain letters, spaces, apostrophes, and hyphens')
 
     @validates('company')
-    def validate_company(self, value, **kwargs):
+    def validate_company(self, value):
         """Validate company name format"""
         if value:
             if not re.match(r'^[a-zA-Z0-9\s.,\'&-]{1,100}$', value.strip()):
                 raise ValidationError('Company name contains invalid characters')
 
     @validates('job_title')
-    def validate_job_title(self, value, **kwargs):
+    def validate_job_title(self, value):
         """Validate job title format"""
         if value:
             if not re.match(r'^[a-zA-Z0-9\s.,\'&-]{1,100}$', value.strip()):

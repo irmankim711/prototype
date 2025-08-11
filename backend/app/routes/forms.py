@@ -685,6 +685,120 @@ def update_submission_status(submission_id):
         current_app.logger.error(f"Error in update_submission_status: {str(e)}")
         return jsonify({'error': 'Failed to update submission status'}), 500
 
+@forms_bp.route('/submissions', methods=['GET'])
+@jwt_required()
+@limiter.limit("100 per hour")
+def get_all_submissions():
+    """Get all submissions across all forms for the current user with filtering and pagination."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+        
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 10, type=int), 100)
+        status = request.args.get('status')
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        form_id = request.args.get('form_id', type=int)
+        
+        # Build query - only submissions from forms owned by the user
+        user_forms_subquery = Form.query.filter_by(creator_id=user.id).subquery()
+        query = FormSubmission.query.join(
+            user_forms_subquery,
+            FormSubmission.form_id == user_forms_subquery.c.id  # type: ignore
+        )
+        
+        # Apply form filter
+        if form_id:
+            query = query.filter(FormSubmission.form_id == form_id)  # type: ignore
+        
+        # Apply status filter
+        if status:
+            query = query.filter(FormSubmission.status == status)  # type: ignore
+        
+        # Apply date filters
+        if date_from:
+            try:
+                from_date = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+                query = query.filter(FormSubmission.submitted_at >= from_date)
+            except ValueError:
+                return jsonify({'error': 'Invalid date_from format'}), 400
+        
+        if date_to:
+            try:
+                to_date = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+                query = query.filter(FormSubmission.submitted_at <= to_date)
+            except ValueError:
+                return jsonify({'error': 'Invalid date_to format'}), 400
+        
+        # Apply pagination
+        submissions = query.order_by(desc(FormSubmission.submitted_at)).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        # Prepare response data with form information
+        submissions_data = []
+        for sub in submissions.items:
+            form = Form.query.get(sub.form_id)
+            
+            # Extract name and email from submission data or use submitter_email
+            submission_name = None
+            submission_email = sub.submitter_email
+            
+            # Try to extract name from form data
+            if sub.data:
+                for key, value in sub.data.items():
+                    if key.lower() in ['name', 'full_name', 'fullname', 'first_name', 'firstname']:
+                        if isinstance(value, str) and value.strip():
+                            submission_name = value.strip()
+                            break
+                
+                # Try to extract email if not available from submitter_email
+                if not submission_email:
+                    for key, value in sub.data.items():
+                        if key.lower() in ['email', 'email_address', 'emailaddress']:
+                            if isinstance(value, str) and '@' in value:
+                                submission_email = value.strip()
+                                break
+            
+            # Calculate a simple score based on completion (mock scoring)
+            score = 100
+            if sub.data:
+                total_fields = len(sub.data)
+                filled_fields = sum(1 for v in sub.data.values() if v and str(v).strip())
+                if total_fields > 0:
+                    score = int((filled_fields / total_fields) * 100)
+            
+            submissions_data.append({
+                'id': sub.id,
+                'name': submission_name or 'Anonymous',
+                'email': submission_email or 'No email provided',
+                'date': sub.submitted_at.isoformat(),
+                'score': score,
+                'status': sub.status,
+                'form_id': sub.form_id,
+                'form_title': form.title if form else 'Unknown Form',
+                'data': sub.data,
+                'submitter_id': sub.submitter_id
+            })
+        
+        return jsonify({
+            'submissions': submissions_data,
+            'pagination': {
+                'page': submissions.page,
+                'pages': submissions.pages,
+                'per_page': submissions.per_page,
+                'total': submissions.total,
+                'has_next': submissions.has_next,
+                'has_prev': submissions.has_prev
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in get_all_submissions: {str(e)}")
+        return jsonify({'error': 'Failed to retrieve submissions'}), 500
+
 # Error handlers for this blueprint
 @forms_bp.errorhandler(404)
 def not_found(error):
@@ -1358,9 +1472,9 @@ def submit_form_quick_access(form_id):
             return jsonify({'error': 'Form data is required'}), 400
         
         # Create submission
-        submission = FormSubmission(  # type: ignore
+        submission = FormSubmission(
             form_id=form.id,
-            data=json.dumps(data['data']),
+            data=data['data'],  # Pass dictionary directly, not JSON string
             submitter_id=submitter_data['submitter_id'],
             submitter_email=submitter_data['submitter_email'],
             ip_address=request.remote_addr,
@@ -2005,7 +2119,7 @@ def submit_form_with_code_access(form_id):
         # Create submission
         submission = FormSubmission(
             form_id=form.id,
-            data=json.dumps(data['data']),
+            data=data['data'],  # Pass dictionary directly, not JSON string
             submitter_id=None,  # Anonymous submission
             submitter_email=f"access_code_{access_code.code}@anonymous.local",
             ip_address=request.remote_addr,
