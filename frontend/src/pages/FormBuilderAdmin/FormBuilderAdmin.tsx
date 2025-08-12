@@ -1,7 +1,7 @@
 import React from "react";
 import { useState, useContext } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { formBuilderAPI } from "../../services/formBuilder";
+import { formBuilderAPI, type Form } from "../../services/formBuilder";
 import { AuthContext } from "../../context/AuthContext";
 import {
   Box,
@@ -44,6 +44,11 @@ import {
   VpnKey,
   ContentCopy,
   Info,
+  Dashboard,
+  MoreVert,
+  Visibility,
+  Public,
+  ViewList,
 } from "@mui/icons-material";
 
 import FormBuilder from "../../components/FormBuilder/FormBuilder";
@@ -105,7 +110,7 @@ export default function FormBuilderAdmin() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
 
-  const [tabValue, setTabValue] = useState(0); // Default to External Forms tab (was My Forms)
+  const [tabValue, setTabValue] = useState(1); // Start with External Forms tab (faster loading)
   const [editingFormId, setEditingFormId] = useState<number | null>(null);
   const [showFormBuilder, setShowFormBuilder] = useState(false);
 
@@ -179,7 +184,7 @@ export default function FormBuilderAdmin() {
   // QR Code state
   const [showQRGenerator, setShowQRGenerator] = useState(false);
 
-  // Forms query - needed for generic access codes
+  // Forms query - disabled by default to prevent slow loading
   const {
     data: formsData,
     isLoading: formsLoading,
@@ -189,6 +194,10 @@ export default function FormBuilderAdmin() {
     queryKey: ["forms", page],
     queryFn: () => formBuilderAPI.getForms({ page, limit: 10 }),
     staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 15, // 15 minutes
+    retry: 1, // Only retry once
+    retryDelay: 500, // Quick retry
+    enabled: false, // DISABLED by default - only fetch when actually needed
   });
 
   const forms = formsData?.forms || [];
@@ -216,11 +225,21 @@ export default function FormBuilderAdmin() {
   // Handlers
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
+    // Only fetch forms when In-House Forms tab (index 0) is selected
+    if (newValue === 0 && user && accessToken) {
+      refetch();
+    }
   };
 
   const handleNewForm = () => {
     setShowFormBuilder(true);
     setEditingFormId(null);
+    // Show immediate feedback
+    setSnackbar({
+      open: true,
+      message: "Loading form builder...",
+      severity: "info",
+    });
   };
 
   const handleEditForm = (form: Form) => {
@@ -238,13 +257,11 @@ export default function FormBuilderAdmin() {
     }
   };
 
-  // Commented out unused My Forms functions
-  /*
+  // Menu handlers for form actions
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, form: Form) => {
     setAnchorEl(event.currentTarget);
     setSelectedForm(form);
   };
-  */
 
   const handleMenuClose = () => {
     setAnchorEl(null);
@@ -457,7 +474,9 @@ export default function FormBuilderAdmin() {
 
   const handleDeleteExternalForm = (formId: string) => {
     if (window.confirm("Are you sure you want to remove this external form?")) {
-      const updatedForms = externalForms.filter((form: any) => form.id !== formId);
+      const updatedForms = externalForms.filter(
+        (form: any) => form.id !== formId
+      );
       setExternalForms(updatedForms);
       localStorage.setItem("externalForms", JSON.stringify(updatedForms));
       setSnackbar({
@@ -621,19 +640,16 @@ export default function FormBuilderAdmin() {
         </Box>
 
         <Tabs value={tabValue} onChange={handleTabChange}>
-          {/* COMMENTED OUT - My Forms Tab */}
-          {/*
           <Tab
             label={
               <Badge badgeContent={forms.length} color="primary">
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <ViewList />
-                  My Forms
+                  In-House Forms
                 </Box>
               </Badge>
             }
           />
-          */}
           <Tab
             label={
               <Badge badgeContent={externalForms.length} color="secondary">
@@ -673,8 +689,7 @@ export default function FormBuilderAdmin() {
         </Tabs>
       </Box>
 
-      {/* COMMENTED OUT - My Forms Tab Content */}
-      {/*
+      {/* In-House Forms Tab */}
       <TabPanel value={tabValue} index={0}>
         {formsLoading ? (
           <Typography>Loading forms...</Typography>
@@ -728,7 +743,9 @@ export default function FormBuilderAdmin() {
                       </Typography>
                       <IconButton
                         size="small"
-                        onClick={(e: any) => handleMenuOpen(e, form)}
+                        onClick={(e: React.MouseEvent<HTMLElement>) =>
+                          handleMenuOpen(e, form)
+                        }
                       >
                         <MoreVert />
                       </IconButton>
@@ -799,10 +816,9 @@ export default function FormBuilderAdmin() {
           </Grid>
         )}
       </TabPanel>
-      */}
 
       {/* External Forms Tab */}
-      <TabPanel value={tabValue} index={0}>
+      <TabPanel value={tabValue} index={1}>
         <Box
           sx={{
             mb: 3,
@@ -912,7 +928,7 @@ export default function FormBuilderAdmin() {
       </TabPanel>
 
       {/* Analytics Tab */}
-      <TabPanel value={tabValue} index={1}>
+      <TabPanel value={tabValue} index={2}>
         <Typography variant="h6" gutterBottom>
           Form Analytics
         </Typography>
@@ -965,12 +981,12 @@ export default function FormBuilderAdmin() {
       </TabPanel>
 
       {/* Form Status Management Tab */}
-      <TabPanel value={tabValue} index={2}>
+      <TabPanel value={tabValue} index={3}>
         <FormStatusManager externalForms={externalForms} />
       </TabPanel>
 
       {/* Access Codes Tab */}
-      <TabPanel value={tabValue} index={3}>
+      <TabPanel value={tabValue} index={4}>
         <Box
           sx={{
             mb: 3,
