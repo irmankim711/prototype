@@ -525,6 +525,56 @@ export const generateReport = async (
   return result;
 };
 
+// Fetch a template file (e.g., Temp1.docx) as Blob from server templates dir
+export const fetchTemplateBlob = async (templateName: string): Promise<Blob> => {
+  const response = await api.get(
+    `/mvp/templates/${encodeURIComponent(templateName)}/download`,
+    { responseType: "blob" }
+  );
+  return response.data;
+};
+
+// Generate report by uploading Excel + DOCX template to backend mapper
+export const generateReportWithExcel = async (
+  templateFilename: string,
+  excelFile: File
+): Promise<{
+  success: boolean;
+  downloadUrl: string;
+  filename: string;
+  message: string;
+  context_used?: Record<string, unknown>;
+  optimizations?: Record<string, unknown>;
+  missing_fields?: string[];
+}> => {
+  try {
+    // Get template blob from server so user doesn't need to upload it manually
+    const templateBlob = await fetchTemplateBlob(templateFilename);
+    const formData = new FormData();
+    formData.append(
+      "template_file",
+      new File([templateBlob], templateFilename, {
+        type:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      })
+    );
+    formData.append("excel_file", excelFile);
+
+    const { data } = await api.post(`/mvp/templates/generate-with-excel`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return data;
+  } catch (err: any) {
+    const status = err?.response?.status;
+    const server = err?.response?.data || {};
+    const msg = server?.error || server?.message || err?.message || 'Generation failed';
+    const hint = server?.hint ? ` Hint: ${server.hint}` : '';
+    throw new Error(`${msg}${hint}${status ? ` (HTTP ${status})` : ''}`);
+  }
+};
+
 // Download generated report
 export const downloadReport = async (
   downloadUrl: string,

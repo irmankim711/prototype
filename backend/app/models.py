@@ -392,3 +392,39 @@ class FormAccessCode(db.Model):
             'allowed_external_forms': self.allowed_external_forms or [],
             'accessible_forms_count': len(self.get_accessible_forms())
         }
+
+# Google Forms Integration Models
+class FormIntegration(db.Model):
+    """Model for tracking Google Forms integrations"""
+    __tablename__ = 'form_integrations'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    program_id = db.Column(db.Integer, nullable=False)
+    platform = db.Column(db.String(50), nullable=False)  # 'google_forms'
+    form_id = db.Column(db.String(255), nullable=False)
+    form_title = db.Column(db.String(500))
+    form_url = db.Column(db.Text)
+    oauth_user_id = db.Column(db.String(255))
+    created_by = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+class FormResponse(db.Model):
+    """Model for storing Google Forms responses"""
+    __tablename__ = 'form_responses'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    form_id = db.Column(db.String(255), nullable=False)
+    response_id = db.Column(db.String(255), nullable=False)
+    response_data = db.Column(db.JSON)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+class Participant(db.Model):
+    """Model for tracking form participants"""
+    __tablename__ = 'participants'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255))
+    name = db.Column(db.String(255))
+    form_id = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

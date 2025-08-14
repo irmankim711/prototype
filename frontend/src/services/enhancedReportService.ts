@@ -346,6 +346,213 @@ class EnhancedReportService {
       return {};
     }
   }
+
+  // Excel Upload and AI Integration Methods
+  private getAuthHeadersFormData() {
+    const token =
+      localStorage.getItem("access_token") ||
+      localStorage.getItem("accessToken");
+    return {
+      Authorization: `Bearer ${token}`,
+    };
+  }
+
+  async uploadExcelFile(file: File): Promise<{
+    success: boolean;
+    data?: {
+      primary_sheet: {
+        headers: string[];
+        sample_data: Record<string, string | number | null>[];
+        clean_rows: number;
+        total_cols: number;
+        statistics: Record<string, unknown>;
+        field_categories: Record<string, string>;
+        quality_assessment: {
+          completeness: {
+            completeness_percentage: number;
+          };
+          uniqueness: {
+            duplicate_rows: number;
+          };
+        };
+      };
+      filename: string;
+    };
+    ai_insights?: Record<string, unknown>;
+    error?: string;
+  }> {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await axios.post(
+        `${API_BASE_URL}/enhanced-report/upload-excel`,
+        formData,
+        {
+          headers: this.getAuthHeadersFormData(),
+          timeout: 60000, // 60 second timeout for file upload
+        }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      console.error("Error uploading Excel file:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.error ||
+          error.message ||
+          "Failed to upload file",
+      };
+    }
+  }
+
+  async generateContentVariations(data: {
+    excel_data: any;
+    section_type?: string;
+  }): Promise<{
+    success: boolean;
+    content_variations?: {
+      variations: Array<{
+        style: string;
+        title: string;
+        content: string;
+        tone: string;
+      }>;
+    };
+    error?: string;
+  }> {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/enhanced-report/generate-content-variations`,
+        data,
+        {
+          headers: this.getAuthHeaders(),
+          timeout: 30000,
+        }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      console.error("Error generating content variations:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.error ||
+          error.message ||
+          "Failed to generate content variations",
+      };
+    }
+  }
+
+  async generateLivePreview(data: {
+    excel_data: any;
+    template_type?: string;
+    selected_content?: any;
+  }): Promise<{
+    success: boolean;
+    preview_html?: string;
+    template_type?: string;
+    charts_count?: number;
+    generated_at?: string;
+    error?: string;
+  }> {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/enhanced-report/generate-live-preview`,
+        data,
+        {
+          headers: this.getAuthHeaders(),
+          timeout: 45000,
+        }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      console.error("Error generating live preview:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.error ||
+          error.message ||
+          "Failed to generate preview",
+      };
+    }
+  }
+
+  async exportReport(data: {
+    excel_data: any;
+    selected_content?: any;
+    format?: string;
+    template_type?: string;
+  }): Promise<{
+    success: boolean;
+    message?: string;
+    format?: string;
+    filename?: string;
+    download_url?: string;
+    file_path?: string;
+    error?: string;
+  }> {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/enhanced-report/export-report`,
+        data,
+        {
+          headers: this.getAuthHeaders(),
+          timeout: 60000,
+        }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      console.error("Error exporting report:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.error ||
+          error.message ||
+          "Failed to export report",
+      };
+    }
+  }
+
+  async healthCheck(): Promise<{
+    service: string;
+    status: string;
+    timestamp: string;
+    components: {
+      gemini_ai: boolean;
+      excel_parser: boolean;
+      preview_generator: boolean;
+    };
+    error?: string;
+  }> {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/enhanced-report/health`,
+        {
+          timeout: 5000,
+        }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      console.error("Error checking health:", error);
+      return {
+        service: "Enhanced Report Builder",
+        status: "unhealthy",
+        timestamp: new Date().toISOString(),
+        components: {
+          gemini_ai: false,
+          excel_parser: false,
+          preview_generator: false,
+        },
+        error:
+          error.response?.data?.error || error.message || "Health check failed",
+      };
+    }
+  }
 }
 
 export const enhancedReportService = new EnhancedReportService();

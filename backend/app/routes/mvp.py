@@ -227,15 +227,64 @@ def generate_report_with_excel():
     Generate report using template and Excel data with intelligent mapping.
     """
     try:
-        # Check for required files
-        if 'template_file' not in request.files or 'excel_file' not in request.files:
+        # Log request payload for diagnostics
+        try:
+            current_app.logger.info(
+                "generate-with-excel: files=%s form=%s",
+                list(request.files.keys()),
+                list(request.form.keys()),
+            )
+        except Exception:
+            pass
+
+        # Accept multiple parameter names for better UX
+        template_file = request.files.get('template_file') or request.files.get('template') or request.files.get('file')
+        excel_file = request.files.get('excel_file') or request.files.get('excel') or request.files.get('data')
+
+        # Validate presence
+        if not template_file:
             return jsonify({
                 'success': False,
-                'error': 'Both template and Excel files are required'
+                'error_code': 'template_missing',
+                'message': 'Template file is required',
+                'details': {'expected_keys': ['template_file', 'template']},
+                'suggestions': ['Attach a DOCX or TEX template as form-data with key "template_file".'],
+                'retry_possible': True
             }), 400
-        
-        template_file = request.files['template_file']
-        excel_file = request.files['excel_file']
+
+        if not excel_file:
+            return jsonify({
+                'success': False,
+                'error_code': 'excel_missing',
+                'message': 'Excel file is required',
+                'details': {'expected_keys': ['excel_file', 'excel']},
+                'suggestions': ['Attach an Excel .xlsx file as form-data with key "excel_file".'],
+                'retry_possible': True
+            }), 400
+
+        # Basic file-type validation
+        template_name = (template_file.filename or '').lower()
+        excel_name = (excel_file.filename or '').lower()
+
+        if not template_name.endswith(('.docx', '.tex')):
+            return jsonify({
+                'success': False,
+                'error_code': 'invalid_template',
+                'message': 'Template must be DOCX or TEX format',
+                'details': {'filename': template_file.filename},
+                'suggestions': ['Use a .docx Word template with Jinja placeholders or a .tex LaTeX template.'],
+                'retry_possible': True
+            }), 400
+
+        if not excel_name.endswith(('.xlsx', '.xls')):
+            return jsonify({
+                'success': False,
+                'error_code': 'invalid_excel',
+                'message': 'Excel file must be .xlsx or .xls',
+                'details': {'filename': excel_file.filename},
+                'suggestions': ['Export your sheet as .xlsx and try again.'],
+                'retry_possible': True
+            }), 400
         
         # Save files temporarily
         import tempfile
@@ -255,9 +304,12 @@ def generate_report_with_excel():
         # Initialize optimizer and extract data
         optimizer = TemplateOptimizerService()
         
-        # Read template content
-        with open(template_path, 'r', encoding='utf-8') as f:
-            template_content = f.read()
+        # Read template content (text-based only). For DOCX, skip reading as text.
+        if file_ext == '.docx':
+            template_content = ''
+        else:
+            with open(template_path, 'r', encoding='utf-8') as f:
+                template_content = f.read()
         
         # Get optimized context
         optimization_result = optimizer.optimize_template_with_excel(template_content, excel_path)
@@ -279,10 +331,79 @@ def generate_report_with_excel():
             output_filename = f"report_{uuid.uuid4().hex}.pdf"
             output_path = os.path.join(output_dir, output_filename)
             
-            # Use Jinja2 to render LaTeX
-            from jinja2 import Template
-            template = Template(template_content)
-            rendered_latex = template.render(context)
+            # Use Jinja2 to render LaTeX with tolerant undefined handling and safe fallbacks
+            from jinja2 import Environment, StrictUndefined
+            
+            # Custom undefined class that provides helpful error messages
+            class HelpfulUndefined(StrictUndefined):
+                def __str__(self):
+                    hint = ""
+                    if hasattr(self, '_undefined_name') and self._undefined_name:
+                        name = str(self._undefined_name)
+                        if name == 'p' or name.startswith('p.'):
+                            hint = " (Hint: 'p' variables should be inside {% for p in participants %} loops)"
+                    return f"[UNDEFINED: {getattr(self, '_undefined_name', 'unknown')}{hint}]"
+            
+            env = Environment(
+                autoescape=False, 
+                trim_blocks=True, 
+                lstrip_blocks=True, 
+                undefined=HelpfulUndefined
+            )
+            
+            try:
+                template = env.from_string(template_content)
+                rendered_latex = template.render(context)
+            except Exception as render_err:
+                current_app.logger.exception("LaTeX render failed; attempting syntax conversion and safe context")
+                try:
+                    # Convert Mustache syntax to Jinja2 if needed and prepare safe context
+                    from app.services.template_converter import TemplateConverter
+
+                    syntax_type = TemplateConverter.analyze_template_syntax(template_content)
+                    if syntax_type in ['mustache', 'mixed']:
+                        converted_content = TemplateConverter.mustache_to_jinja2(template_content)
+                        prepared_context = TemplateConverter.prepare_context_for_mustache_conversion(context)
+                    else:
+                        converted_content = template_content
+                        prepared_context = context
+
+                    # Generate safe defaults for any missing placeholders
+                    safe_defaults = TemplateConverter.generate_safe_context_from_template(converted_content)
+
+                    # Deep-merge user/prepared context into safe defaults
+                    def deep_merge(base, user):
+                        for k, v in user.items():
+                            if k in base and isinstance(base[k], dict) and isinstance(v, dict):
+                                deep_merge(base[k], v)
+                            else:
+                                base[k] = v
+                        return base
+
+                    final_context = deep_merge(safe_defaults, prepared_context)
+
+                    # Use more tolerant undefined for the retry
+                    from jinja2 import Undefined
+                    env_tolerant = Environment(
+                        autoescape=False, 
+                        trim_blocks=True, 
+                        lstrip_blocks=True, 
+                        undefined=Undefined
+                    )
+                    
+                    template = env_tolerant.from_string(converted_content)
+                    rendered_latex = template.render(final_context)
+                except Exception as second_err:
+                    return jsonify({
+                        'success': False,
+                        'error': f"Template rendering failed: {str(render_err)}",
+                        'hint': 'Check for variables used outside loops (e.g., {{ p.* }} outside {% for p in participants %} ... {% endfor %}). The variable "p" should only be used inside participant loops.',
+                        'debug_info': {
+                            'original_error': str(render_err),
+                            'retry_error': str(second_err),
+                            'template_syntax': syntax_type if 'syntax_type' in locals() else 'unknown'
+                        }
+                    }), 400
             
             # Save rendered LaTeX for debugging
             latex_output_path = os.path.join(output_dir, f"debug_{uuid.uuid4().hex}.tex")
@@ -311,28 +432,80 @@ def generate_report_with_excel():
             # Word template processing
             output_filename = f"report_{uuid.uuid4().hex}.docx"
             output_path = os.path.join(output_dir, output_filename)
-            
-            # Use docxtpl for Word templates
-            from docxtpl import DocxTemplate
-            doc = DocxTemplate(template_path)
-            doc.render(context)
-            doc.save(output_path)
-            
-            download_url = f"/mvp/static/generated/{output_filename}"
-            
-            # Clean up temporary files
-            import shutil
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            
-            return jsonify({
-                'success': True,
-                'downloadUrl': download_url,
-                'message': 'Report generated successfully with Excel data!',
-                'filename': output_filename,
-                'context_used': context,
-                'optimizations': optimization_result.get('optimizations', {}),
-                'missing_fields': optimization_result.get('missing_fields', [])
-            })
+
+            try:
+                # Use docxtpl for Word templates
+                from docxtpl import DocxTemplate
+
+                # Log a concise context summary for diagnostics
+                try:
+                    current_app.logger.info(
+                        "Excel->Context summary: program_title=%s, participants=%d, keys=%s",
+                        (context.get('program', {}) or {}).get('title'),
+                        len(context.get('participants', []) or []),
+                        list(context.keys()),
+                    )
+                except Exception:
+                    pass
+
+                doc = DocxTemplate(template_path)
+                # Use a tolerant Jinja2 environment so missing vars render as empty strings instead of raising
+                from jinja2 import Environment, Undefined
+                env = Environment(autoescape=False, trim_blocks=True, lstrip_blocks=True, undefined=Undefined)
+
+                try:
+                    doc.render(context, jinja_env=env)
+                except Exception as render_err:
+                    current_app.logger.exception("docxtpl rendering failed - retrying with sanitized context")
+                    # Retry with sanitized context and tolerant env
+                    try:
+                        safe_context = context or {}
+                        if 'participants' not in safe_context:
+                            safe_context['participants'] = []
+                        if 'program' not in safe_context:
+                            safe_context['program'] = {}
+                        doc.render(safe_context, jinja_env=env)
+                    except Exception as second_err:
+                        return jsonify({
+                            'success': False,
+                            'error': f"Template rendering failed: {str(render_err)}",
+                            'hint': "Check for variables used outside their loops (e.g., using {{ p.* }} outside {% for p in participants %} ... {% endfor %}). Missing variables now render as empty strings.",
+                        }), 400
+
+                try:
+                    doc.save(output_path)
+                except Exception as save_err:
+                    current_app.logger.exception("Saving rendered DOCX failed")
+                    return jsonify({
+                        'success': False,
+                        'error': f"Failed to save generated DOCX: {str(save_err)}"
+                    }), 500
+
+                download_url = f"/mvp/static/generated/{output_filename}"
+
+                # Clean up temporary files
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
+                return jsonify({
+                    'success': True,
+                    'downloadUrl': download_url,
+                    'message': 'Report generated successfully with Excel data!',
+                    'filename': output_filename,
+                    'context_used': context,
+                    'context_summary': {
+                        'program_title': (context.get('program', {}) or {}).get('title'),
+                        'participants_count': len(context.get('participants', []) or [])
+                    },
+                    'optimizations': optimization_result.get('optimizations', {}),
+                    'missing_fields': optimization_result.get('missing_fields', [])
+                })
+            except Exception as e:
+                current_app.logger.exception("Error generating DOCX from Excel")
+                return jsonify({
+                    'success': False,
+                    'error': f"Server error during DOCX generation: {str(e)}"
+                }), 500
         
         else:
             return jsonify({

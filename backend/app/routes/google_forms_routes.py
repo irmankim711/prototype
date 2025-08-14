@@ -203,7 +203,7 @@ def oauth_callback():
             }), 400
         
         # Exchange code for tokens using existing method
-        success = google_forms_service.handle_oauth_callback(authorization_code, str(user_id))
+        success = google_forms_service.handle_oauth_callback(authorization_code, str(user_id), state=str(user_id))
         
         if not success:
             return jsonify({
@@ -224,14 +224,30 @@ def oauth_callback():
         }), 500
 
 @google_forms_bp.route('/status', methods=['GET'])
-@jwt_required()
 def get_integration_status():
     """Get Google Forms integration status for current user"""
     try:
-        user_id = get_jwt_identity()
+        # Check if user is authenticated
+        try:
+            from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+            verify_jwt_in_request(optional=True)
+            user_id = get_jwt_identity()
+        except:
+            user_id = None
+        
+        # If not authenticated, return basic status
+        if not user_id:
+            return jsonify({
+                'success': True,
+                'is_authenticated': False,
+                'is_authorized': False,
+                'has_valid_token': False,
+                'requires_auth': True,
+                'message': 'Authentication required to check Google Forms integration status'
+            })
         
         # Check if user has Google Forms access by trying to get credentials
-        credentials = google_forms_service.get_credentials(str(user_id))
+        credentials = google_forms_service._get_user_credentials(str(user_id))
         is_authorized = credentials is not None
         
         # Try to get forms to check token validity
@@ -245,6 +261,7 @@ def get_integration_status():
         
         return jsonify({
             'success': True,
+            'is_authenticated': True,
             'is_authorized': is_authorized,
             'has_valid_token': is_authorized,
             'last_sync': None,  # Could be implemented later

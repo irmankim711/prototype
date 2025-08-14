@@ -35,25 +35,96 @@ class TemplateConverterService:
         # Data mapping configurations
         self.field_mappings = {
             'program': {
-                'title': ['program.title', 'program.name', 'title'],
-                'description': ['program.description', 'description'],
-                'start_date': ['program.start_date', 'start_date'],
-                'end_date': ['program.end_date', 'end_date'],
-                'duration': ['program.duration', 'duration'],
-                'location': ['program.location', 'location'],
-                'organizer': ['program.organizer', 'organizer'],
-                'department': ['program.department', 'department']
+                'title': [
+                    'program.title', 'program.name', 'title', 'tajuk', 'nama program', 'program name'
+                ],
+                'description': [
+                    'program.description', 'description', 'keterangan', 'deskripsi'
+                ],
+                'date': [
+                    'program.date', 'date', 'tarikh'
+                ],
+                'time': [
+                    'program.time', 'time', 'masa'
+                ],
+                'start_date': [
+                    'program.start_date', 'start_date', 'mula', 'tarikh mula'
+                ],
+                'end_date': [
+                    'program.end_date', 'end_date', 'tamat', 'tarikh tamat'
+                ],
+                'duration': [
+                    'program.duration', 'duration', 'tempoh'
+                ],
+                'location': [
+                    'program.location', 'location', 'lokasi', 'tempat'
+                ],
+                'place': [
+                    'program.place', 'place', 'venue', 'tempat', 'lokasi', 'location'
+                ],
+                'organizer': [
+                    'program.organizer', 'organizer', 'penganjur', 'anjuran'
+                ],
+                'speaker': [
+                    'program.speaker', 'speaker', 'penceramah'
+                ],
+                'trainer': [
+                    'program.trainer', 'trainer', 'jurulatih'
+                ],
+                'facilitator': [
+                    'program.facilitator', 'facilitator', 'fasilitator'
+                ],
+                'total_participants': [
+                    'program.total_participants', 'report.total_participants', 'total_participants',
+                    'Jumlah_Peserta', 'jumlah peserta', 'jumlah_kehadiran', 'jumlah hadir', 'keseluruhan', 'total'
+                ],
+                'department': [
+                    'program.department', 'department', 'jabatan', 'bahagian'
+                ],
+                'banner': [
+                    'program.banner', 'banner', 'image_banner'
+                ]
             },
             'participant': {
-                'name': ['participant.name', 'participant.full_name', 'name', 'full_name'],
-                'email': ['participant.email', 'email'],
-                'phone': ['participant.phone', 'phone'],
-                'organization': ['participant.organization', 'organization'],
-                'department': ['participant.department', 'department'],
-                'position': ['participant.position', 'position'],
-                'ic': ['participant.identification_number', 'participant.ic', 'ic'],
-                'gender': ['participant.gender', 'gender'],
-                'registration_date': ['participant.registration_date', 'registration_date']
+                'name': [
+                    'participant.name', 'participant.full_name', 'name', 'full_name', 'nama', 'nama penuh'
+                ],
+                'email': [
+                    'participant.email', 'email'
+                ],
+                'phone': [
+                    'participant.phone', 'phone', 'telefon', 'tel', 'no_tel', 'no telefon', 'phone_no'
+                ],
+                'address': [
+                    'participant.address', 'address', 'alamat'
+                ],
+                'organization': [
+                    'participant.organization', 'organization', 'organisasi'
+                ],
+                'department': [
+                    'participant.department', 'department', 'jabatan', 'bahagian'
+                ],
+                'position': [
+                    'participant.position', 'position', 'jawatan'
+                ],
+                'ic': [
+                    'participant.identification_number', 'participant.ic', 'ic', 'kad pengenalan', 'k/p', 'kp', 'no kp'
+                ],
+                'gender': [
+                    'participant.gender', 'gender', 'jantina', 'lelaki/perempuan'
+                ],
+                'pre_mark': [
+                    'participant.pre_mark', 'pre', 'pra', 'markah pra', 'pre test'
+                ],
+                'post_mark': [
+                    'participant.post_mark', 'post', 'markah pos', 'post test'
+                ],
+                'bil': [
+                    'participant.bil', 'bil', 'no', 'no.'
+                ],
+                'registration_date': [
+                    'participant.registration_date', 'registration_date', 'tarikh daftar'
+                ]
             },
             'attendance': {
                 'total_sessions': ['attendance.total_sessions', 'total_sessions'],
@@ -62,10 +133,17 @@ class TemplateConverterService:
                 'attendance_percentage': ['attendance.attendance_percentage', 'attendance_percentage']
             },
             'report': {
-                'generated_date': ['report.generated_date', 'generated_date'],
-                'generated_by': ['report.generated_by', 'generated_by'],
-                'report_type': ['report.report_type', 'report_type'],
-                'total_participants': ['report.total_participants', 'total_participants']
+                'generated_date': ['report.generated_date', 'generated_date', 'tarikh laporan'],
+                'generated_by': ['report.generated_by', 'generated_by', 'dijana oleh'],
+                'report_type': ['report.report_type', 'report_type', 'jenis laporan'],
+                'total_participants': [
+                    'report.total_participants', 'total_participants', 'Jumlah_Peserta', 'jumlah peserta', 'keseluruhan'
+                ]
+            },
+            'signature': {
+                'consultant_name': ['signature.consultant.name', 'consultant.name', 'nama perunding'],
+                'executive_name': ['signature.executive.name', 'executive.name', 'nama pegawai'],
+                'head_name': ['signature.head.name', 'head.name', 'ketua jabatan']
             }
         }
         

@@ -22,7 +22,7 @@ import PublicForms from "./pages/PublicForms/PublicForms";
 import PublicFormBuilder from "./pages/PublicFormBuilder/PublicFormBuilder";
 
 import Submission from "./pages/Submission/Submission";
-import ReportBuilder from "./pages/ReportBuilder/ReportBuilder";
+import EnhancedNoJSONReportBuilder from "./components/EnhancedNoJSONReportBuilder";
 import ReportHistory from "./pages/ReportHistory/ReportHistory";
 import ReportTemplates from "./pages/ReportTemplates/ReportTemplates";
 import RealtimeDashboard from "./pages/RealtimeDashboard";
@@ -33,6 +33,9 @@ import Settings from "./pages/Settings/Settings";
 import AboutUs from "./pages/AboutUs/AboutUs";
 import PublicFormAccess from "./components/PublicFormAccess/PublicFormAccess";
 import GoogleFormsManager from "./components/GoogleFormsManager";
+import EnhancedReportBuilder from "./components/EnhancedReportBuilder";
+import ModernReportBuilder from "./components/ModernReportBuilderClean";
+import UltraModernReportBuilderWithExport from "./components/UltraModernReportBuilderWithExport";
 
 const queryClient = new QueryClient();
 
@@ -65,7 +68,22 @@ function AppLayout() {
             element={<FormBuilderDashboardEnhanced />}
           />
           <Route path="/submission" element={<Submission />} />
-          <Route path="/report-builder" element={<ReportBuilder />} />
+          <Route
+            path="/report-builder"
+            element={<UltraModernReportBuilderWithExport />}
+          />
+          <Route
+            path="/enhanced-report-builder"
+            element={<EnhancedReportBuilder />}
+          />
+          <Route
+            path="/modern-report-builder"
+            element={<ModernReportBuilder />}
+          />
+          <Route
+            path="/no-json-report-builder"
+            element={<EnhancedNoJSONReportBuilder />}
+          />
           <Route path="/google-forms" element={<GoogleFormsManager />} />
           <Route path="/report-history" element={<ReportHistory />} />
           <Route path="/report-templates" element={<ReportTemplates />} />

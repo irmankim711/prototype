@@ -38,10 +38,22 @@ class TemplateConverter:
                 base_name = parts[0]
                 nested_key = parts[1]
                 # For nested sections, iterate over the nested array
-                return f'{{% for item in {base_name}.{nested_key} %}}{content}{{% endfor %}}'
+                loop_content = f'{{% for item in {base_name}.{nested_key} %}}{content}{{% endfor %}}'
             else:
                 # For simple sections, iterate over the array
-                return f'{{% for item in {section_name} %}}{content}{{% endfor %}}'
+                loop_content = f'{{% for item in {section_name} %}}{content}{{% endfor %}}'
+            
+            # Convert variable references within this loop
+            # Find the singular form of the section name to replace
+            singular_name = section_name
+            if section_name.endswith('s'):
+                singular_name = section_name[:-1]  # participants -> participant
+            
+            # Replace {{singular_name.property}} with {{item.property}}
+            var_pattern = r'\{\{' + re.escape(singular_name) + r'\.([^}]+)\}\}'
+            loop_content = re.sub(var_pattern, r'{{ item.\1 }}', loop_content)
+            
+            return loop_content
         
         # Replace all section patterns (handle nested patterns)
         while re.search(section_pattern, converted, re.DOTALL):
@@ -57,19 +69,12 @@ class TemplateConverter:
         
         converted = re.sub(if_pattern, replace_if, converted, flags=re.DOTALL)
         
-        # Handle variable references within loops
-        # Convert {{item.property}} to {{ item.property }}
-        # This is already compatible with Jinja2, but ensure proper spacing
+        # Handle variable references (ensure proper spacing)
         var_pattern = r'\{\{([^#/][^}]*)\}\}'
         
         def replace_var(match):
             var_name = match.group(1).strip()
-            # Check if it's a loop variable reference
-            if var_name.startswith('item.') or var_name in ['item']:
-                return f'{{{{ {var_name} }}}}'
-            else:
-                # Handle nested object access
-                return f'{{{{ {var_name} }}}}'
+            return f'{{{{ {var_name} }}}}'
         
         converted = re.sub(var_pattern, replace_var, converted)
         

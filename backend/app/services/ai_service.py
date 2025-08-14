@@ -11,6 +11,12 @@ import re
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
+# Optional Gemini (Google Generative AI) SDK
+try:
+    import google.generativeai as genai
+except Exception:
+    genai = None
+
 # Set up logging
 logger = logging.getLogger(__name__)
 
@@ -29,6 +35,18 @@ class AIService:
         """Initialize the AI service with API keys"""
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         self.google_ai_api_key = os.getenv('GOOGLE_AI_API_KEY')
+        # Gemini configuration
+        self.gemini_available = False
+        self.gemini_model_name = os.getenv('GOOGLE_GEMINI_MODEL', 'gemini-1.5-flash')
+        if self.google_ai_api_key:
+            try:
+                if genai:
+                    genai.configure(api_key=self.google_ai_api_key)
+                    self.gemini_available = True
+                else:
+                    logger.warning("google-generativeai package not installed; Gemini disabled")
+            except Exception as e:
+                logger.warning(f"Failed to configure Gemini: {e}")
         
         if not self.openai_api_key:
             logger.warning("OpenAI API key not found in environment variables")
@@ -539,18 +557,25 @@ class AIService:
                 }}
                 """
                 
-                response = self.openai_client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "You are an expert data analyst. Always respond with valid JSON and provide comprehensive, actionable insights."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=2000,
-                    temperature=0.7
-                )
-                
-                # Parse the response
-                analysis_result = self._parse_json_response(response.choices[0].message.content)
+                if self.gemini_available:
+                    analysis_result = self._gemini_generate_json(
+                        prompt,
+                        system="You are an expert data analyst. Always respond with valid JSON and provide comprehensive, actionable insights.",
+                        max_output_tokens=2000,
+                    )
+                else:
+                    response = self.openai_client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[
+                            {"role": "system", "content": "You are an expert data analyst. Always respond with valid JSON and provide comprehensive, actionable insights."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        max_tokens=2000,
+                        temperature=0.7
+                    )
+                    
+                    # Parse the response
+                    analysis_result = self._parse_json_response(response.choices[0].message.content)
                 
                 return {
                     'success': True,
@@ -750,17 +775,24 @@ class AIService:
                 }}
                 """
                 
-                response = self.openai_client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "You are a report generation expert. Provide actionable, specific suggestions for creating professional reports."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=1500,
-                    temperature=0.6
-                )
-                
-                suggestions = self._parse_json_response(response.choices[0].message.content or "")
+                if self.gemini_available:
+                    suggestions = self._gemini_generate_json(
+                        prompt,
+                        system="You are a report generation expert. Provide actionable, specific suggestions for creating professional reports.",
+                        max_output_tokens=1500,
+                    )
+                else:
+                    response = self.openai_client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[
+                            {"role": "system", "content": "You are a report generation expert. Provide actionable, specific suggestions for creating professional reports."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        max_tokens=1500,
+                        temperature=0.6
+                    )
+                    
+                    suggestions = self._parse_json_response(response.choices[0].message.content or "")
                 
                 return {
                     'success': True,
@@ -1004,17 +1036,23 @@ class AIService:
             }}
             """
             
-            response = self.openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a data quality expert. Provide thorough analysis and actionable recommendations for data improvement."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=1500,
-                temperature=0.5
-            )
-            
-            validation = self._parse_json_response(response.choices[0].message.content)
+            if self.gemini_available:
+                validation = self._gemini_generate_json(
+                    prompt,
+                    system="You are a data quality expert. Provide thorough analysis and actionable recommendations for data improvement.",
+                    max_output_tokens=1500,
+                )
+            else:
+                response = self.openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You are a data quality expert. Provide thorough analysis and actionable recommendations for data improvement."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=1500,
+                    temperature=0.5
+                )
+                validation = self._parse_json_response(response.choices[0].message.content)
             
             return {
                 'success': True,
@@ -1077,17 +1115,24 @@ class AIService:
                 }}
                 """
                 
-                response = self.openai_client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "You are an expert in report templating and business documentation. Provide comprehensive, practical placeholder suggestions."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=1500,
-                    temperature=0.6
-                )
-                
-                placeholders = self._parse_json_response(response.choices[0].message.content or "")
+                if self.gemini_available:
+                    placeholders = self._gemini_generate_json(
+                        prompt,
+                        system="You are an expert in report templating and business documentation. Provide comprehensive, practical placeholder suggestions.",
+                        max_output_tokens=1500,
+                    )
+                else:
+                    response = self.openai_client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[
+                            {"role": "system", "content": "You are an expert in report templating and business documentation. Provide comprehensive, practical placeholder suggestions."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        max_tokens=1500,
+                        temperature=0.6
+                    )
+                    
+                    placeholders = self._parse_json_response(response.choices[0].message.content or "")
                 
                 return {
                     'success': True,
@@ -1279,6 +1324,30 @@ class AIService:
             return self._extract_text_content(response)
         except Exception as e:
             logger.error(f"Error parsing AI response: {str(e)}")
+            return {}
+
+    def _gemini_generate_json(self, prompt: str, system: Optional[str] = None, max_output_tokens: int = 1500) -> Dict[str, Any]:
+        """Generate JSON using Gemini if available."""
+        if not self.gemini_available or not genai:
+            return {}
+        try:
+            # Prefer JSON response if supported by SDK version
+            model = None
+            try:
+                generation_config = genai.types.GenerationConfig(
+                    response_mime_type='application/json',
+                    max_output_tokens=max_output_tokens
+                )
+                model = genai.GenerativeModel(self.gemini_model_name, generation_config=generation_config)
+            except Exception:
+                model = genai.GenerativeModel(self.gemini_model_name)
+
+            content = prompt if not system else f"{system}\n\n{prompt}"
+            resp = model.generate_content(content)
+            text = getattr(resp, 'text', '') or ''
+            return self._parse_json_response(text)
+        except Exception as e:
+            logger.error(f"Gemini generation failed: {e}")
             return {}
 
     def _extract_text_content(self, text: str) -> Dict[str, Any]:

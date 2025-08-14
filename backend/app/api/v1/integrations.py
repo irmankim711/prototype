@@ -19,7 +19,17 @@ import redis
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.services.google_sheets_service import google_sheets_service, GoogleSheetsError, AuthenticationError as GSAuthError
-from app.services.microsoft_graph_service import microsoft_graph_service, MicrosoftGraphError, AuthenticationError as MGAuthError
+
+# Microsoft Graph service - optional
+try:
+    from app.services.microsoft_graph_service import microsoft_graph_service, MicrosoftGraphError, AuthenticationError as MGAuthError
+    MICROSOFT_AVAILABLE = True
+except ImportError:
+    microsoft_graph_service = None
+    MicrosoftGraphError = Exception
+    MGAuthError = Exception
+    MICROSOFT_AVAILABLE = False
+
 from app.core.auth import get_current_user
 from app.core.rate_limiter import RateLimiter
 
@@ -28,7 +38,15 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["API Integrations"])
 security = HTTPBearer()
-rate_limiter = RateLimiter(redis_url=settings.REDIS_URL)
+
+# Initialize rate limiter with proper Redis client
+try:
+    import redis
+    redis_client = redis.from_url(settings.redis.url)
+    rate_limiter = RateLimiter(redis_client=redis_client)
+except Exception as e:
+    logger.warning(f"Redis not available, using in-memory rate limiting: {e}")
+    rate_limiter = RateLimiter()
 
 # Pydantic Models
 class GoogleSheetsAuthRequest(BaseModel):

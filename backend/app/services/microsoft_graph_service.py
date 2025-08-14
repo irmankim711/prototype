@@ -1,6 +1,8 @@
 """
 Microsoft Graph API Integration Service
-Meta DevOps Engineering Standards - Production-Ready Implementation
+Meta DevOps Engineering Standards - Production-Ready Imple        app = ConfidentialClientApplication(
+            client_id=settings.microsoft.client_id,
+            client_secret=settings.microsoft.client_secret,tation
 
 Author: Meta API Integration Specialist
 Performance Targets: 10,000 requests/hour, <5ms latency
@@ -88,8 +90,26 @@ class MicrosoftGraphService:
     """
     
     def __init__(self, redis_client: Optional[redis.Redis] = None):
-        self.redis_client = redis_client or redis.from_url(settings.REDIS_URL)
-        self.authority = f"https://login.microsoftonline.com/{settings.MICROSOFT_TENANT_ID}"
+        from app.core.config import get_settings
+        settings = get_settings()
+        
+        # Check if Microsoft Graph is enabled
+        self.enabled = os.getenv('MICROSOFT_ENABLED', 'true').lower() == 'true'
+        
+        if not self.enabled:
+            logger.info("Microsoft Graph service disabled via MICROSOFT_ENABLED=false")
+            return
+            
+        # Validate required configuration
+        if (not hasattr(settings, 'microsoft') or 
+            settings.microsoft.tenant_id == 'your_microsoft_tenant_id_here' or
+            settings.microsoft.client_id == 'your_microsoft_client_id_here'):
+            logger.warning("Microsoft Graph service disabled: configuration not complete")
+            self.enabled = False
+            return
+            
+        self.redis_client = redis_client or redis.from_url(settings.redis.url)
+        self.authority = f"https://login.microsoftonline.com/{settings.microsoft.tenant_id}"
         self.scopes = [
             "https://graph.microsoft.com/Files.ReadWrite.All",
             "https://graph.microsoft.com/Sites.ReadWrite.All",
@@ -101,8 +121,8 @@ class MicrosoftGraphService:
         
         # Initialize MSAL application
         self.app = ConfidentialClientApplication(
-            client_id=settings.MICROSOFT_CLIENT_ID,
-            client_secret=settings.MICROSOFT_CLIENT_SECRET,
+            client_id=settings.microsoft.client_id,
+            client_credential=settings.microsoft.client_secret,
             authority=self.authority
         )
         
@@ -147,6 +167,9 @@ class MicrosoftGraphService:
         Returns:
             Dictionary containing authorization URL and PKCE parameters
         """
+        if not getattr(self, 'enabled', True):
+            raise AuthenticationError("Microsoft Graph service is disabled")
+            
         pkce_data = self.generate_pkce_challenge()
         
         auth_url = self.app.get_authorization_request_url(

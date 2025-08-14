@@ -392,6 +392,8 @@ def register_blueprints(app):
     from .routes.public_forms import public_forms_bp
     from .routes.google_forms_routes import google_forms_bp
     from .routes.production_routes import production_bp  # NEW: Production routes
+    from .routes.enhanced_report_routes import enhanced_report_bp  # NEW: Enhanced Report Builder
+    from .routes.reports_export import reports_export_bp  # NEW: Unified reports export
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(dashboard_bp)  # Dashboard already has url_prefix='/api/dashboard'
@@ -408,6 +410,8 @@ def register_blueprints(app):
     app.register_blueprint(public_forms_bp, url_prefix='/api/public-forms')
     app.register_blueprint(google_forms_bp)  # Already has url_prefix='/api/google-forms'
     app.register_blueprint(production_bp)  # NEW: Production routes with /api/production prefix
+    app.register_blueprint(enhanced_report_bp)  # NEW: Enhanced Report Builder with /api/enhanced-report prefix
+    app.register_blueprint(reports_export_bp)  # NEW: Unified export endpoints under /api/reports
 
 def main():
     app = create_app()
