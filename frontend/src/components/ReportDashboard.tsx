@@ -127,7 +127,13 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ formId }) => {
   };
 
   const handleGenerateReport = (formId: string) => {
-    generateReportMutation.mutate({ formId, title: `Report for ${formId}` });
+    // Fix: Send the correct data structure that the backend expects
+    generateReportMutation.mutate({ 
+      form_id: parseInt(formId), 
+      report_type: 'summary',
+      title: `Report for Form ${formId}`,
+      description: `Automated report generated for form ${formId}`
+    });
   };
 
   const handlePreviewReport = (report: Report) => {

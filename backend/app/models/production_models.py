@@ -9,6 +9,10 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from flask_sqlalchemy import SQLAlchemy
 import uuid
+import logging
+
+# Setup logging for this module
+logger = logging.getLogger(__name__)
 
 db = SQLAlchemy()
 
@@ -243,74 +247,175 @@ class SystemConfiguration(db.Model):
 
 # Create tables function
 def create_production_tables(app):
-    """Create all production tables"""
-    with app.app_context():
-        db.create_all()
-        print("Production database tables created successfully!")
+    """Create all production tables with enhanced error handling and retry logic"""
+    from ..core.database import with_db_retry, get_db_manager
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    @with_db_retry(max_retries=3, base_delay=2.0)
+    def _create_tables_with_retry():
+        """Create tables with retry logic"""
+        with app.app_context():
+            try:
+                # Test database connection before proceeding
+                db_manager = get_db_manager()
+                health_status = db_manager.health_check(force=True)
+                logger.info(f"Database health before table creation: {health_status}")
+                
+                # Create tables
+                db.create_all()
+                logger.info("Production database tables created successfully!")
+                
+                return True
+            except Exception as e:
+                logger.error(f"Failed to create tables: {str(e)}")
+                raise
+    
+    @with_db_retry(max_retries=3, base_delay=1.0)
+    def _create_default_configs_with_retry():
+        """Create default configurations with retry logic"""
+        with app.app_context():
+            try:
+                # Create default system configurations
+                default_configs = [
+                    {
+                        'key': 'MOCK_MODE_DISABLED',
+                        'value': 'true',
+                        'value_type': 'boolean',
+                        'description': 'Disable all mock data and use real API integrations'
+                    },
+                    {
+                        'key': 'ENABLE_REAL_GOOGLE_FORMS',
+                        'value': 'true',
+                        'value_type': 'boolean',
+                        'description': 'Enable real Google Forms API integration'
+                    },
+                    {
+                        'key': 'ENABLE_REAL_MICROSOFT_FORMS',
+                        'value': 'true',
+                        'value_type': 'boolean',
+                        'description': 'Enable real Microsoft Forms API integration'
+                    },
+                    {
+                        'key': 'ENABLE_REAL_AI',
+                        'value': 'true',
+                        'value_type': 'boolean',
+                        'description': 'Enable real AI analysis using OpenAI API'
+                    },
+                    {
+                        'key': 'PRODUCTION_MODE',
+                        'value': 'true',
+                        'value_type': 'boolean',
+                        'description': 'System running in production mode'
+                    }
+                ]
+                
+                for config in default_configs:
+                    existing_config = SystemConfiguration.query.filter_by(key=config['key']).first()
+                    if not existing_config:
+                        new_config = SystemConfiguration(**config)
+                        db.session.add(new_config)
+                
+                db.session.commit()
+                logger.info("Default system configurations created!")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to create default configurations: {str(e)}")
+                raise
+    
+    # Execute table creation and configuration setup with retry logic
+    try:
+        # Create tables first
+        _create_tables_with_retry()
         
-        # Create default system configurations
-        default_configs = [
-            {
-                'key': 'MOCK_MODE_DISABLED',
-                'value': 'true',
-                'value_type': 'boolean',
-                'description': 'Disable all mock data and use real API integrations'
-            },
-            {
-                'key': 'ENABLE_REAL_GOOGLE_FORMS',
-                'value': 'true',
-                'value_type': 'boolean',
-                'description': 'Enable real Google Forms API integration'
-            },
-            {
-                'key': 'ENABLE_REAL_MICROSOFT_FORMS',
-                'value': 'true',
-                'value_type': 'boolean',
-                'description': 'Enable real Microsoft Forms API integration'
-            },
-            {
-                'key': 'ENABLE_REAL_AI',
-                'value': 'true',
-                'value_type': 'boolean',
-                'description': 'Enable real AI analysis using OpenAI API'
-            },
-            {
-                'key': 'PRODUCTION_MODE',
-                'value': 'true',
-                'value_type': 'boolean',
-                'description': 'System running in production mode'
-            }
-        ]
+        # Then create default configurations
+        _create_default_configs_with_retry()
         
-        for config in default_configs:
-            existing_config = SystemConfiguration.query.filter_by(key=config['key']).first()
-            if not existing_config:
-                new_config = SystemConfiguration(**config)
-                db.session.add(new_config)
+        logger.info("Production database setup completed successfully!")
         
-        db.session.commit()
-        print("Default system configurations created!")
+    except Exception as e:
+        logger.error(f"Failed to setup production database: {str(e)}")
+        raise
 
 # Migration scripts
 def migrate_from_mock_to_production(app):
-    """Migrate existing mock data to production schema"""
-    with app.app_context():
-        # Check if there are any existing users to migrate
-        print("Starting migration from mock to production data...")
-        
-        # This would be customized based on existing schema
-        # For now, we'll just ensure the tables exist
-        create_production_tables(app)
-        
-        print("Migration completed successfully!")
+    """Migrate existing mock data to production schema with enhanced error handling"""
+    from ..core.database import with_db_retry, get_db_manager
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    @with_db_retry(max_retries=3, base_delay=2.0)
+    def _migrate_with_retry():
+        """Execute migration with retry logic"""
+        with app.app_context():
+            try:
+                # Check database health before migration
+                db_manager = get_db_manager()
+                health_status = db_manager.health_check(force=True)
+                logger.info(f"Database health before migration: {health_status}")
+                
+                # Check if there are any existing users to migrate
+                logger.info("Starting migration from mock to production data...")
+                
+                # This would be customized based on existing schema
+                # For now, we'll just ensure the tables exist
+                create_production_tables(app)
+                
+                logger.info("Migration completed successfully!")
+                return True
+                
+            except Exception as e:
+                logger.error(f"Migration failed: {str(e)}")
+                raise
+    
+    try:
+        _migrate_with_retry()
+    except Exception as e:
+        logger.error(f"Migration failed after retries: {str(e)}")
+        raise
 
 if __name__ == "__main__":
     # This can be run standalone to create tables
     from flask import Flask
+    from ..core.database import get_db_manager, check_database_health, get_database_info
+    import logging
+    
+    # Setup logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
     
     app = Flask(__name__)
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://your_user:your_password@localhost/your_database'
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
-    db.init_app(app)
-    create_production_tables(app)
+    # Use environment-based database configuration
+    from ..core.config import get_database_config
+    db_config = get_database_config()
+    app.config.update(db_config)
+    
+    # Initialize database manager
+    db_manager = get_db_manager()
+    
+    try:
+        # Test database connection
+        health_status = check_database_health(force=True)
+        logger.info(f"Database health check: {health_status}")
+        
+        # Get connection info
+        conn_info = get_database_info()
+        logger.info(f"Database connection info: {conn_info}")
+        
+        # Initialize Flask-SQLAlchemy
+        db.init_app(app)
+        
+        # Create tables
+        create_production_tables(app)
+        
+        logger.info("Production tables created successfully!")
+        
+    except Exception as e:
+        logger.error(f"Failed to create production tables: {str(e)}")
+        raise
+    finally:
+        # Clean up database connections
+        db_manager.close()

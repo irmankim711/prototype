@@ -194,7 +194,7 @@ export class ConditionalLogicEngine {
           try {
             const regex = new RegExp(targetValue);
             passed = regex.test(sourceValue);
-          } catch (e) {
+          } catch {
             console.warn("Invalid regex pattern:", targetValue);
             passed = false;
           }
@@ -346,7 +346,7 @@ export class ConditionalLogicEngine {
   /**
    * Add rules to the engine
    */
-  addRules(rules: ConditionalRule[]): void {
+  addRules(_rules: ConditionalRule[]): void {
     // Store rules for evaluation
     // Implementation depends on how you want to store rules
   }

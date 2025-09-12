@@ -1,12 +1,8 @@
 from functools import wraps
-from flask import jsonify
-from flask_jwt_extended import get_jwt_identity
-from .models import User, Permission
-
-from functools import wraps
 from flask import jsonify, current_app
 from flask_jwt_extended import get_jwt_identity
-from .models import User, Permission
+from .models import User
+from .core.auth import Permission
 
 def get_current_user_id():
     """Helper function to get current authenticated user ID as integer with enhanced error handling."""

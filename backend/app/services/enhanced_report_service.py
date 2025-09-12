@@ -89,48 +89,27 @@ class EnhancedReportService:
         """Get all active report templates"""
         if HAS_MODELS and ReportTemplate:
             try:
-                templates = ReportTemplate.query.filter_by(is_active=True).all()
-                return [
-                    {
-                        'id': str(t.id),
-                        'name': t.name,
-                        'description': t.description,
-                        'schema': t.schema,
-                        'isActive': t.is_active,
-                        'createdAt': t.created_at.isoformat() if t.created_at else None
-                    }
-                    for t in templates
-                ]
+                # Check if we're in a Flask application context
+                if current_app:
+                    templates = ReportTemplate.query.filter_by(is_active=True).all()
+                    return [
+                        {
+                            'id': str(t.id),
+                            'name': t.name,
+                            'description': t.description,
+                            'schema': t.schema,
+                            'isActive': t.is_active,
+                            'createdAt': t.created_at.isoformat() if t.created_at else None
+                        }
+                        for t in templates
+                    ]
+                else:
+                    logger.warning("Not in Flask application context, returning empty templates list")
             except Exception as e:
                 logger.error(f"Error fetching templates: {e}")
         
-        # Return mock templates
-        return [
-            {
-                'id': '1',
-                'name': 'Form Submission Summary',
-                'description': 'Summary report of form submissions',
-                'schema': {'format': 'pdf'},
-                'isActive': True,
-                'createdAt': datetime.now().isoformat()
-            },
-            {
-                'id': '2', 
-                'name': 'Detailed Analytics Report',
-                'description': 'Comprehensive analytics and insights',
-                'schema': {'format': 'pdf'},
-                'isActive': True,
-                'createdAt': datetime.now().isoformat()
-            },
-            {
-                'id': '3',
-                'name': 'Executive Summary Report',
-                'description': 'High-level executive summary',
-                'schema': {'format': 'pdf'},
-                'isActive': True,
-                'createdAt': datetime.now().isoformat()
-            }
-        ]
+        # Return empty list instead of mock templates
+        return []
     
     def generate_report(self, template_id: str, data: Dict, user_id: int) -> Dict:
         """Generate a report based on template and data"""
@@ -518,5 +497,5 @@ class EnhancedReportService:
             logger.error(f"Error generating comparison report: {e}")
             raise
 
-# Create global instance
-enhanced_report_service = EnhancedReportService()
+# Service should be instantiated within Flask application context
+# Do not create global instances here

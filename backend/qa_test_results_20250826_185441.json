@@ -1,0 +1,86 @@
+{
+  "form_collection": {
+    "public_forms_endpoint": {
+      "status": "PASS",
+      "details": "Forms count: 0",
+      "timestamp": "2025-08-26T18:54:10.052013"
+    }
+  },
+  "data_storage": {},
+  "excel_layer": {},
+  "report_generation": {
+    "pdf_generation": {
+      "status": "PASS",
+      "details": "Generated PDF: /api/reports/download/report_test_template_20250826_105412.pdf",
+      "timestamp": "2025-08-26T18:54:12.077554"
+    },
+    "pdf_download": {
+      "status": "PASS",
+      "details": "File size: 1623 bytes",
+      "timestamp": "2025-08-26T18:54:14.108394"
+    }
+  },
+  "security": {
+    "authentication_endpoint": {
+      "status": "PASS",
+      "details": "Status code: 401",
+      "timestamp": "2025-08-26T18:53:42.709540"
+    },
+    "jwt_protection": {
+      "status": "PASS",
+      "details": "Status code: 401",
+      "timestamp": "2025-08-26T18:53:44.724189"
+    },
+    "cors_configuration": {
+      "status": "PASS",
+      "details": "Origin: *",
+      "timestamp": "2025-08-26T18:53:46.747940"
+    },
+    "rate_limiting": {
+      "status": "INFO",
+      "details": "Rate limiting not detected (may be disabled in dev)",
+      "timestamp": "2025-08-26T18:54:08.018798"
+    }
+  },
+  "error_handling": {
+    "404_handling": {
+      "status": "PASS",
+      "details": "Proper 404 error response",
+      "timestamp": "2025-08-26T18:54:16.134382"
+    },
+    "invalid_json_handling": {
+      "status": "PASS",
+      "details": "Status code: 400",
+      "timestamp": "2025-08-26T18:54:18.157867"
+    }
+  },
+  "performance": {
+    "response_time": {
+      "status": "FAIL",
+      "details": "Average: 2026.86ms, Max: 2046.95ms",
+      "timestamp": "2025-08-26T18:54:39.429806"
+    },
+    "concurrent_requests": {
+      "status": "FAIL",
+      "details": "Success rate: 40.0%",
+      "timestamp": "2025-08-26T18:54:41.524686"
+    }
+  },
+  "deployment": {
+    "backend_health": {
+      "status": "PASS",
+      "details": "Status: healthy",
+      "timestamp": "2025-08-26T18:53:38.647252"
+    },
+    "database_health": {
+      "status": "FAIL",
+      "details": "Status code: 503",
+      "timestamp": "2025-08-26T18:53:40.678516"
+    },
+    "frontend_accessibility": {
+      "status": "PASS",
+      "details": "Status code: 200",
+      "timestamp": "2025-08-26T18:53:40.686552"
+    }
+  }
+}

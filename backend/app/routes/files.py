@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 import os
 import uuid
 from sqlalchemy import desc, func
-from ..models import db, File, Permission
+from .. import db
+from ..models import File, Permission
 from ..decorators import require_permission, get_current_user
 
 files_bp = Blueprint('files', __name__)

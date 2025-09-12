@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Environment Test</title>
+</head>
+<body>
+    <h1>🧪 Simple Environment Variables Test</h1>
+    <p>Check the console for environment variable values.</p>
+    
+    <script type="module">
+        console.log('🧪 Testing Environment Variables...');
+        console.log('=' * 50);
+        
+        // Test all environment variables
+        const envVars = [
+            'VITE_API_URL',
+            'VITE_ENVIRONMENT', 
+            'VITE_APP_NAME',
+            'VITE_ENABLE_AI_FEATURES',
+            'VITE_API_TIMEOUT',
+            'VITE_MAX_RETRY_ATTEMPTS'
+        ];
+        
+        envVars.forEach(varName => {
+            const value = import.meta.env[varName];
+            if (value !== undefined) {
+                console.log(`✅ ${varName}: ${value}`);
+            } else {
+                console.log(`❌ ${varName}: NOT SET`);
+            }
+        });
+        
+        console.log('\n📋 All Environment Variables:');
+        console.log(import.meta.env);
+        
+        console.log('\n' + '=' * 50);
+        console.log('✅ Environment Test Complete');
+    </script>
+</body>
+</html>

@@ -1,0 +1,319 @@
+% Setting up the document class and basic configurations
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{margin=1in}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{colortbl}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{pdflscape}
+\usepackage{noto}
+
+% Defining colors for tables
+\definecolor{lightgray}{gray}{0.9}
+
+% Document begins
+\begin{document}
+
+% Title Page
+\begin{center}
+    \vspace*{1cm}
+    \textbf{\huge LAPORAN {{program.title}}}\\
+    \vspace{0.5cm}
+    \textbf{{program.location}}\\
+    \vspace{0.5cm}
+    \textbf{Tarikh: {{program.date}}}\\
+    \vspace{0.5cm}
+    \textbf{Masa: {{program.time}}}\\
+    \vspace{1cm}
+    \textbf{ANJURAN: {{program.organizer}}}\\
+    \vspace{0.5cm}
+    \textbf{PERUNDING: MUBARAK RESOURCES}
+\end{center}
+
+% Table of Contents
+\tableofcontents
+\newpage
+
+% Section 1: Program Information
+\section{Maklumat Program}
+\begin{tabular}{|l|l|}
+    \hline
+    \textbf{Latar Belakang Kursus} & {{program.background}} \\
+    \hline
+    \textbf{Tarikh} & {{program.date}} \\
+    \hline
+    \textbf{Tempat} & {{program.place}} \\
+    \hline
+    \textbf{Penceramah} & {{program.speaker}} \\
+    \hline
+    \textbf{Jurulatih} & {{program.trainer}} \\
+    \hline
+    \textbf{Fasilitator} & {{program.facilitator}} \\
+    \hline
+    \textbf{Jumlah Peserta (Lelaki)} & {{program.male_participants}} \\
+    \hline
+    \textbf{Jumlah Peserta (Perempuan)} & {{program.female_participants}} \\
+    \hline
+    \textbf{Jumlah Keseluruhan Hadir} & {{program.total_participants}} \\
+    \hline
+    \textbf{Urusetia} & {{program.secretariat}} \\
+    \hline
+    \textbf{Syarikat Pengangkutan} & {{program.transport_company}} \\
+    \hline
+    \textbf{Katering} & {{program.catering}} \\
+    \hline
+\end{tabular}
+
+% Section 2: Course Objectives
+\section{Objektif Kursus}
+Setelah mengikuti modul, peserta akan:
+\begin{itemize}
+    \item {{program.objectives if program.objectives else 'PROGRAM OBJECTIVES'}}
+\end{itemize}
+
+% Section 3: Program Tentative
+\section{Tentatif Program}
+\subsection{Hari Pertama ({{program.day1_date}})}
+\begin{longtable}{|p{2cm}|p{3cm}|p{7cm}|p{3cm}|}
+    \hline
+    \rowcolor{lightgray}
+    \textbf{Masa} & \textbf{Perkara/Aktiviti} & \textbf{Penerangan} & \textbf{Pengendali Slot} \\
+    \hline
+    \endhead
+    {% for tentative in tentative.day1 %}
+    {{tentative.time}} & {{tentative.activity}} & {{tentative.description}} & {{tentative.handler}} \\
+    \hline
+    {% endfor %}
+\end{longtable}
+
+\subsection{Hari Kedua ({{program.day2_date}})}
+\begin{longtable}{|p{2cm}|p{3cm}|p{7cm}|p{3cm}|}
+    \hline
+    \rowcolor{lightgray}
+    \textbf{Masa} & \textbf{Perkara/Aktiviti} & \textbf{Penerangan} & \textbf{Pengendali Slot} \\
+    \hline
+    \endhead
+    {% for tentative in tentative.day2 %}
+    {{tentative.time}} & {{tentative.activity}} & {{tentative.description}} & {{tentative.handler}} \\
+    \hline
+    {% endfor %}
+\end{longtable}
+
+% Section 4: Program Evaluation
+\section{Penilaian Program}
+\begin{tabular}{|c|p{6cm}|c|c|c|c|c|}
+    \hline
+    \rowcolor{lightgray}
+    \textbf{Jenis Penilaian} & \textbf{Skala} & \textbf{1} & \textbf{2} & \textbf{3} & \textbf{4} & \textbf{5} \\
+    \hline
+    \multicolumn{2}{|c|}{Skala Penilaian} & Tidak Memuaskan & Kurang Memuaskan & Memuaskan & Baik & Cemerlang \\
+    \hline
+    \multicolumn{7}{|c|}{\textbf{A – Kandungan Kursus}} \\
+    \hline
+    Menepati objektif kursus & Jumlah Penilaian & {{evaluation.content.objective.1}} & {{evaluation.content.objective.2}} & {{evaluation.content.objective.3}} & {{evaluation.content.objective.4}} & {{evaluation.content.objective.5}} \\
+    \hline
+    Kandungan modul memberi impak & Jumlah Penilaian & {{evaluation.content.impact.1}} & {{evaluation.content.impact.2}} & {{evaluation.content.impact.3}} & {{evaluation.content.impact.4}} & {{evaluation.content.impact.5}} \\
+    \hline
+    Jangka masa sesi & Jumlah Penilaian & {{evaluation.content.duration.1}} & {{evaluation.content.duration.2}} & {{evaluation.content.duration.3}} & {{evaluation.content.duration.4}} & {{evaluation.content.duration.5}} \\
+    \hline
+    \multicolumn{7}{|c|}{\textbf{B – Alat Bantu Mengajar}} \\
+    \hline
+    Cetakkan nota & Jumlah Penilaian & {{evaluation.tools.notes.1}} & {{evaluation.tools.notes.2}} & {{evaluation.tools.notes.3}} & {{evaluation.tools.notes.4}} & {{evaluation.tools.notes.5}} \\
+    \hline
+    Nota mudah fahami & Jumlah Penilaian & {{evaluation.tools.notes_clarity.1}} & {{evaluation.tools.notes_clarity.2}} & {{evaluation.tools.notes_clarity.3}} & {{evaluation.tools.notes_clarity.4}} & {{evaluation.tools.notes_clarity.5}} \\
+    \hline
+    Penggunaan ‘white board’ & Jumlah Penilaian & {{evaluation.tools.whiteboard.1}} & {{evaluation.tools.whiteboard.2}} & {{evaluation.tools.whiteboard.3}} & {{evaluation.tools.whiteboard.4}} & {{evaluation.tools.whiteboard.5}} \\
+    \hline
+    Sistem LCD & Jumlah Penilaian & {{evaluation.tools.lcd.1}} & {{evaluation.tools.lcd.2}} & {{evaluation.tools.lcd.3}} & {{evaluation.tools.lcd.4}} & {{evaluation.tools.lcd.5}} \\
+    \hline
+    Penggunaan PA sistem & Jumlah Penilaian & {{evaluation.tools.pa_system.1}} & {{evaluation.tools.pa_system.2}} & {{evaluation.tools.pa_system.3}} & {{evaluation.tools.pa_system.4}} & {{evaluation.tools.pa_system.5}} \\
+    \hline
+    \multicolumn{7}{|c|}{\textbf{C – Keberkesanan Penyampai}} \\
+    \hline
+    Persediaan yang rapi & Jumlah Penilaian & {{evaluation.presenter.preparation.1}} & {{evaluation.presenter.preparation.2}} & {{evaluation.presenter.preparation.3}} & {{evaluation.presenter.preparation.4}} & {{evaluation.presenter.preparation.5}} \\
+    \hline
+    Penyampaian yang teratur & Jumlah Penilaian & {{evaluation.presenter.delivery.1}} & {{evaluation.presenter.delivery.2}} & {{evaluation.presenter.delivery.3}} & {{evaluation.presenter.delivery.4}} & {{evaluation.presenter.delivery.5}} \\
+    \hline
+    Bahasa mudah difahami & Jumlah Penilaian & {{evaluation.presenter.language.1}} & {{evaluation.presenter.language.2}} & {{evaluation.presenter.language.3}} & {{evaluation.presenter.language.4}} & {{evaluation.presenter.language.5}} \\
+    \hline
+    Pengetahuan tajuk kursus & Jumlah Penilaian & {{evaluation.presenter.knowledge.1}} & {{evaluation.presenter.knowledge.2}} & {{evaluation.presenter.knowledge.3}} & {{evaluation.presenter.knowledge.4}} & {{evaluation.presenter.knowledge.5}} \\
+    \hline
+    Menjawab soalan dengan baik & Jumlah Penilaian & {{evaluation.presenter.answering.1}} & {{evaluation.presenter.answering.2}} & {{evaluation.presenter.answering.3}} & {{evaluation.presenter.answering.4}} & {{evaluation.presenter.answering.5}} \\
+    \hline
+    Metodologi latihan sesuai & Jumlah Penilaian & {{evaluation.presenter.methodology.1}} & {{evaluation.presenter.methodology.2}} & {{evaluation.presenter.methodology.3}} & {{evaluation.presenter.methodology.4}} & {{evaluation.presenter.methodology.5}} \\
+    \hline
+    Menarik minat peserta & Jumlah Penilaian & {{evaluation.presenter.engagement.1}} & {{evaluation.presenter.engagement.2}} & {{evaluation.presenter.engagement.3}} & {{evaluation.presenter.engagement.4}} & {{evaluation.presenter.engagement.5}} \\
+    \hline
+    Maklumbalas peserta & Jumlah Penilaian & {{evaluation.presenter.feedback.1}} & {{evaluation.presenter.feedback.2}} & {{evaluation.presenter.feedback.3}} & {{evaluation.presenter.feedback.4}} & {{evaluation.presenter.feedback.5}} \\
+    \hline
+    \multicolumn{7}{|c|}{\textbf{D – Fasilitator}} \\
+    \hline
+    Memberi impak kepada peserta & Jumlah Penilaian & {{evaluation.facilitator.impact.1}} & {{evaluation.facilitator.impact.2}} & {{evaluation.facilitator.impact.3}} & {{evaluation.facilitator.impact.4}} & {{evaluation.facilitator.impact.5}} \\
+    \hline
+    Prestasi keseluruhan & Jumlah Penilaian & {{evaluation.facilitator.performance.1}} & {{evaluation.facilitator.performance.2}} & {{evaluation.facilitator.performance.3}} & {{evaluation.facilitator.performance.4}} & {{evaluation.facilitator.performance.5}} \\
+    \hline
+    \multicolumn{7}{|c|}{\textbf{E – Persekitaran}} \\
+    \hline
+    Lokasi kursus & Jumlah Penilaian & {{evaluation.environment.location.1}} & {{evaluation.environment.location.2}} & {{evaluation.environment.location.3}} & {{evaluation.environment.location.4}} & {{evaluation.environment.location.5}} \\
+    \hline
+    Kemudahan tempat ibadah & Jumlah Penilaian & {{evaluation.environment.worship.1}} & {{evaluation.environment.worship.2}} & {{evaluation.environment.worship.3}} & {{evaluation.environment.worship.4}} & {{evaluation.environment.worship.5}} \\
+    \hline
+    Kemudahan asas & Jumlah Penilaian & {{evaluation.environment.facilities.1}} & {{evaluation.environment.facilities.2}} & {{evaluation.environment.facilities.3}} & {{evaluation.environment.facilities.4}} & {{evaluation.environment.facilities.5}} \\
+    \hline
+    Penyediaan makan/minuman & Jumlah Penilaian & {{evaluation.environment.catering.1}} & {{evaluation.environment.catering.2}} & {{evaluation.environment.catering.3}} & {{evaluation.environment.catering.4}} & {{evaluation.environment.catering.5}} \\
+    \hline
+    Kemudahan dewan seminar & Jumlah Penilaian & {{evaluation.environment.seminar_hall.1}} & {{evaluation.environment.seminar_hall.2}} & {{evaluation.environment.seminar_hall.3}} & {{evaluation.environment.seminar_hall.4}} & {{evaluation.environment.seminar_hall.5}} \\
+    \hline
+    \multicolumn{7}{|c|}{\textbf{F – Keseluruhan Kursus}} \\
+    \hline
+    Memberi impak kepada peserta & Jumlah Penilaian & {{evaluation.overall.impact.1}} & {{evaluation.overall.impact.2}} & {{evaluation.overall.impact.3}} & {{evaluation.overall.impact.4}} & {{evaluation.overall.impact.5}} \\
+    \hline
+    Prestasi keseluruhan & Jumlah Penilaian & {{evaluation.overall.performance.1}} & {{evaluation.overall.performance.2}} & {{evaluation.overall.performance.3}} & {{evaluation.overall.performance.4}} & {{evaluation.overall.performance.5}} \\
+    \hline
+\end{tabular}
+
+% Section 5: Improvement Suggestions
+\section{Cadangan Penambahbaikan}
+\subsection{Cadangan Perunding}
+\begin{itemize}
+    \item {{suggestions.consultant}}
+\end{itemize}
+
+\subsection{Cadangan Asnaf/Peserta}
+\begin{itemize}
+    \item {{suggestions.participants}}
+\end{itemize}
+
+% Section 6: Evaluation Summary
+\section{Rumusan Penilaian}
+Penilaian dibuat berdasarkan borang penilaian yang diisi oleh {{evaluation.total_participants}} orang peserta. Penilaian merangkumi enam komponen: kandungan sesi, alat bantu mengajar, keberkesanan penyampaian, fasilitator, persekitaran, dan impak keseluruhan program. Skala penilaian adalah seperti berikut:
+
+\begin{tabular}{|c|c|c|c|c|}
+    \hline
+    \rowcolor{lightgray}
+    \textbf{1} & \textbf{2} & \textbf{3} & \textbf{4} & \textbf{5} \\
+    \hline
+    Tidak Memuaskan & Kurang Memuaskan & Memuaskan & Baik & Cemerlang \\
+    \hline
+\end{tabular}
+
+\begin{tabular}{|c|c|c|c|c|}
+    \hline
+    \rowcolor{lightgray}
+    \textbf{Peratus} & \textbf{Tidak Memuaskan} & \textbf{Kurang Memuaskan} & \textbf{Memuaskan} & \textbf{Baik} & \textbf{Cemerlang} \\
+    \hline
+    & {{evaluation.summary.percentage.1}} & {{evaluation.summary.percentage.2}} & {{evaluation.summary.percentage.3}} & {{evaluation.summary.percentage.4}} & {{evaluation.summary.percentage.5}} \\
+    \hline
+\end{tabular}
+
+% Placeholder for chart (to be generated by automation system)
+% {{evaluation.chart}}
+
+% Section 7: Pre and Post Analysis
+\section{Analisa Pra dan Post}
+\subsection{Pra Penilaian Peserta}
+\begin{longtable}{|c|p{6cm}|c|}
+    \hline
+    \rowcolor{lightgray}
+    \textbf{Bil} & \textbf{Nama} & \textbf{Markah Pra} \\
+    \hline
+    \endhead
+    {{#participants}}
+    {{participant.bil}} & {{participant.name}} & {{participant.pre_mark}} \\
+    \hline
+    {{/participants}}
+\end{longtable}
+
+\subsection{Post Penilaian Peserta}
+\begin{longtable}{|c|p{6cm}|c|}
+    \hline
+    \rowcolor{lightgray}
+    \textbf{Bil} & \textbf{Nama} & \textbf{Markah Post} \\
+    \hline
+    \endhead
+    {{#participants}}
+    {{participant.bil}} & {{participant.name}} & {{participant.post_mark}} \\
+    \hline
+    {{/participants}}
+\end{longtable}
+
+\subsection{Analisa Pra dan Post}
+\begin{longtable}{|c|p{6cm}|c|c|c|}
+    \hline
+    \rowcolor{lightgray}
+    \textbf{Bil} & \textbf{Nama} & \textbf{Markah Pra} & \textbf{Markah Post} & \textbf{Kenaikan/Penurunan} \\
+    \hline
+    \endhead
+    {{#participants}}
+    {{participant.bil}} & {{participant.name}} & {{participant.pre_mark}} & {{participant.post_mark}} & {{participant.change}} \\
+    \hline
+    {{/participants}}
+\end{longtable}
+
+\subsection{Rumusan Penilaian Pra Post}
+\begin{tabular}{|c|c|c|c|c|}
+    \hline
+    \rowcolor{lightgray}
+    \textbf{} & \textbf{Menurun} & \textbf{Tiada Peningkatan} & \textbf{Meningkat} & \textbf{Tidak Lengkap} \\
+    \hline
+    Peratus & {{evaluation.pre_post.decrease.percentage}} & {{evaluation.pre_post.no_change.percentage}} & {{evaluation.pre_post.increase.percentage}} & {{evaluation.pre_post.incomplete.percentage}} \\
+    \hline
+    Orang & {{evaluation.pre_post.decrease.count}} & {{evaluation.pre_post.no_change.count}} & {{evaluation.pre_post.increase.count}} & {{evaluation.pre_post.incomplete.count}} \\
+    \hline
+\end{tabular}
+
+% Section 8: Attendance Report
+\section{Laporan Kehadiran Peserta}
+\begin{longtable}{|c|p{4cm}|p{3cm}|p{4cm}|p{2cm}|c|c|p{2cm}|}
+    \hline
+    \rowcolor{lightgray}
+    \textbf{Bil} & \textbf{Nama} & \textbf{No. K/P} & \textbf{Alamat} & \textbf{No. Tel} & \textbf{Hadir H1} & \textbf{Hadir H2} & \textbf{Catatan} \\
+    \hline
+    \endhead
+    {{#participants}}
+    {{participant.bil}} & {{participant.name}} & {{participant.ic}} & {{participant.address}} & {{participant.tel}} & {{participant.attendance_day1}} & {{participant.attendance_day2}} & {{participant.notes}} \\
+    \hline
+    {{/participants}}
+\end{longtable}
+
+\textbf{Jumlah Jemputan:} {{attendance.total_invited}} \\
+\textbf{Jumlah Kehadiran:} {{attendance.total_attended}} \\
+\textbf{Jumlah Tidak Hadir:} {{attendance.total_absent}}
+
+% Section 9: Individual Asnaf Evaluation
+\section{Laporan Penilaian Asnaf Individu}
+Penilaian dibuat berdasarkan {{evaluation.total_participants}} orang peserta yang hadir pada hari kedua. Penilaian merangkumi tiga komponen: kandungan sesi, keberkesanan penyampaian, dan impak keseluruhan program. Maklum balas ini boleh digunakan untuk penambahbaikan program akan datang.
+
+% Section 10: Program Pictures
+\section{Gambar Program}
+\begin{figure}[h]
+    \centering
+    {{#images}}
+    \includegraphics[width=0.45\textwidth]{{image.path}}
+    \caption{{image.caption}}
+    \vspace{0.5cm}
+    {{/images}}
+\end{figure}
+
+% Section 11: Conclusion
+\section{Kesimpulan}
+{{program.conclusion}}
+
+% Signatures
+\begin{center}
+    \vspace{1cm}
+    \begin{tabular}{p{5cm}p{5cm}p{5cm}}
+        \textbf{Disediakan Oleh:} & \textbf{Disemak Oleh:} & \textbf{Disahkan Oleh:} \\
+        Perunding (MUBARAK RESOURCES) & Eksekutif Pembangunan Asnaf & Ketua Jabatan Pembangunan Insan dan Ekonomi \\
+        {{signature.consultant.name}} & {{signature.executive.name}} & {{signature.head.name}} \\
+        Tarikh: {{program.date}} & Tarikh: {{program.date}} & Tarikh: {{program.date}} \\
+    \end{tabular}
+\end{center}
+
+\end{document}

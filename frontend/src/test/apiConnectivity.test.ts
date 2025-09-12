@@ -21,7 +21,7 @@ async function testApiConnectivity() {
   const testEmail = `apitest_${Date.now()}@example.com`;
   const testPassword = 'apitest123';
   try {
-    await axios.post(`${API_BASE_URL}/auth/register`, {
+    await axios.post(`${API_BASE_URL}/api/auth/register`, { // ✅ FIXED: Keep /api prefix since this uses direct axios, not the configured instance
       email: testEmail,
       password: testPassword,
     });
@@ -38,7 +38,7 @@ async function testApiConnectivity() {
   // 3. Login
   let token = '';
   try {
-    const res = await axios.post(`${API_BASE_URL}/auth/login`, {
+    const res = await axios.post(`${API_BASE_URL}/api/auth/login`, { // ✅ FIXED: Keep /api prefix since this uses direct axios, not the configured instance
       email: testEmail,
       password: testPassword,
     });

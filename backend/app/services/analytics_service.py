@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from sqlalchemy import func, and_, desc, cast, Date
-from ..models import db, Form, FormSubmission, User
+from .. import db
+from ..models import Form, FormSubmission, User
 from typing import Dict, List, Any, Optional
 import json
 

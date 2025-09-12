@@ -78,35 +78,63 @@ class ExcelTableDetector:
         """Find all tables in a single sheet using openpyxl."""
         tables = []
         
-        # Get all non-empty cells
-        non_empty_cells = []
-        for row in sheet.iter_rows():
-            for cell in row:
-                if cell.value is not None and str(cell.value).strip():
-                    non_empty_cells.append((cell.row - 1, cell.column - 1))  # Convert to 0-based
+        # Get sheet dimensions
+        max_row = sheet.max_row
+        max_col = sheet.max_column
         
-        if not non_empty_cells:
+        if max_row < 2 or max_col < 2:  # Need at least header + 1 data row
             return tables
         
-        # Group cells into contiguous blocks
-        table_blocks = self._group_cells_into_blocks(non_empty_cells)
+        # Simple approach: treat the entire sheet as one table
+        # This is more reliable than complex flood fill algorithms
+        table_data = []
         
-        # Process each block
-        for block_idx, block in enumerate(table_blocks):
-            table_data = self._extract_table_data_openpyxl(sheet, block)
-            if table_data and len(table_data) > 1:  # At least header + 1 row
-                table_name = f"{sheet_name}_Table{block_idx + 1}" if len(table_blocks) > 1 else sheet_name
+        # Extract all data from the sheet
+        for row_idx in range(1, max_row + 1):
+            row_data = []
+            for col_idx in range(1, max_col + 1):
+                cell = sheet.cell(row=row_idx, column=col_idx)
+                value = self._clean_cell_value(cell.value)
+                row_data.append(value)
+            
+            # Only add rows that have at least one non-empty cell
+            if any(cell is not None and str(cell).strip() for cell in row_data):
+                table_data.append(row_data)
+        
+        if len(table_data) >= 2:  # At least header + 1 data row
+            # Clean up empty columns
+            if table_data:
+                # Find columns with data
+                non_empty_cols = []
+                for col_idx in range(len(table_data[0])):
+                    has_data = False
+                    for row_idx in range(len(table_data)):
+                        if row_idx < len(table_data) and col_idx < len(table_data[row_idx]):
+                            if table_data[row_idx][col_idx] is not None and str(table_data[row_idx][col_idx]).strip():
+                                has_data = True
+                                break
+                    if has_data:
+                        non_empty_cols.append(col_idx)
                 
-                tables.append({
-                    'name': table_name,
-                    'sheet_name': sheet_name,
-                    'data': table_data,
-                    'headers': table_data[0] if table_data else [],
-                    'row_count': len(table_data) - 1 if table_data else 0,
-                    'column_count': len(table_data[0]) if table_data else 0,
-                    'range': self._get_table_range(block),
-                    'data_types': self._infer_column_types(table_data)
-                })
+                # Filter table data to only include non-empty columns
+                if non_empty_cols:
+                    filtered_table_data = []
+                    for row in table_data:
+                        filtered_row = [row[col_idx] for col_idx in non_empty_cols if col_idx < len(row)]
+                        filtered_table_data.append(filtered_row)
+                    
+                    table_data = filtered_table_data
+            
+            tables.append({
+                'name': sheet_name,
+                'sheet_name': sheet_name,
+                'data': table_data,
+                'headers': table_data[0] if table_data else [],
+                'row_count': len(table_data) - 1 if table_data else 0,
+                'column_count': len(table_data[0]) if table_data else 0,
+                'range': f"A1:{chr(65 + len(table_data[0]) - 1)}{len(table_data)}" if table_data else "A1:A1",
+                'data_types': self._infer_column_types(table_data) if table_data else []
+            })
         
         return tables
     
@@ -416,30 +444,80 @@ class ExcelParserService:
             Dictionary containing parsed tables and metadata
         """
         try:
+            # Validate input
+            if not file_path:
+                return {
+                    'success': False,
+                    'error': 'No file path provided',
+                    'filename': filename or 'unknown'
+                }
+            
             # Detect file extension
             file_extension = None
             if filename:
                 file_extension = self._get_file_extension(filename)
             
-            # Initialize detector
-            detector = ExcelTableDetector(file_path, file_extension)
+            # Initialize detector with error handling
+            try:
+                detector = ExcelTableDetector(file_path, file_extension)
+            except Exception as detector_error:
+                logger.error(f"Failed to initialize Excel detector: {str(detector_error)}")
+                return {
+                    'success': False,
+                    'error': f'Failed to initialize Excel detector: {str(detector_error)}',
+                    'filename': filename or 'unknown'
+                }
             
-            # Detect all tables
-            tables = detector.detect_all_tables()
+            # Detect all tables with error handling
+            try:
+                tables = detector.detect_all_tables()
+            except Exception as detection_error:
+                logger.error(f"Failed to detect tables: {str(detection_error)}")
+                return {
+                    'success': False,
+                    'error': f'Failed to detect tables: {str(detection_error)}',
+                    'filename': filename or 'unknown'
+                }
             
-            # Generate response
+            # Validate tables data
+            if not tables or not isinstance(tables, list):
+                logger.warning(f"No valid tables found in file: {filename or 'unknown'}")
+                tables = []
+            
+            # Calculate metadata safely
+            total_rows = 0
+            total_columns = 0
+            sheets_processed = set()
+            
+            for table in tables:
+                if isinstance(table, dict):
+                    total_rows += table.get('row_count', 0)
+                    total_columns += table.get('column_count', 0)
+                    sheet_name = table.get('sheet_name', 'Unknown')
+                    if sheet_name:
+                        sheets_processed.add(sheet_name)
+            
+            # Generate response with enhanced error handling
             response = {
                 'success': True,
                 'filename': filename or 'unknown',
                 'tables_count': len(tables),
                 'tables': tables,
+                'total_rows': total_rows,
+                'total_columns': total_columns,
+                'sheets_processed': len(sheets_processed),
                 'metadata': {
                     'parsed_at': datetime.utcnow().isoformat(),
-                    'total_rows': sum(table['row_count'] for table in tables),
-                    'total_columns': sum(table['column_count'] for table in tables),
-                    'sheets_processed': len(set(table['sheet_name'] for table in tables))
+                    'total_rows': total_rows,
+                    'total_columns': total_columns,
+                    'sheets_processed': len(sheets_processed),
+                    'file_extension': file_extension,
+                    'processing_status': 'completed'
                 }
             }
+            
+            logger.info(f"Successfully parsed Excel file: {filename or 'unknown'}, "
+                       f"{len(tables)} tables, {total_rows} rows, {total_columns} columns")
             
             return response
             
@@ -448,7 +526,12 @@ class ExcelParserService:
             return {
                 'success': False,
                 'error': str(e),
-                'filename': filename or 'unknown'
+                'filename': filename or 'unknown',
+                'metadata': {
+                    'parsed_at': datetime.utcnow().isoformat(),
+                    'processing_status': 'failed',
+                    'error_details': str(e)
+                }
             }
     
     def _get_file_extension(self, filename: str) -> str:
@@ -519,3 +602,51 @@ class ExcelParserService:
         sql_parts.append(");")
         
         return "\n".join(sql_parts)
+    
+    def _infer_column_types(self, table_data: List[List[Any]]) -> List[str]:
+        """Infer data types for each column based on sample data."""
+        if not table_data or len(table_data) < 2:
+            return []
+        
+        headers = table_data[0]
+        column_types = []
+        
+        for col_idx in range(len(headers)):
+            # Sample values from the column (skip header row)
+            sample_values = []
+            for row_idx in range(1, min(len(table_data), 6)):  # Get up to 5 sample values
+                if row_idx < len(table_data) and col_idx < len(table_data[row_idx]):
+                    value = table_data[row_idx][col_idx]
+                    if value is not None and str(value).strip():
+                        sample_values.append(value)
+            
+            # Determine data type based on sample values
+            if not sample_values:
+                column_types.append('text')
+                continue
+            
+            # Check if all values are numeric
+            numeric_count = 0
+            date_count = 0
+            
+            for value in sample_values:
+                if isinstance(value, (int, float)):
+                    numeric_count += 1
+                elif isinstance(value, str):
+                    # Try to detect date
+                    try:
+                        from datetime import datetime
+                        datetime.strptime(value, '%Y-%m-%d')
+                        date_count += 1
+                    except ValueError:
+                        pass
+            
+            # Determine most common type
+            if date_count > len(sample_values) * 0.7:  # 70% are dates
+                column_types.append('date')
+            elif numeric_count > len(sample_values) * 0.7:  # 70% are numeric
+                column_types.append('number')
+            else:
+                column_types.append('text')
+        
+        return column_types

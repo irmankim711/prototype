@@ -4,7 +4,12 @@ Initialize database - create tables and run migrations
 """
 
 import os
+import sys
 from dotenv import load_dotenv
+
+# Add the backend directory to Python path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate, init, migrate, upgrade
@@ -21,9 +26,13 @@ def init_database():
     
     # Create Flask app
     app = Flask(__name__)
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL').replace(
-        'postgresql://', 'postgresql+psycopg2://', 1
-    )
+    
+    # Get database URL from environment
+    database_url = os.getenv('DATABASE_URL', 'sqlite:///app.db')
+    if database_url.startswith('postgresql://'):
+        database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+    
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     # Initialize extensions
@@ -34,7 +43,7 @@ def init_database():
     with app.app_context():
         try:
             # Import models to register them
-            from app.models import User, Report, ReportTemplate
+            from app.models import User, Report, ReportTemplate, Program, Participant, FormIntegration
             
             print("📋 Creating all tables...")
             db.create_all()
@@ -56,6 +65,8 @@ def init_database():
                 
         except Exception as e:
             print(f"❌ Error initializing database: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     print("\n✅ Database initialization completed!")

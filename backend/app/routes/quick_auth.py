@@ -3,7 +3,8 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 from flask_limiter.util import get_remote_address
 from flask_limiter import Limiter
 from datetime import datetime, timedelta
-from ..models import db, QuickAccessToken, Form, FormSubmission
+from .. import db
+from ..models import QuickAccessToken, Form, FormSubmission
 from ..services.twilio_service import twilio_service
 import random
 import string

@@ -372,7 +372,7 @@ export default function LandingPageEnhanced() {
       const response = await login({ email, password });
       console.log("Login response received:", response);
       if (response.access_token) {
-        localStorage.setItem("token", response.access_token);
+        localStorage.setItem("accessToken", response.access_token);
         console.log("Token saved to localStorage, navigating to dashboard...");
         navigate("/dashboard");
       } else {
@@ -558,7 +558,7 @@ export default function LandingPageEnhanced() {
       icon: <AutoAwesome />,
       title: "AI-Powered Analytics",
       description:
-        "Advanced machine learning algorithms that transform your data into actionable insights automatically.",
+        "Advanced machine learning algorithms that transform your form data into actionable insights automatically.",
       color: "#6366f1",
       delay: 100,
     },
@@ -566,7 +566,7 @@ export default function LandingPageEnhanced() {
       icon: <Security />,
       title: "Enterprise Security",
       description:
-        "Bank-grade encryption and compliance standards protecting your most sensitive business data.",
+        "Bank-grade encryption and compliance standards protecting your most sensitive business data and form submissions.",
       color: "#10b981",
       delay: 200,
     },
@@ -574,7 +574,7 @@ export default function LandingPageEnhanced() {
       icon: <Speed />,
       title: "Lightning Fast",
       description:
-        "Optimized performance that processes millions of records in seconds, not hours.",
+        "Optimized performance that processes form submissions and generates reports in seconds, not hours.",
       color: "#f59e0b",
       delay: 300,
     },
@@ -582,7 +582,7 @@ export default function LandingPageEnhanced() {
       icon: <Hub />,
       title: "Seamless Integration",
       description:
-        "Connect with 500+ business tools and platforms with just a few clicks.",
+        "Connect with your existing business tools and platforms with our comprehensive API and webhook system.",
       color: "#ec4899",
       delay: 400,
     },
@@ -590,7 +590,7 @@ export default function LandingPageEnhanced() {
       icon: <Timeline />,
       title: "Real-time Insights",
       description:
-        "Live dashboards and real-time analytics keep you ahead of the competition.",
+        "Live dashboards and real-time analytics keep you informed about form submissions and report generation.",
       color: "#8b5cf6",
       delay: 500,
     },
@@ -598,15 +598,15 @@ export default function LandingPageEnhanced() {
       icon: <CloudUpload />,
       title: "Cloud Native",
       description:
-        "Built for the cloud with automatic scaling and 99.9% uptime guarantee.",
+        "Built for the cloud with automatic scaling and 99.9% uptime guarantee for your form processing needs.",
       color: "#06b6d4",
       delay: 600,
     },
   ];
 
   const stats = [
-    { number: "10M+", label: "Reports Generated", color: "#6366f1" },
-    { number: "500+", label: "Enterprise Clients", color: "#10b981" },
+    { number: "10K+", label: "Forms Processed", color: "#6366f1" },
+    { number: "100+", label: "Active Users", color: "#10b981" },
     { number: "99.9%", label: "Uptime Guarantee", color: "#f59e0b" },
     { number: "24/7", label: "Expert Support", color: "#ec4899" },
   ];
@@ -699,6 +699,9 @@ export default function LandingPageEnhanced() {
                   value={email}
                   onChange={(e: any) => setEmail(e.target.value)}
                   required
+                  inputProps={{
+                    autoComplete: "username"
+                  }}
                 />
                 <StyledTextField
                   fullWidth
@@ -707,6 +710,9 @@ export default function LandingPageEnhanced() {
                   value={password}
                   onChange={(e: any) => setPassword(e.target.value)}
                   required
+                  inputProps={{
+                    autoComplete: "current-password"
+                  }}
                 />
                 <FormControlLabel
                   control={
@@ -922,49 +928,6 @@ export default function LandingPageEnhanced() {
                 </Box>
               )}
 
-              {/* Development Bypass Button */}
-              <Divider sx={{ my: 3 }}>
-                <Typography variant="body2" color="textSecondary">
-                  DEVELOPMENT
-                </Typography>
-              </Divider>
-
-              <Button
-                onClick={() => {
-                  // Store a dummy token for bypass
-                  localStorage.setItem("quickAccessToken", "dev-bypass-token");
-                  localStorage.setItem(
-                    "quickAccessUser",
-                    JSON.stringify({
-                      name: "Development User",
-                      email: "dev@example.com",
-                      access_type: "bypass",
-                    })
-                  );
-                  console.log("Development bypass: Navigating to public forms");
-                  navigate("/forms/public");
-                }}
-                fullWidth
-                variant="outlined"
-                sx={{
-                  py: 2,
-                  mb: 3,
-                  borderRadius: "12px",
-                  border: "2px solid #f59e0b",
-                  color: "#f59e0b",
-                  fontSize: "1.1rem",
-                  fontWeight: 600,
-                  transition: "all 0.3s ease",
-                  "&:hover": {
-                    background: "#fef3c7",
-                    borderColor: "#d97706",
-                    color: "#d97706",
-                  },
-                }}
-              >
-                🚀 Skip Authentication (Dev Mode)
-              </Button>
-
               <Divider sx={{ my: 3 }} />
               <Typography align="center" color="textSecondary">
                 Need full admin access?{" "}
@@ -1025,6 +988,9 @@ export default function LandingPageEnhanced() {
                   value={signupPassword}
                   onChange={(e: any) => setSignupPassword(e.target.value)}
                   required
+                  inputProps={{
+                    autoComplete: "new-password"
+                  }}
                 />
                 <StyledTextField
                   fullWidth
@@ -1033,6 +999,9 @@ export default function LandingPageEnhanced() {
                   value={signupConfirm}
                   onChange={(e: any) => setSignupConfirm(e.target.value)}
                   required
+                  inputProps={{
+                    autoComplete: "new-password"
+                  }}
                 />
                 <Button
                   type="submit"
@@ -1102,7 +1071,7 @@ export default function LandingPageEnhanced() {
                           animation: `${fadeInUp} 1s ease-out`,
                         }}
                       >
-                        Transform Data Into
+                        Transform Forms Into
                         <Box
                           component="span"
                           sx={{
@@ -1114,7 +1083,7 @@ export default function LandingPageEnhanced() {
                             animation: `${pulse} 2s ease-in-out infinite`,
                           }}
                         >
-                          Business Gold
+                          Report
                         </Box>
                       </Typography>
                       <Typography
@@ -1127,9 +1096,9 @@ export default function LandingPageEnhanced() {
                           animation: `${fadeInUp} 1s ease-out 0.3s both`,
                         }}
                       >
-                        Unlock the power of AI-driven analytics and automated
-                        reporting. Make decisions faster with real-time insights
-                        that matter.
+                        Transform your form submissions into comprehensive reports with AI-driven analytics. 
+                        Streamline data collection, automate report generation, and gain actionable insights 
+                        from your form data in real-time.
                       </Typography>
                       <Box
                         sx={{
@@ -1200,7 +1169,7 @@ export default function LandingPageEnhanced() {
                       justifyContent: "center",
                     }}
                   >
-                    {/* Animated dashboard preview */}
+                    {/* Professional dashboard preview */}
                     <Box
                       sx={{
                         width: "100%",
@@ -1226,13 +1195,13 @@ export default function LandingPageEnhanced() {
                         },
                       }}
                     >
-                      {/* Mock dashboard content */}
+                      {/* Professional dashboard content */}
                       <Box sx={{ p: 3 }}>
                         <Box
                           sx={{
                             height: "20px",
                             background:
-                              "linear-gradient(90deg, #e2e8f0, #cbd5e1)",
+                              "linear-gradient(90deg, #6366f1, #8b5cf6)",
                             borderRadius: "10px",
                             mb: 2,
                             width: "60%",
@@ -1275,7 +1244,7 @@ export default function LandingPageEnhanced() {
                             overflow: "hidden",
                           }}
                         >
-                          {/* Animated chart bars */}
+                          {/* Professional chart visualization */}
                           <Box
                             sx={{
                               position: "absolute",
@@ -1384,8 +1353,7 @@ export default function LandingPageEnhanced() {
                   color="textSecondary"
                   sx={{ maxWidth: 600, mx: "auto" }}
                 >
-                  Everything you need to transform your data into actionable
-                  insights
+                  Everything you need to transform your form submissions into comprehensive reports and actionable insights
                 </Typography>
               </Box>
               <Grid container spacing={4}>
@@ -1463,8 +1431,7 @@ export default function LandingPageEnhanced() {
                   variant="h6"
                   sx={{ mb: 6, color: "#cbd5e1", maxWidth: 600, mx: "auto" }}
                 >
-                  Join thousands of companies already using StratoSys to make
-                  better decisions
+                  Join organizations already using StratoSys to streamline their form processing and report generation workflows
                 </Typography>
                 <Box
                   sx={{
@@ -1549,8 +1516,8 @@ export default function LandingPageEnhanced() {
           </Typography>
           <Typography variant="body1" sx={{ mb: 3, color: "textSecondary" }}>
             {modalContent === "solutions"
-              ? "Discover how StratoSys can transform your business with our comprehensive suite of analytics tools."
-              : "Choose the perfect plan for your business needs. All plans include our core features with varying levels of support and customization."}
+              ? "Discover how StratoSys can transform your form processing workflow with our comprehensive suite of analytics and reporting tools."
+              : "Choose the perfect plan for your form processing and reporting needs. All plans include our core features with varying levels of support and customization."}
           </Typography>
           <Button
             variant="contained"

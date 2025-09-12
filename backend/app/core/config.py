@@ -11,6 +11,12 @@ from pathlib import Path
 import redis
 from functools import lru_cache
 
+# Import enhanced environment loader
+from .env_loader import get_environment_info
+
+# Setup logger for this module
+logger = logging.getLogger(__name__)
+
 @dataclass
 class DatabaseConfig:
     """Database configuration settings"""
@@ -102,6 +108,16 @@ class MonitoringConfig:
     enable_metrics: bool = field(default_factory=lambda: os.getenv('ENABLE_METRICS', 'true').lower() == 'true')
     metrics_port: int = field(default_factory=lambda: int(os.getenv('METRICS_PORT', '8080')))
 
+@dataclass
+class CORSConfig:
+    """CORS configuration settings"""
+    origins: List[str] = field(default_factory=lambda: [])
+    methods: List[str] = field(default_factory=lambda: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+    allow_headers: List[str] = field(default_factory=lambda: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-request-id'])
+    expose_headers: List[str] = field(default_factory=lambda: ['Content-Type', 'Authorization'])
+    supports_credentials: bool = field(default_factory=lambda: os.getenv('CORS_SUPPORTS_CREDENTIALS', 'true').lower() == 'true')
+    max_age: int = field(default_factory=lambda: int(os.getenv('CORS_MAX_AGE', '3600')))
+
 class Settings:
     """
     Comprehensive application settings with validation and environment support
@@ -115,9 +131,22 @@ class Settings:
     """
     
     def __init__(self):
+        # Get environment information for debugging (with fallback)
+        try:
+            env_info = get_environment_info()
+            logger.info(f"🔧 Initializing Settings with environment: {env_info['current_environment']}")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not get environment info: {e}")
+            logger.info("🔧 Initializing Settings with fallback environment detection")
+        
         self.environment = os.getenv('FLASK_ENV', 'development')
         self.debug = os.getenv('DEBUG', 'false').lower() == 'true'
         self.testing = os.getenv('TESTING', 'false').lower() == 'true'
+        
+        # Log environment state for debugging
+        logger.info(f"🎯 FLASK_ENV: {self.environment}")
+        logger.info(f"🐛 DEBUG: {self.debug}")
+        logger.info(f"🧪 TESTING: {self.testing}")
         
         # Application metadata
         self.app_name = os.getenv('APP_NAME', 'Automated Report Platform')
@@ -136,14 +165,15 @@ class Settings:
         self.celery = CeleryConfig()
         self.rate_limit = RateLimitConfig()
         self.monitoring = MonitoringConfig()
+        self.cors = CORSConfig()
         
         # File upload settings
         self.max_content_length = int(os.getenv('MAX_CONTENT_LENGTH', str(16 * 1024 * 1024)))  # 16MB
         self.upload_folder = Path(os.getenv('UPLOAD_FOLDER', 'uploads'))
         self.allowed_extensions = set(os.getenv('ALLOWED_EXTENSIONS', 'txt,pdf,png,jpg,jpeg,gif,xlsx,csv').split(','))
         
-        # CORS settings
-        self.cors_origins = self._parse_list(os.getenv('CORS_ORIGINS', '*'))
+        # CORS settings - enhanced parsing
+        self._setup_cors_origins()
         
         # Session settings
         self.session_cookie_secure = os.getenv('SESSION_COOKIE_SECURE', 'true').lower() == 'true'
@@ -162,6 +192,45 @@ class Settings:
             return []
         return [item.strip() for item in value.split(separator) if item.strip()]
     
+    def _setup_cors_origins(self) -> None:
+        """Setup CORS origins with environment-specific defaults"""
+        cors_origins = os.getenv('CORS_ORIGINS')
+        
+        if cors_origins:
+            # Parse comma-separated origins from environment
+            self.cors.origins = self._parse_list(cors_origins)
+        else:
+            # Set environment-specific defaults
+            if self.environment == 'production':
+                # Production should have explicit origins
+                self.cors.origins = []
+            elif self.environment == 'testing':
+                # Testing environment
+                self.cors.origins = ['http://localhost:3000', 'http://localhost:5000']
+            else:
+                # Development environment
+                self.cors.origins = [
+                    'http://localhost:3000',
+                    'http://localhost:3001', 
+                    'http://localhost:5173',  # Vite default port
+                    'http://localhost:5174',
+                    'http://localhost:5000',  # Backend port
+                    'http://localhost:5001'   # Alternative backend port
+                ]
+        
+        # Parse other CORS settings
+        cors_methods = os.getenv('CORS_METHODS')
+        if cors_methods:
+            self.cors.methods = self._parse_list(cors_methods)
+        
+        cors_headers = os.getenv('CORS_ALLOW_HEADERS')
+        if cors_headers:
+            self.cors.allow_headers = self._parse_list(cors_headers)
+        
+        cors_expose_headers = os.getenv('CORS_EXPOSE_HEADERS')
+        if cors_expose_headers:
+            self.cors.expose_headers = self._parse_list(cors_expose_headers)
+    
     def _validate_settings(self) -> None:
         """Validate critical configuration settings"""
         errors = []
@@ -177,6 +246,10 @@ class Settings:
             for var_name, var_value in required_vars:
                 if not var_value or var_value.startswith('dev-') or var_value.startswith('jwt-'):
                     errors.append(f"Production environment requires {var_name} to be set")
+            
+            # Production must have explicit CORS origins
+            if not self.cors.origins:
+                errors.append("Production environment requires CORS_ORIGINS to be set")
         
         # Validate Google OAuth settings if enabled
         if self.google.client_id and not self.google.client_secret:
@@ -269,6 +342,17 @@ class Settings:
         
         return result
 
+    def get_cors_config(self) -> Dict[str, Any]:
+        """Get CORS configuration for Flask-CORS"""
+        return {
+            'origins': self.cors.origins,
+            'methods': self.cors.methods,
+            'allow_headers': self.cors.allow_headers,
+            'expose_headers': self.cors.expose_headers,
+            'supports_credentials': self.cors.supports_credentials,
+            'max_age': self.cors.max_age
+        }
+
 @lru_cache()
 def get_settings() -> Settings:
     """
@@ -295,3 +379,7 @@ def get_google_config() -> GoogleConfig:
 def get_microsoft_config() -> MicrosoftConfig:
     """Get Microsoft Graph configuration"""
     return get_settings().microsoft
+
+def get_cors_config() -> Dict[str, Any]:
+    """Get CORS configuration"""
+    return get_settings().get_cors_config()

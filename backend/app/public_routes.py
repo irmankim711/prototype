@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
-from .models import db, Form, FormSubmission
+from . import db
+from .models import Form, FormSubmission
 from sqlalchemy import desc
 import json
 

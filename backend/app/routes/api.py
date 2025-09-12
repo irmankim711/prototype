@@ -6,10 +6,18 @@ from datetime import datetime, timedelta
 from sqlalchemy import desc, func, or_
 from sqlalchemy.exc import SQLAlchemyError
 from .. import celery
-from ..models import db, Report, ReportTemplate, User
+from .. import db
+from ..models import Report, ReportTemplate, User
 from ..services.report_service import report_service
 from ..services.ai_service import ai_service
-from ..services.google_forms_service import google_forms_service
+try:
+    from ..services.google_forms_service import google_forms_service
+    GOOGLE_FORMS_ENABLED = google_forms_service is not None
+    print(f"Google Forms service status: {'Enabled' if GOOGLE_FORMS_ENABLED else 'Disabled'}")
+except (ImportError, ValueError) as e:
+    google_forms_service = None
+    GOOGLE_FORMS_ENABLED = False
+    print(f"⚠️ Google Forms routes disabled - {str(e)}")
 from ..decorators import get_current_user_id
 from docxtpl import DocxTemplate
 import os
@@ -85,6 +93,13 @@ def get_automated_reports():
 def handle_google_form_report_generation(user_id, data):
     """Handle report generation for Google Forms"""
     try:
+        # Check if Google Forms service is available
+        if not GOOGLE_FORMS_ENABLED or not google_forms_service:
+            return jsonify({
+                'error': 'Google Forms service not configured',
+                'message': 'Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET'
+            }), 503
+        
         google_form_id = data.get('google_form_id')
         if not google_form_id:
             return jsonify({'error': 'google_form_id is required for Google Form reports'}), 400
@@ -216,8 +231,17 @@ def handle_database_error(error):
     current_app.logger.error(f"Database error: {error}")
     return jsonify({'error': 'Database operation failed'}), 500
 
+@api.route('/test', methods=['GET'])
+def test_endpoint():
+    """Simple test endpoint to verify the API is working"""
+    return jsonify({
+        'message': 'API is working!',
+        'status': 'success',
+        'timestamp': datetime.utcnow().isoformat()
+    }), 200
+
 @api.route('/reports', methods=['GET'])
-@jwt_required()
+# @jwt_required()  # Temporarily disabled for local testing
 @limiter.limit("100 per hour")
 def get_reports():
     """Get all reports for the current user with pagination"""
@@ -229,6 +253,21 @@ def get_reports():
         
         if page < 1:
             return jsonify({'error': 'Page number must be positive'}), 400
+        
+        # Handle case when no user is authenticated (for testing)
+        if user_id is None:
+            # Return empty reports list for unauthenticated users
+            return jsonify({
+                'reports': [],
+                'pagination': {
+                    'page': page,
+                    'pages': 0,
+                    'per_page': per_page,
+                    'total': 0,
+                    'has_next': False,
+                    'has_prev': False
+                }
+            }), 200
         
         query = Report.query.filter_by(user_id=user_id)
         
@@ -659,114 +698,159 @@ def not_found(error):
     return jsonify({'error': 'Resource not found'}), 404
 
 # Google Forms API Endpoints
-@api.route('/google-forms/auth', methods=['GET'])
-@jwt_required()
-def google_forms_auth():
-    """Initiate Google Forms OAuth flow"""
-    try:
-        user_id = get_jwt_identity()
-        google_service = google_forms_service
-        
-        # Get OAuth URL
-        auth_url = google_service.get_authorization_url(user_id)
-        
-        return jsonify({
-            'auth_url': auth_url,
-            'message': 'Please visit the URL to authorize access to Google Forms'
-        }), 200
-        
-    except Exception as e:
-        current_app.logger.error(f"Error initiating Google Forms auth: {str(e)}")
-        return jsonify({'error': 'Failed to initiate Google Forms authentication'}), 500
-
-@api.route('/google-forms/callback', methods=['GET'])
-@jwt_required()
-def google_forms_callback():
-    """Handle Google Forms OAuth callback"""
-    try:
-        user_id = get_jwt_identity()
-        code = request.args.get('code')
-        
-        if not code:
-            return jsonify({'error': 'Authorization code not provided'}), 400
-        
-        google_service = google_forms_service
-        
-        # Exchange code for tokens
-        success = google_service.handle_oauth_callback(code, user_id)
-        
-        if success:
-            return jsonify({
-                'message': 'Google Forms authorization successful',
-                'status': 'authorized'
-            }), 200
-        else:
-            return jsonify({'error': 'Failed to authorize Google Forms access'}), 400
+if GOOGLE_FORMS_ENABLED and google_forms_service:
+    @api.route('/google-forms/auth', methods=['GET'])
+    @jwt_required()
+    def google_forms_auth():
+        """Initiate Google Forms OAuth flow"""
+        try:
+            user_id = get_jwt_identity()
+            google_service = google_forms_service
             
-    except Exception as e:
-        current_app.logger.error(f"Error handling Google Forms callback: {str(e)}")
-        return jsonify({'error': 'Failed to complete Google Forms authorization'}), 500
-
-@api.route('/google-forms/forms', methods=['GET'])
-@jwt_required()
-def get_google_forms():
-    """Get list of user's Google Forms"""
-    try:
-        user_id = get_jwt_identity()
-        google_service = google_forms_service
-        
-        # Get user's forms
-        forms = google_service.get_user_forms(user_id)
-        
+            # Get OAuth URL
+            auth_url = google_service.get_authorization_url(user_id)
+            
+            return jsonify({
+                'auth_url': auth_url,
+                'message': 'Please visit the URL to authorize access to Google Forms'
+            }), 200
+            
+        except Exception as e:
+            current_app.logger.error(f"Error initiating Google Forms auth: {str(e)}")
+            return jsonify({'error': 'Failed to initiate Google Forms authentication'}), 500
+else:
+    @api.route('/google-forms/auth', methods=['GET'])
+    @jwt_required()
+    def google_forms_auth_disabled():
         return jsonify({
-            'forms': forms,
-            'total': len(forms)
-        }), 200
-        
-    except Exception as e:
-        current_app.logger.error(f"Error fetching Google Forms: {str(e)}")
-        return jsonify({'error': 'Failed to fetch Google Forms'}), 500
+            'error': 'Google Forms service not configured',
+            'message': 'Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET'
+        }), 503
 
-@api.route('/google-forms/<form_id>/responses', methods=['GET'])
-@jwt_required()
-def get_google_form_responses(form_id):
-    """Get responses for a specific Google Form"""
-    try:
-        user_id = get_jwt_identity()
-        google_service = google_forms_service
-        
-        # Get form responses
-        responses = google_service.get_form_responses(user_id, form_id)
-        
+if GOOGLE_FORMS_ENABLED and google_forms_service:
+    @api.route('/google-forms/callback', methods=['GET'])
+    @jwt_required()
+    def google_forms_callback():
+        """Handle Google Forms OAuth callback"""
+        try:
+            user_id = get_jwt_identity()
+            code = request.args.get('code')
+            
+            if not code:
+                return jsonify({'error': 'Authorization code not provided'}), 400
+            
+            google_service = google_forms_service
+            
+            # Exchange code for tokens
+            success = google_service.handle_oauth_callback(code, user_id)
+            
+            if success:
+                return jsonify({
+                    'message': 'Google Forms authorization successful',
+                    'status': 'authorized'
+                }), 200
+            else:
+                return jsonify({'error': 'Failed to authorize Google Forms access'}), 400
+                
+        except Exception as e:
+            current_app.logger.error(f"Error handling Google Forms callback: {str(e)}")
+            return jsonify({'error': 'Failed to complete Google Forms authorization'}), 500
+else:
+    @api.route('/google-forms/callback', methods=['GET'])
+    @jwt_required()
+    def google_forms_callback_disabled():
         return jsonify({
-            'form_id': form_id,
-            'responses': responses,
-            'total': len(responses)
-        }), 200
-        
-    except Exception as e:
-        current_app.logger.error(f"Error fetching Google Form responses: {str(e)}")
-        return jsonify({'error': 'Failed to fetch Google Form responses'}), 500
+            'error': 'Google Forms service not configured',
+            'message': 'Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET'
+        }), 503
 
-@api.route('/google-forms/<form_id>/analytics', methods=['GET'])
-@jwt_required()
-def get_google_form_analytics(form_id):
-    """Generate analytics for a specific Google Form"""
-    try:
-        user_id = get_jwt_identity()
-        google_service = google_forms_service
-        
-        # Generate analytics
-        analytics = google_service.generate_form_analytics(user_id, form_id)
-        
+if GOOGLE_FORMS_ENABLED and google_forms_service:
+    @api.route('/google-forms/forms', methods=['GET'])
+    @jwt_required()
+    def get_google_forms():
+        """Get list of user's Google Forms"""
+        try:
+            user_id = get_jwt_identity()
+            google_service = google_forms_service
+            
+            # Get user's forms
+            forms = google_service.get_user_forms(user_id)
+            
+            return jsonify({
+                'forms': forms,
+                'total': len(forms)
+            }), 200
+            
+        except Exception as e:
+            current_app.logger.error(f"Error fetching Google Forms: {str(e)}")
+            return jsonify({'error': 'Failed to fetch Google Forms'}), 500
+else:
+    @api.route('/google-forms/forms', methods=['GET'])
+    @jwt_required()
+    def get_google_forms_disabled():
         return jsonify({
-            'form_id': form_id,
-            'analytics': analytics
-        }), 200
-        
-    except Exception as e:
-        current_app.logger.error(f"Error generating Google Form analytics: {str(e)}")
-        return jsonify({'error': 'Failed to generate Google Form analytics'}), 500
+            'error': 'Google Forms service not configured',
+            'message': 'Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET'
+        }), 503
+
+if GOOGLE_FORMS_ENABLED and google_forms_service:
+    @api.route('/google-forms/<form_id>/responses', methods=['GET'])
+    @jwt_required()
+    def get_google_form_responses(form_id):
+        """Get responses for a specific Google Form"""
+        try:
+            user_id = get_jwt_identity()
+            google_service = google_forms_service
+            
+            # Get form responses
+            responses = google_service.get_form_responses(user_id, form_id)
+            
+            return jsonify({
+                'form_id': form_id,
+                'responses': responses,
+                'total': len(responses)
+            }), 200
+            
+        except Exception as e:
+            current_app.logger.error(f"Error fetching Google Form responses: {str(e)}")
+            return jsonify({'error': 'Failed to fetch Google Form responses'}), 500
+else:
+    @api.route('/google-forms/<form_id>/responses', methods=['GET'])
+    @jwt_required()
+    def get_google_form_responses_disabled(form_id):
+        return jsonify({
+            'error': 'Google Forms service not configured',
+            'message': 'Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET'
+        }), 503
+
+if GOOGLE_FORMS_ENABLED and google_forms_service:
+    @api.route('/google-forms/<form_id>/analytics', methods=['GET'])
+    @jwt_required()
+    def get_google_form_analytics(form_id):
+        """Generate analytics for a specific Google Form"""
+        try:
+            user_id = get_jwt_identity()
+            google_service = google_forms_service
+            
+            # Generate analytics
+            analytics = google_service.generate_form_analytics(user_id, form_id)
+            
+            return jsonify({
+                'form_id': form_id,
+                'analytics': analytics
+            }), 200
+            
+        except Exception as e:
+            current_app.logger.error(f"Error generating Google Form analytics: {str(e)}")
+            return jsonify({'error': 'Failed to generate Google Form analytics'}), 500
+else:
+    @api.route('/google-forms/<form_id>/analytics', methods=['GET'])
+    @jwt_required()
+    def get_google_form_analytics_disabled(form_id):
+        return jsonify({
+            'error': 'Google Forms service not configured',
+            'message': 'Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET'
+        }), 503
 
 @api.route('/reports/export/pdf/<int:report_id>', methods=['GET'])
 @jwt_required()

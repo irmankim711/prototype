@@ -1,5 +1,5 @@
 import React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Box,
   Grid,
@@ -14,6 +14,11 @@ import {
   Button,
   Divider,
   Alert,
+  AlertTitle,
+  Collapse,
+  IconButton,
+  Tooltip,
+  Skeleton,
   useTheme,
 } from "@mui/material";
 import {
@@ -23,6 +28,12 @@ import {
   Assessment,
   Timeline,
   BarChart as BarChartIcon,
+  Refresh,
+  Error,
+  Warning,
+  Info,
+  ExpandMore,
+  ExpandLess,
 } from "@mui/icons-material";
 import RealTimeStats from "./RealTimeStats";
 import InteractiveCharts from "./InteractiveCharts";
@@ -64,58 +75,286 @@ export const AnalyticsDashboard: React.FC = () => {
   const [fieldAnalytics, setFieldAnalytics] = useState<FieldAnalytics | null>(
     null
   );
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  
+  // Enhanced state management for loading and errors
+  const [loading, setLoading] = useState({
+    topForms: false,
+    performance: false,
+    geographic: false,
+    fieldAnalytics: false,
+    overall: true,
+  });
+  
+  const [errors, setErrors] = useState({
+    topForms: null as string | null,
+    performance: null as string | null,
+    geographic: null as string | null,
+    fieldAnalytics: null as string | null,
+    overall: null as string | null,
+  });
+  
+  const [retryCounts, setRetryCounts] = useState({
+    topForms: 0,
+    performance: 0,
+    geographic: 0,
+    fieldAnalytics: 0,
+  });
+  
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  // Refs to track timeouts for cleanup
+  const timeoutRefs = useRef<{ [key: string]: NodeJS.Timeout }>({});
+  const isMountedRef = useRef(true);
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
   };
 
-  const fetchTopForms = async () => {
+  // Enhanced fetch functions with retry logic and better error handling
+  const fetchTopForms = useCallback(async (isRetry: boolean = false) => {
+    if (isRetry) {
+      setIsRetrying(true);
+    } else {
+      setLoading(prev => ({ ...prev, topForms: true }));
+    }
+    
     try {
       const { forms } = await analyticsService.getTopPerformingForms(10);
+      if (!isMountedRef.current) return;
       setTopForms(forms);
-    } catch (err) {
+      setErrors(prev => ({ ...prev, topForms: null }));
+      setRetryCounts(prev => ({ ...prev, topForms: 0 }));
+    } catch (err: unknown) {
+      if (!isMountedRef.current) return;
       console.error("Error fetching top forms:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch top performing forms";
+      setErrors(prev => ({ ...prev, topForms: errorMessage }));
+      
+      // Auto-retry logic with cleanup tracking
+      if (retryCounts.topForms < 2 && !isRetry) {
+        setRetryCounts(prev => ({ ...prev, topForms: prev.topForms + 1 }));
+        const timeoutId = setTimeout(() => {
+          if (isMountedRef.current) {
+            fetchTopForms(true);
+          }
+        }, 2000);
+        timeoutRefs.current.topForms = timeoutId;
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(prev => ({ ...prev, topForms: false }));
+        setIsRetrying(false);
+      }
     }
-  };
+  }, [retryCounts.topForms]);
 
-  const fetchPerformanceData = async () => {
+  const fetchPerformanceData = useCallback(async (isRetry: boolean = false) => {
+    if (isRetry) {
+      setIsRetrying(true);
+    } else {
+      setLoading(prev => ({ ...prev, performance: true }));
+    }
+    
     try {
       const data = await analyticsService.getPerformanceComparison();
+      if (!isMountedRef.current) return;
       setPerformanceData(data);
-    } catch (err) {
+      setErrors(prev => ({ ...prev, performance: null }));
+      setRetryCounts(prev => ({ ...prev, performance: 0 }));
+    } catch (err: unknown) {
+      if (!isMountedRef.current) return;
       console.error("Error fetching performance data:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch performance data";
+      setErrors(prev => ({ ...prev, performance: errorMessage }));
+      
+      // Auto-retry logic with cleanup tracking
+      if (retryCounts.performance < 2 && !isRetry) {
+        setRetryCounts(prev => ({ ...prev, performance: prev.performance + 1 }));
+        const timeoutId = setTimeout(() => {
+          if (isMountedRef.current) {
+            fetchPerformanceData(true);
+          }
+        }, 2000);
+        timeoutRefs.current.performance = timeoutId;
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(prev => ({ ...prev, performance: false }));
+        setIsRetrying(false);
+      }
     }
-  };
+  }, [retryCounts.performance]);
 
-  const fetchGeographicData = async () => {
+  const fetchGeographicData = useCallback(async (isRetry: boolean = false) => {
+    if (isRetry) {
+      setIsRetrying(true);
+    } else {
+      setLoading(prev => ({ ...prev, geographic: true }));
+    }
+    
     try {
       const data = await analyticsService.getGeographicDistribution();
+      if (!isMountedRef.current) return;
       setGeoData(data);
-    } catch (err) {
+      setErrors(prev => ({ ...prev, geographic: null }));
+      setRetryCounts(prev => ({ ...prev, geographic: 0 }));
+    } catch (err: unknown) {
+      if (!isMountedRef.current) return;
       console.error("Error fetching geographic data:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch geographic data";
+      setErrors(prev => ({ ...prev, geographic: errorMessage }));
+      
+      // Auto-retry logic with cleanup tracking
+      if (retryCounts.geographic < 2 && !isRetry) {
+        setRetryCounts(prev => ({ ...prev, geographic: prev.geographic + 1 }));
+        const timeoutId = setTimeout(() => {
+          if (isMountedRef.current) {
+            fetchGeographicData(true);
+          }
+        }, 2000);
+        timeoutRefs.current.geographic = timeoutId;
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(prev => ({ ...prev, geographic: false }));
+        setIsRetrying(false);
+      }
     }
-  };
+  }, [retryCounts.geographic]);
 
-  const fetchFieldAnalytics = async (formId: number) => {
+  const fetchFieldAnalytics = useCallback(async (formId: number, isRetry: boolean = false) => {
+    if (isRetry) {
+      setIsRetrying(true);
+    } else {
+      setLoading(prev => ({ ...prev, fieldAnalytics: true }));
+    }
+    
     try {
-      setLoading(true);
       const data = await analyticsService.getFieldAnalytics(formId);
+      if (!isMountedRef.current) return;
       setFieldAnalytics(data);
       setSelectedFormId(formId);
-    } catch (err) {
+      setErrors(prev => ({ ...prev, fieldAnalytics: null }));
+      setRetryCounts(prev => ({ ...prev, fieldAnalytics: 0 }));
+    } catch (err: unknown) {
+      if (!isMountedRef.current) return;
       console.error("Error fetching field analytics:", err);
-      setError("Failed to fetch field analytics");
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch field analytics";
+      setErrors(prev => ({ ...prev, fieldAnalytics: errorMessage }));
+      
+      // Auto-retry logic with cleanup tracking
+      if (retryCounts.fieldAnalytics < 2 && !isRetry) {
+        setRetryCounts(prev => ({ ...prev, fieldAnalytics: prev.fieldAnalytics + 1 }));
+        const timeoutId = setTimeout(() => {
+          if (isMountedRef.current) {
+            fetchFieldAnalytics(formId, true);
+          }
+        }, 2000);
+        timeoutRefs.current.fieldAnalytics = timeoutId;
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(prev => ({ ...prev, fieldAnalytics: false }));
+        setIsRetrying(false);
+      }
+    }
+  }, [retryCounts.fieldAnalytics]);
+
+  // Retry handlers for each data type
+  const handleRetryTopForms = () => {
+    setRetryCounts(prev => ({ ...prev, topForms: 0 }));
+    fetchTopForms();
+  };
+
+  const handleRetryPerformance = () => {
+    setRetryCounts(prev => ({ ...prev, performance: 0 }));
+    fetchPerformanceData();
+  };
+
+  const handleRetryGeographic = () => {
+    setRetryCounts(prev => ({ ...prev, geographic: 0 }));
+    fetchGeographicData();
+  };
+
+  const handleRetryFieldAnalytics = () => {
+    if (selectedFormId) {
+      setRetryCounts(prev => ({ ...prev, fieldAnalytics: 0 }));
+      fetchFieldAnalytics(selectedFormId);
     }
   };
 
-  useEffect(() => {
+  // Overall retry function
+  const handleRetryAll = () => {
+    setRetryCounts({
+      topForms: 0,
+      performance: 0,
+      geographic: 0,
+      fieldAnalytics: 0,
+    });
+    setErrors({
+      topForms: null,
+      performance: null,
+      geographic: null,
+      fieldAnalytics: null,
+      overall: null,
+    });
     fetchTopForms();
     fetchPerformanceData();
     fetchGeographicData();
+  };
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    const initializeDashboard = async () => {
+      if (!isMountedRef.current) return;
+      
+      setLoading(prev => ({ ...prev, overall: true }));
+      try {
+        await Promise.all([
+          fetchTopForms(),
+          fetchPerformanceData(),
+          fetchGeographicData(),
+        ]);
+        if (!isMountedRef.current) return;
+        setErrors(prev => ({ ...prev, overall: null }));
+      } catch (err: unknown) {
+        if (!isMountedRef.current) return;
+        console.error("Error initializing dashboard:", err);
+        setErrors(prev => ({ 
+          ...prev, 
+          overall: err.message || "Failed to initialize dashboard" 
+        }));
+      } finally {
+        if (isMountedRef.current) {
+          setLoading(prev => ({ ...prev, overall: false }));
+        }
+      }
+    };
+
+    initializeDashboard();
+
+    return () => {
+      isMountedRef.current = false;
+      // Clear any pending retry timeouts
+      Object.values(timeoutRefs.current).forEach(timeout => {
+        if (timeout) clearTimeout(timeout);
+      });
+      timeoutRefs.current = {};
+    };
+  }, [fetchTopForms, fetchPerformanceData, fetchGeographicData]);
+
+  // Additional cleanup effect for component unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      // Clear all timeouts on unmount
+      Object.values(timeoutRefs.current).forEach(timeout => {
+        if (timeout) clearTimeout(timeout);
+      });
+      timeoutRefs.current = {};
+    };
   }, []);
 
   const getTrendIcon = (trend: string) => {
@@ -142,6 +381,70 @@ export const AnalyticsDashboard: React.FC = () => {
     return theme.palette.error.main;
   };
 
+  // Check if there are any overall errors
+  const hasOverallError = Object.values(errors).some(error => error !== null);
+  const hasData = topForms.length > 0 || performanceData || geoData;
+
+  // Loading skeleton component
+  const LoadingSkeleton = () => (
+    <Grid container spacing={3}>
+      <Grid item xs={12}>
+        <Skeleton variant="rectangular" height={200} />
+      </Grid>
+      <Grid item xs={12} lg={8}>
+        <Skeleton variant="rectangular" height={300} />
+      </Grid>
+      <Grid item xs={12} lg={4}>
+        <Skeleton variant="rectangular" height={300} />
+      </Grid>
+    </Grid>
+  );
+
+  // Error fallback component
+  const ErrorFallback = ({ error, onRetry, title }: { 
+    error: string; 
+    onRetry: () => void; 
+    title: string;
+  }) => (
+    <Card variant="outlined" sx={{ mb: 2 }}>
+      <CardContent sx={{ textAlign: 'center', py: 4 }}>
+        <Error sx={{ fontSize: 48, color: theme.palette.error.main, mb: 2 }} />
+        <Typography variant="h6" color="error" gutterBottom>
+          {title}
+        </Typography>
+        <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+          {error}
+        </Typography>
+        <Button
+          variant="outlined"
+          onClick={onRetry}
+          startIcon={<Refresh />}
+          disabled={isRetrying}
+        >
+          Retry
+        </Button>
+      </CardContent>
+    </Card>
+  );
+
+  // Overall error state
+  if (loading.overall) {
+    return (
+      <Container maxWidth="xl">
+        <Box sx={{ pb: 4 }}>
+          <Box display="flex" alignItems="center" gap={2} mb={4}>
+            <AnalyticsIcon sx={{ fontSize: 32, color: theme.palette.primary.main }} />
+            <Typography variant="h4" component="h1">
+              Analytics Dashboard
+            </Typography>
+            <Chip label="Enhanced" color="primary" variant="outlined" size="small" />
+          </Box>
+          <LoadingSkeleton />
+        </Box>
+      </Container>
+    );
+  }
+
   return (
     <Container maxWidth="xl">
       <Box sx={{ pb: 4 }}>
@@ -160,6 +463,65 @@ export const AnalyticsDashboard: React.FC = () => {
             size="small"
           />
         </Box>
+
+        {/* Overall Error Alert */}
+        {hasOverallError && (
+          <Alert 
+            severity="error" 
+            sx={{ mb: 3 }}
+            action={
+              <Box display="flex" gap={1}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleRetryAll}
+                  disabled={isRetrying}
+                  startIcon={<Refresh />}
+                >
+                  Retry All
+                </Button>
+                <IconButton
+                  size="small"
+                  onClick={() => setShowErrorDetails(!showErrorDetails)}
+                >
+                  {showErrorDetails ? <ExpandLess /> : <ExpandMore />}
+                </IconButton>
+              </Box>
+            }
+          >
+            <AlertTitle>Dashboard Data Issues</AlertTitle>
+            Some analytics data could not be loaded. Click "Retry All" to attempt to reload all data.
+            
+            <Collapse in={showErrorDetails}>
+              <Box mt={2}>
+                {errors.topForms && (
+                  <Typography variant="body2" color="textSecondary">
+                    <strong>Top Forms:</strong> {errors.topForms}
+                  </Typography>
+                )}
+                {errors.performance && (
+                  <Typography variant="body2" color="textSecondary">
+                    <strong>Performance Data:</strong> {errors.performance}
+                  </Typography>
+                )}
+                {errors.geographic && (
+                  <Typography variant="body2" color="textSecondary">
+                    <strong>Geographic Data:</strong> {errors.geographic}
+                  </Typography>
+                )}
+              </Box>
+            </Collapse>
+          </Alert>
+        )}
+
+        {/* Success Alert when data is loaded */}
+        {!hasOverallError && hasData && (
+          <Alert severity="success" sx={{ mb: 3 }}>
+            <Typography variant="body2">
+              Analytics dashboard loaded successfully. All data sources are operational.
+            </Typography>
+          </Alert>
+        )}
 
         {/* Navigation Tabs */}
         <Paper sx={{ mb: 3 }}>
@@ -189,12 +551,6 @@ export const AnalyticsDashboard: React.FC = () => {
           </Tabs>
         </Paper>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
-
         {/* Tab Panels */}
         <TabPanel value={activeTab} index={0}>
           {/* Overview Tab */}
@@ -208,13 +564,37 @@ export const AnalyticsDashboard: React.FC = () => {
             <Grid item xs={12} lg={8}>
               <Card>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Top Performing Forms
-                  </Typography>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                    <Typography variant="h6">
+                      Top Performing Forms
+                    </Typography>
+                    <Tooltip title="Refresh top forms">
+                      <IconButton
+                        size="small"
+                        onClick={handleRetryTopForms}
+                        disabled={loading.topForms || isRetrying}
+                      >
+                        <Refresh />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                   <Divider sx={{ mb: 2 }} />
-                  {topForms.length > 0 ? (
+                  
+                  {loading.topForms ? (
+                    <Box display="flex" flexDirection="column" gap={2}>
+                      {[1, 2, 3, 4, 5, 6].map((i) => (
+                        <Skeleton key={i} variant="rectangular" height={80} />
+                      ))}
+                    </Box>
+                  ) : errors.topForms ? (
+                    <ErrorFallback
+                      error={errors.topForms}
+                      onRetry={handleRetryTopForms}
+                      title="Failed to Load Top Forms"
+                    />
+                  ) : topForms.length > 0 ? (
                     <Grid container spacing={2}>
-                      {topForms.slice(0, 6).map((form: any) => (
+                      {topForms.slice(0, 6).map((form: TopFormData) => (
                         <Grid item xs={12} sm={6} md={4} key={form.form_id}>
                           <Paper
                             sx={{
@@ -257,9 +637,22 @@ export const AnalyticsDashboard: React.FC = () => {
                       ))}
                     </Grid>
                   ) : (
-                    <Typography color="textSecondary">
-                      No form data available
-                    </Typography>
+                    <Box textAlign="center" py={4}>
+                      <Info sx={{ fontSize: 48, color: theme.palette.info.main, mb: 2 }} />
+                      <Typography variant="h6" color="textSecondary">
+                        No Form Data Available
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                        There are no forms to display at the moment.
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        onClick={handleRetryTopForms}
+                        startIcon={<Refresh />}
+                      >
+                        Refresh
+                      </Button>
+                    </Box>
                   )}
                 </CardContent>
               </Card>
@@ -269,13 +662,37 @@ export const AnalyticsDashboard: React.FC = () => {
             <Grid item xs={12} lg={4}>
               <Card>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Geographic Distribution
-                  </Typography>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                    <Typography variant="h6">
+                      Geographic Distribution
+                    </Typography>
+                    <Tooltip title="Refresh geographic data">
+                      <IconButton
+                        size="small"
+                        onClick={handleRetryGeographic}
+                        disabled={loading.geographic || isRetrying}
+                      >
+                        <Refresh />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                   <Divider sx={{ mb: 2 }} />
-                  {geoData ? (
+                  
+                  {loading.geographic ? (
+                    <Box display="flex" flexDirection="column" gap={2}>
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <Skeleton key={i} variant="rectangular" height={30} />
+                      ))}
+                    </Box>
+                  ) : errors.geographic ? (
+                    <ErrorFallback
+                      error={errors.geographic}
+                      onRetry={handleRetryGeographic}
+                      title="Failed to Load Geographic Data"
+                    />
+                  ) : geoData ? (
                     <Box>
-                      {geoData.countries.slice(0, 5).map((country: any) => (
+                      {geoData.countries.slice(0, 5).map((country: { name: string; count: number; percentage: number }) => (
                         <Box
                           key={country.name}
                           display="flex"
@@ -317,9 +734,22 @@ export const AnalyticsDashboard: React.FC = () => {
                       </Typography>
                     </Box>
                   ) : (
-                    <Typography color="textSecondary">
-                      Loading geographic data...
-                    </Typography>
+                    <Box textAlign="center" py={4}>
+                      <Warning sx={{ fontSize: 48, color: theme.palette.warning.main, mb: 2 }} />
+                      <Typography variant="h6" color="textSecondary">
+                        No Geographic Data
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                        Geographic distribution data is not available.
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        onClick={handleRetryGeographic}
+                        startIcon={<Refresh />}
+                      >
+                        Refresh
+                      </Button>
+                    </Box>
                   )}
                 </CardContent>
               </Card>
@@ -338,11 +768,35 @@ export const AnalyticsDashboard: React.FC = () => {
             <Grid item xs={12}>
               <Card>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Form Performance Analysis
-                  </Typography>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                    <Typography variant="h6">
+                      Form Performance Analysis
+                    </Typography>
+                    <Tooltip title="Refresh performance data">
+                      <IconButton
+                        size="small"
+                        onClick={handleRetryPerformance}
+                        disabled={loading.performance || isRetrying}
+                      >
+                        <Refresh />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                   <Divider sx={{ mb: 2 }} />
-                  {performanceData ? (
+                  
+                  {loading.performance ? (
+                    <Box display="flex" flexDirection="column" gap={2}>
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+                        <Skeleton key={i} variant="rectangular" height={120} />
+                      ))}
+                    </Box>
+                  ) : errors.performance ? (
+                    <ErrorFallback
+                      error={errors.performance}
+                      onRetry={handleRetryPerformance}
+                      title="Failed to Load Performance Data"
+                    />
+                  ) : performanceData ? (
                     <Box>
                       {performanceData.best_performer && (
                         <Alert severity="success" sx={{ mb: 3 }}>
@@ -356,7 +810,7 @@ export const AnalyticsDashboard: React.FC = () => {
                       )}
 
                       <Grid container spacing={2}>
-                        {performanceData.forms.slice(0, 9).map((form: any) => (
+                        {performanceData.forms.slice(0, 9).map((form: { name: string; current: number; previous: number }) => (
                           <Grid item xs={12} sm={6} md={4} key={form.form_id}>
                             <Paper sx={{ p: 2 }}>
                               <Typography
@@ -408,9 +862,22 @@ export const AnalyticsDashboard: React.FC = () => {
                       </Grid>
                     </Box>
                   ) : (
-                    <Typography color="textSecondary">
-                      Loading performance data...
-                    </Typography>
+                    <Box textAlign="center" py={4}>
+                      <Info sx={{ fontSize: 48, color: theme.palette.info.main, mb: 2 }} />
+                      <Typography variant="h6" color="textSecondary">
+                        No Performance Data
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                        Performance comparison data is not available.
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        onClick={handleRetryPerformance}
+                        startIcon={<Refresh />}
+                      >
+                        Refresh
+                      </Button>
+                    </Box>
                   )}
                 </CardContent>
               </Card>
@@ -428,21 +895,34 @@ export const AnalyticsDashboard: React.FC = () => {
                     Select Form for Analysis
                   </Typography>
                   <Divider sx={{ mb: 2 }} />
-                  {topForms.map((form: any) => (
-                    <Button
-                      key={form.form_id}
-                      fullWidth
-                      variant={
-                        selectedFormId === form.form_id
-                          ? "contained"
-                          : "outlined"
-                      }
-                      onClick={() => fetchFieldAnalytics(form.form_id)}
-                      sx={{ mb: 1, justifyContent: "flex-start" }}
-                    >
-                      {form.form_name}
-                    </Button>
-                  ))}
+                  {topForms.length > 0 ? (
+                    topForms.map((form: TopFormData) => (
+                      <Button
+                        key={form.form_id}
+                        fullWidth
+                        variant={
+                          selectedFormId === form.form_id
+                            ? "contained"
+                            : "outlined"
+                        }
+                        onClick={() => fetchFieldAnalytics(form.form_id)}
+                        sx={{ mb: 1, justifyContent: "flex-start" }}
+                        disabled={loading.fieldAnalytics}
+                      >
+                        {form.form_name}
+                      </Button>
+                    ))
+                  ) : (
+                    <Box textAlign="center" py={4}>
+                      <Info sx={{ fontSize: 48, color: theme.palette.info.main, mb: 2 }} />
+                      <Typography variant="h6" color="textSecondary">
+                        No Forms Available
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Please load forms first to analyze field completion.
+                      </Typography>
+                    </Box>
+                  )}
                 </CardContent>
               </Card>
             </Grid>
@@ -450,13 +930,36 @@ export const AnalyticsDashboard: React.FC = () => {
             <Grid item xs={12} lg={8}>
               <Card>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Field Completion Analysis
-                  </Typography>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                    <Typography variant="h6">
+                      Field Completion Analysis
+                    </Typography>
+                    {selectedFormId && (
+                      <Tooltip title="Refresh field analytics">
+                        <IconButton
+                          size="small"
+                          onClick={handleRetryFieldAnalytics}
+                          disabled={loading.fieldAnalytics || isRetrying}
+                        >
+                          <Refresh />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
                   <Divider sx={{ mb: 2 }} />
 
-                  {loading ? (
-                    <Typography>Loading field analytics...</Typography>
+                  {loading.fieldAnalytics ? (
+                    <Box display="flex" flexDirection="column" gap={2}>
+                      {[1, 2, 3, 4].map((i) => (
+                        <Skeleton key={i} variant="rectangular" height={150} />
+                      ))}
+                    </Box>
+                  ) : errors.fieldAnalytics ? (
+                    <ErrorFallback
+                      error={errors.fieldAnalytics}
+                      onRetry={handleRetryFieldAnalytics}
+                      title="Failed to Load Field Analytics"
+                    />
                   ) : fieldAnalytics ? (
                     <Box>
                       <Alert severity="info" sx={{ mb: 3 }}>
@@ -555,9 +1058,15 @@ export const AnalyticsDashboard: React.FC = () => {
                       </Grid>
                     </Box>
                   ) : (
-                    <Typography color="textSecondary">
-                      Select a form to view field completion analysis
-                    </Typography>
+                    <Box textAlign="center" py={4}>
+                      <Info sx={{ fontSize: 48, color: theme.palette.info.main, mb: 2 }} />
+                      <Typography variant="h6" color="textSecondary">
+                        Select a Form
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Choose a form from the left panel to view field completion analysis.
+                      </Typography>
+                    </Box>
                   )}
                 </CardContent>
               </Card>

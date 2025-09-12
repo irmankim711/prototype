@@ -2,7 +2,8 @@ import openai
 from openai import OpenAI
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.models import Report, db
+from app import db
+from app.models import Report
 from sqlalchemy import desc
 import os
 import json

@@ -35,10 +35,12 @@ class Permission(Enum):
     WRITE = "write"
     DELETE = "delete"
     ADMIN = "admin"
+    VIEW_USERS = "view_users"
     MANAGE_USERS = "manage_users"
     MANAGE_FORMS = "manage_forms"
     MANAGE_REPORTS = "manage_reports"
     EXPORT_DATA = "export_data"
+    UPLOAD_FILE = "upload_file"
 
 @dataclass
 class UserInfo:

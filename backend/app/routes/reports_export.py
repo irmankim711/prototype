@@ -16,7 +16,7 @@ from ..services.export_service import export_service
 
 logger = logging.getLogger(__name__)
 
-reports_export_bp = Blueprint('reports_export', __name__, url_prefix='/api/reports')
+reports_export_bp = Blueprint('reports_export', __name__, url_prefix='/api/reports/export')
 
 
 def _get_reports_dir():
@@ -27,7 +27,7 @@ def _get_reports_dir():
     return reports_dir
 
 
-@reports_export_bp.route('/export', methods=['POST'])
+@reports_export_bp.route('/', methods=['POST'])
 @jwt_required(optional=True)
 def export_reports():
     try:

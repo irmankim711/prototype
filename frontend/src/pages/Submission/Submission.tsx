@@ -64,7 +64,7 @@ const StyledTableRow = styled(TableRow)(() => ({
 
 const ScoreChip = styled(Chip)<{ score: number }>(({ score }) => {
   let backgroundColor = "#4caf50";
-  let color = "white";
+  const color = "white";
 
   if (score < 80) {
     backgroundColor = "#ff9800";

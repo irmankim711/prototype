@@ -1,7 +1,9 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
-from ..models import db, User, UserRole, Permission
+from .. import db
+from ..models import User
+from ..core.auth import UserRole, Permission
 from ..decorators import require_permission, require_role, get_current_user
 from ..validation import validate_json, UserUpdateSchema
 

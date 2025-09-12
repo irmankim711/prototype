@@ -24,30 +24,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchReportTemplates, updateReportTemplate } from "../../services/api";
 import type { ReportTemplate } from "../../services/api";
 
-// Mock data for fallback
-const mockTemplates = [
-  {
-    id: "1",
-    name: "Financial Report",
-    description: "Standard financial report template",
-    schema: { fields: [] as any[] },
-    isActive: true,
-  },
-  {
-    id: "2",
-    name: "Performance Report",
-    description: "Performance analysis template",
-    schema: { fields: [] as any[] },
-    isActive: true,
-  },
-  {
-    id: "3",
-    name: "Sales Report",
-    description: "Sales and revenue analysis",
-    schema: { fields: [] as any[] },
-    isActive: false,
-  },
-];
+// No mock data - templates will be fetched from backend
 
 export default function ReportTemplates() {
   const [editTemplate, setEditTemplate] = useState<ReportTemplate | null>(null);
@@ -61,14 +38,14 @@ export default function ReportTemplates() {
   } = useQuery({
     queryKey: ["reportTemplates"],
     queryFn: fetchReportTemplates,
-    retry: 1,
+    retry: 3,
     onError: (error: any) => {
-      console.log("API Error, using mock data:", error);
+      console.error("API Error fetching templates:", error);
     },
   });
 
-  // Use mock data if API fails
-  const displayTemplates = templates || mockTemplates;
+  // Use templates from API only
+  const displayTemplates = templates || [];
 
   const updateTemplateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<ReportTemplate> }) =>
@@ -103,7 +80,7 @@ export default function ReportTemplates() {
     const data = {
       name: formData.get("name") as string,
       description: formData.get("description") as string,
-      isActive: formData.get("isActive") === "true",
+      is_active: formData.get("isActive") === "true",
     };
 
     updateTemplateMutation.mutate({
@@ -128,8 +105,8 @@ export default function ReportTemplates() {
   return (
     <Box sx={{ p: 3 }}>
       {error ? (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          Using demo templates (API connection failed)
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Failed to load templates. Please try again later.
         </Alert>
       ) : null}
 
@@ -157,20 +134,26 @@ export default function ReportTemplates() {
                   {template.description}
                 </Typography>
                 <Typography variant="body2" color="textSecondary">
-                  Fields:{" "}
-                  {Array.isArray(template.schema?.fields)
-                    ? template.schema.fields.length
+                  Type: {template.template_type || 'Unknown'}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Category: {template.category || 'General'}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Placeholders:{" "}
+                  {Array.isArray(template.placeholder_schema?.fields)
+                    ? template.placeholder_schema.fields.length
                     : 0}
                 </Typography>
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={template.isActive}
+                      checked={template.is_active}
                       color="primary"
                       disabled
                     />
                   }
-                  label={template.isActive ? "Active" : "Inactive"}
+                  label={template.is_active ? "Active" : "Inactive"}
                 />
               </CardContent>
               <CardActions>
@@ -219,7 +202,7 @@ export default function ReportTemplates() {
               control={
                 <Switch
                   name="isActive"
-                  defaultChecked={editTemplate?.isActive}
+                  defaultChecked={editTemplate?.is_active}
                   color="primary"
                 />
               }

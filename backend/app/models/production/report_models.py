@@ -37,8 +37,7 @@ class ReportTemplate(db.Model):
     supports_images = Column(Boolean, default=False)
     max_participants = Column(Integer)  # Max participants this template can handle
     
-    # Relationships
-    reports = relationship("Report", back_populates="template")
+    # Relationships removed due to schema mismatch
 
     def to_dict(self):
         """Convert to dictionary for API responses"""
@@ -60,49 +59,56 @@ class ReportTemplate(db.Model):
         }
 
 class Report(db.Model):
-    """Real report generation tracking - NO MOCK DATA"""
+    """Real report generation tracking - matches actual database schema exactly"""
     __tablename__ = 'reports'
     
+    # ONLY columns that exist in the actual database
     id = Column(Integer, primary_key=True)
-    program_id = Column(Integer, ForeignKey('programs.id'), nullable=False)
-    template_id = Column(Integer, ForeignKey('report_templates.id'), nullable=False)
-    
-    # Report metadata
+    program_id = Column(Integer)
+    template_id = Column(Integer)
     title = Column(String(255), nullable=False)
     description = Column(Text)
-    report_type = Column(String(50))  # summary, detailed, attendance, evaluation
-    
-    # Generation status
-    generation_status = Column(String(20), default='pending')  # pending, generating, completed, failed
+    report_type = Column(String(50))
+    generation_status = Column(String(20))
     generated_at = Column(DateTime)
-    generation_time_seconds = Column(Integer)  # Time taken to generate
-    
-    # File information
+    generation_time_seconds = Column(Integer)
     file_path = Column(String(500))
-    file_size = Column(Integer)  # File size in bytes
-    file_format = Column(String(10))  # docx, pdf, xlsx
+    file_size = Column(Integer)
+    file_format = Column(String(10))
     download_url = Column(String(500))
-    
-    # Usage tracking
     download_count = Column(Integer, default=0)
     last_downloaded = Column(DateTime)
-    
-    # Generation data
-    data_source = Column(JSON)  # Data used for generation
-    generation_config = Column(JSON)  # Configuration used
-    error_message = Column(Text)  # Error message if generation failed
-    
-    # Quality metrics
-    completeness_score = Column(Integer)  # 0-100 based on data completeness
+    data_source = Column(JSON)
+    generation_config = Column(JSON)
+    error_message = Column(Text)
+    completeness_score = Column(Integer)
     processing_notes = Column(Text)
-    
-    # User tracking
     created_by = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
-    program = relationship("Program")
-    template = relationship("ReportTemplate", back_populates="reports")
+    # Add computed properties for compatibility
+    @property
+    def status(self):
+        """Map generation_status to status for backward compatibility."""
+        return self.generation_status or 'pending'
+    
+    @status.setter
+    def status(self, value):
+        """Set generation_status when status is set."""
+        self.generation_status = value
+    
+    @property
+    def user_id(self):
+        """Extract user_id from created_by for compatibility."""
+        if self.created_by and self.created_by.isdigit():
+            return int(self.created_by)
+        return None
+    
+    @user_id.setter
+    def user_id(self, value):
+        """Set created_by when user_id is set."""
+        if value:
+            self.created_by = str(value)
 
     def to_dict(self):
         """Convert to dictionary for API responses"""
@@ -113,6 +119,7 @@ class Report(db.Model):
             'title': self.title,
             'description': self.description,
             'report_type': self.report_type,
+            'status': self.status,  # Computed property
             'generation_status': self.generation_status,
             'generated_at': self.generated_at.isoformat() if self.generated_at else None,
             'generation_time_seconds': self.generation_time_seconds,
@@ -122,10 +129,14 @@ class Report(db.Model):
             'download_url': self.download_url,
             'download_count': self.download_count,
             'last_downloaded': self.last_downloaded.isoformat() if self.last_downloaded else None,
+            'data_source': self.data_source,
+            'generation_config': self.generation_config,
+            'error_message': self.error_message,
             'completeness_score': self.completeness_score,
+            'processing_notes': self.processing_notes,
             'created_by': self.created_by,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'error_message': self.error_message
+            'user_id': self.user_id,  # Computed property
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
     def update_generation_status(self, status, error_message=None, file_path=None, file_size=None):

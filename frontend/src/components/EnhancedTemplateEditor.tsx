@@ -145,9 +145,39 @@ const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
     }
   }, [templateFile, excelFile, onReportGenerated]);
 
-  const downloadReport = useCallback(() => {
+  const downloadReport = useCallback(async () => {
     if (generatedReport?.downloadUrl) {
-      window.open(generatedReport.downloadUrl, "_blank");
+      // Check if this is the generation endpoint (incorrect URL)
+      if (generatedReport.downloadUrl.includes('/excel/generate-report')) {
+        console.error('❌ Invalid download URL detected:', generatedReport.downloadUrl);
+        alert('Report download URL is invalid. Please regenerate the report.');
+        return;
+      }
+      
+      // Use proper download approach
+      try {
+        const response = await fetch(generatedReport.downloadUrl, {
+          method: 'GET',
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `report.pdf`; // Default filename
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+        } else {
+          throw new Error(`Download failed: ${response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Download error:', error);
+        alert('Failed to download report. Please try again.');
+      }
     }
   }, [generatedReport]);
 

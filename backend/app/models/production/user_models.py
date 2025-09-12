@@ -1,61 +1,51 @@
 """
-User and Authentication Models for production deployment
-NO MOCK DATA - Real user management and OAuth tokens
+User Model Compatible with Supabase Schema
+This model matches the existing Supabase database structure
 """
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, Boolean, JSON, ForeignKey, Integer, SmallInteger
 from sqlalchemy.orm import relationship
-from datetime import datetime, timedelta
+from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
 
 from app import db
 
 class User(db.Model):
-    """Real user management - NO MOCK DATA"""
-    __tablename__ = 'users'
+    """User model compatible with existing database schema"""
+    __tablename__ = 'user'
     
+    # Primary key - using Integer as per database schema
     id = Column(Integer, primary_key=True)
-    uuid = Column(String(36), unique=True, default=lambda: str(uuid.uuid4()))
     
-    # Basic user information
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    username = Column(String(100), unique=True, nullable=False, index=True)
+    # Basic authentication fields
+    email = Column(String(120), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     
-    # Profile information
-    first_name = Column(String(100))
-    last_name = Column(String(100))
-    full_name = Column(String(255))
-    phone = Column(String(20))
-    organization = Column(String(255))
-    position = Column(String(255))
-    department = Column(String(255))
+    # Basic profile fields
+    first_name = Column(String(50), nullable=True)
+    last_name = Column(String(50), nullable=True)
+    username = Column(String(50), unique=True, nullable=True)
+    phone = Column(String(20), nullable=True)
+    company = Column(String(100), nullable=True)
+    job_title = Column(String(100), nullable=True)
+    bio = Column(Text, nullable=True)
+    avatar_url = Column(String(255), nullable=True)
     
-    # Account status
+    # Status fields
     is_active = Column(Boolean, default=True)
-    is_verified = Column(Boolean, default=False)
-    is_admin = Column(Boolean, default=False)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    last_login = Column(DateTime)
-    email_verified_at = Column(DateTime)
+    last_login = Column(DateTime, nullable=True)
     
-    # Security
-    failed_login_attempts = Column(Integer, default=0)
-    locked_until = Column(DateTime)
-    password_reset_token = Column(String(255))
-    password_reset_expires = Column(DateTime)
-    email_verification_token = Column(String(255))
-    
-    # Preferences
-    preferences = Column(JSON)  # User preferences and settings
-    notification_settings = Column(JSON)  # Notification preferences
-    
-    # Relationships
-    tokens = relationship("UserToken", back_populates="user", cascade="all, delete-orphan")
+    # Relationships - Commented out to avoid foreign key issues during testing
+    # tokens = relationship("UserToken", back_populates="user", cascade="all, delete-orphan")
+    # sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+    # forms = relationship("Form", back_populates="creator", cascade="all, delete-orphan")
+    # form_submissions = relationship("FormSubmission", back_populates="submitter", cascade="all, delete-orphan")
+    # files = relationship("File", back_populates="uploader", cascade="all, delete-orphan")
 
     def set_password(self, password):
         """Set password hash"""
@@ -63,74 +53,56 @@ class User(db.Model):
 
     def check_password(self, password):
         """Check password"""
-        return check_password_hash(self.password_hash, password)
+        if self.password_hash:
+            return check_password_hash(self.password_hash, password)
+        return False
     
-    def update_full_name(self):
-        """Update full name from first and last name"""
+    def get_full_name(self):
+        """Get full name"""
         if self.first_name and self.last_name:
-            self.full_name = f"{self.first_name} {self.last_name}"
+            return f"{self.first_name} {self.last_name}"
         elif self.first_name:
-            self.full_name = self.first_name
+            return self.first_name
         elif self.last_name:
-            self.full_name = self.last_name
+            return self.last_name
+        return self.username or self.email
 
     def update_last_login(self):
         """Update last login timestamp"""
         self.last_login = datetime.utcnow()
-        self.failed_login_attempts = 0  # Reset failed attempts on successful login
-
-    def increment_failed_login(self):
-        """Increment failed login attempts"""
-        self.failed_login_attempts = (self.failed_login_attempts or 0) + 1
-        
-        # Lock account after 5 failed attempts for 30 minutes
-        if self.failed_login_attempts >= 5:
-            self.locked_until = datetime.utcnow() + timedelta(minutes=30)
-
-    def is_account_locked(self):
-        """Check if account is locked"""
-        if self.locked_until:
-            return datetime.utcnow() < self.locked_until
-        return False
 
     def to_dict(self, include_sensitive=False):
         """Convert to dictionary for API responses"""
         data = {
             'id': self.id,
-            'uuid': self.uuid,
             'email': self.email,
             'username': self.username,
             'first_name': self.first_name,
             'last_name': self.last_name,
-            'full_name': self.full_name,
+            'full_name': self.get_full_name(),
             'phone': self.phone,
-            'organization': self.organization,
-            'position': self.position,
-            'department': self.department,
+            'company': self.company,
+            'job_title': self.job_title,
+            'bio': self.bio,
+            'avatar_url': self.avatar_url,
             'is_active': self.is_active,
-            'is_verified': self.is_verified,
-            'is_admin': self.is_admin,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'last_login': self.last_login.isoformat() if self.last_login else None,
-            'preferences': self.preferences,
-            'notification_settings': self.notification_settings
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'last_login': self.last_login.isoformat() if self.last_login else None
         }
         
-        if include_sensitive:
-            data.update({
-                'failed_login_attempts': self.failed_login_attempts,
-                'is_locked': self.is_account_locked(),
-                'email_verified_at': self.email_verified_at.isoformat() if self.email_verified_at else None
-            })
-        
         return data
+
+    def __repr__(self):
+        return f'<User {self.email}>'
+
 
 class UserToken(db.Model):
     """Real OAuth token storage - NO MOCK DATA"""
     __tablename__ = 'user_tokens'
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)  # Updated to match User.id type
     
     # Platform information
     platform = Column(String(50), nullable=False)  # google, microsoft, local
@@ -155,8 +127,8 @@ class UserToken(db.Model):
     last_used = Column(DateTime)
     usage_count = Column(Integer, default=0)
     
-    # Relationships
-    user = relationship("User", back_populates="tokens")
+    # Relationships - Commented out to avoid circular dependency issues
+    # user = relationship("User", back_populates="tokens")
 
     def is_expired(self):
         """Check if token is expired"""
@@ -205,12 +177,13 @@ class UserToken(db.Model):
         
         return data
 
+
 class UserSession(db.Model):
     """User session tracking - NO MOCK DATA"""
     __tablename__ = 'user_sessions'
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)  # Updated to match User.id type
     session_token = Column(String(255), unique=True, nullable=False)
     
     # Session metadata
@@ -231,6 +204,9 @@ class UserSession(db.Model):
     login_method = Column(String(50))  # password, google, microsoft
     is_suspicious = Column(Boolean, default=False)
     security_flags = Column(JSON)  # Security-related flags
+    
+    # Relationship - Commented out to avoid circular dependency issues
+    # user = relationship("User", back_populates="sessions")
     
     def is_expired(self):
         """Check if session is expired"""

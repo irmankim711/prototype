@@ -27,15 +27,26 @@ class ProductionGoogleFormsService:
     ]
     
     def __init__(self):
+        """Initialize production Google Forms service with real API credentials"""
+        self.SCOPES = [
+            'https://www.googleapis.com/auth/forms',
+            'https://www.googleapis.com/auth/forms.responses.readonly',
+            'https://www.googleapis.com/auth/drive.readonly'
+        ]
+        
+        # Get configuration from environment
         self.client_id = os.getenv('GOOGLE_CLIENT_ID')
         self.client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
         self.redirect_uri = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:5000/api/google-forms/callback')
         self.credentials_file = os.getenv('GOOGLE_CREDENTIALS_FILE', 'credentials.json')
         
-        # Ensure we have all required configuration
+        # Check if we have required configuration
         if not all([self.client_id, self.client_secret]):
-            raise ValueError("Missing required Google OAuth configuration. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET")
+            logger.warning("⚠️ Google OAuth credentials not configured - service will be disabled")
+            self.enabled = False
+            return
         
+        self.enabled = True
         logger.info(f"Production Google Forms service initialized")
         
     def get_authorization_url(self, user_id: str) -> str:

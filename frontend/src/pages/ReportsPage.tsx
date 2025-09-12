@@ -1,7 +1,11 @@
 import React from "react";
 import { Container, Box, Typography, Tabs, Tab } from "@mui/material";
-import { Assessment, Form, Analytics } from "@mui/icons-material";
+import { Assessment, Assignment, Analytics, Description } from "@mui/icons-material";
 import ReportDashboard from "../components/ReportDashboard";
+import DocxReportGenerator from "../components/DocxReportGenerator";
+import ExcelToDocxConverter from "../components/ExcelToDocxConverter";
+import ReportNavigator from "../components/ReportNavigator";
+import ReportAccessGuide from "../components/ReportAccessGuide";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -39,6 +43,11 @@ const ReportsPage: React.FC = () => {
     setValue(newValue);
   };
 
+  const handleReportGenerated = (report: unknown) => {
+    // Refresh the dashboard when a new report is generated
+    console.log('New report generated:', report);
+  };
+
   return (
     <Container maxWidth="xl">
       <Box sx={{ py: 3 }}>
@@ -52,8 +61,11 @@ const ReportsPage: React.FC = () => {
           gutterBottom
           sx={{ mb: 4 }}
         >
-          AI-powered reports generated from form submissions
+          AI-powered reports generated from form submissions and document uploads
         </Typography>
+
+        {/* Step-by-step guide for users */}
+        <ReportAccessGuide />
 
         <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
           <Tabs
@@ -69,20 +81,42 @@ const ReportsPage: React.FC = () => {
             />
             <Tab
               label="Form Reports"
-              icon={<Form />}
+              icon={<Assignment />}
               iconPosition="start"
               {...a11yProps(1)}
+            />
+            <Tab
+              label="DOCX Generator"
+              icon={<Description />}
+              iconPosition="start"
+              {...a11yProps(2)}
             />
             <Tab
               label="Analytics"
               icon={<Analytics />}
               iconPosition="start"
-              {...a11yProps(2)}
+              {...a11yProps(3)}
             />
           </Tabs>
         </Box>
 
         <TabPanel value={value} index={0}>
+          <Box sx={{ mb: 3 }}>
+            <ReportNavigator 
+              onViewReport={(reportId) => {
+                console.log('View report:', reportId);
+                // Navigate to report view or open preview modal
+              }}
+              onEditReport={(reportId) => {
+                console.log('Edit report:', reportId);
+                // Navigate to report editor
+              }}
+              onDownloadReport={(reportId) => {
+                console.log('Download report:', reportId);
+                // Trigger download
+              }}
+            />
+          </Box>
           <ReportDashboard />
         </TabPanel>
 
@@ -99,6 +133,29 @@ const ReportsPage: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={value} index={2}>
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h6" gutterBottom>
+              Excel to DOCX Converter
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Upload Excel files and automatically generate professional DOCX reports with data analysis.
+            </Typography>
+            <ExcelToDocxConverter 
+              onReportGenerated={handleReportGenerated}
+              onEditReport={(reportId) => {
+                // Navigate to edit mode or open editor modal
+                console.log('Edit report:', reportId);
+              }}
+            />
+          </Box>
+          
+          <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
+            Advanced DOCX Generator
+          </Typography>
+          <DocxReportGenerator onReportGenerated={handleReportGenerated} />
+        </TabPanel>
+
+        <TabPanel value={value} index={3}>
           <Typography variant="h6" gutterBottom>
             Report Analytics
           </Typography>

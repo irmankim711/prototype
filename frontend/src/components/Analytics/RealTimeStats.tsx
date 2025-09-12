@@ -1,5 +1,5 @@
 import React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Box,
   Grid,
@@ -14,6 +14,12 @@ import {
   ListItemAvatar,
   Paper,
   CircularProgress,
+  Button,
+  Alert,
+  AlertTitle,
+  Collapse,
+  IconButton,
+  Tooltip,
   useTheme,
 } from "@mui/material";
 import {
@@ -22,45 +28,164 @@ import {
   Timeline,
   Assignment,
   AccessTime,
+  Refresh,
+  Error,
+  Warning,
+  Info,
+  ExpandMore,
+  ExpandLess,
 } from "@mui/icons-material";
 import { analyticsService } from "../../services/analyticsService";
 import type { AnalyticsStats } from "../../services/analyticsService";
 
 interface RealTimeStatsProps {
   refreshInterval?: number; // in milliseconds
+  maxRetries?: number;
+  retryDelay?: number;
 }
 
 export const RealTimeStats: React.FC<RealTimeStatsProps> = ({
   refreshInterval = 30000, // Default 30 seconds
+  maxRetries = 3,
+  retryDelay = 2000,
 }) => {
   const theme = useTheme();
   const [stats, setStats] = useState<AnalyticsStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
+  const [isPolling, setIsPolling] = useState(true);
 
-  const fetchStats = async () => {
+  // Ref to track retry timeout for cleanup
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchStats = useCallback(async (isRetry: boolean = false) => {
+    if (isRetry) {
+      setIsRetrying(true);
+    } else {
+      setLoading(true);
+    }
+    
     try {
       const data = await analyticsService.getRealTimeStats();
       setStats(data);
       setLastUpdated(new Date());
       setError(null);
-    } catch (err) {
+      setRetryCount(0); // Reset retry count on success
+    } catch (err: any) {
       console.error("Error fetching real-time stats:", err);
-      setError("Failed to fetch real-time statistics");
+      
+      const errorMessage = err.message || "Failed to fetch real-time statistics";
+      setError(errorMessage);
+      
+      // Handle retry logic
+      if (retryCount < maxRetries && !isRetry) {
+        setRetryCount(prev => prev + 1);
+        setTimeout(() => {
+          fetchStats(true);
+        }, retryDelay);
+      }
     } finally {
       setLoading(false);
+      setIsRetrying(false);
     }
+  }, [retryCount, maxRetries, retryDelay]);
+
+  const handleRetry = () => {
+    setRetryCount(0);
+    fetchStats();
+  };
+
+  const handleRefresh = () => {
+    fetchStats();
+  };
+
+  const togglePolling = () => {
+    setIsPolling(!isPolling);
   };
 
   useEffect(() => {
-    fetchStats();
+    let isMounted = true;
+    let interval: NodeJS.Timeout | null = null;
 
-    // Set up polling for real-time updates
-    const interval = setInterval(fetchStats, refreshInterval);
+    const fetchStatsSafely = async (isRetry: boolean = false) => {
+      if (!isMounted) return;
+      
+      if (isRetry) {
+        setIsRetrying(true);
+      } else {
+        setLoading(true);
+      }
+      
+      try {
+        const data = await analyticsService.getRealTimeStats();
+        if (!isMounted) return;
+        
+        setStats(data);
+        setLastUpdated(new Date());
+        setError(null);
+        setRetryCount(0); // Reset retry count on success
+      } catch (err: any) {
+        if (!isMounted) return;
+        
+        console.error("Error fetching real-time stats:", err);
+        
+        const errorMessage = err.message || "Failed to fetch real-time statistics";
+        setError(errorMessage);
+        
+        // Handle retry logic
+        if (retryCount < maxRetries && !isRetry) {
+          setRetryCount(prev => prev + 1);
+          retryTimeoutRef.current = setTimeout(() => {
+            if (isMounted) {
+              fetchStatsSafely(true);
+            }
+          }, retryDelay);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+          setIsRetrying(false);
+        }
+      }
+    };
 
-    return () => clearInterval(interval);
-  }, [refreshInterval]);
+    fetchStatsSafely();
+
+    // Set up polling for real-time updates only when polling is enabled
+    if (isPolling) {
+      interval = setInterval(() => {
+        if (isMounted && !loading && !isRetrying) {
+          fetchStatsSafely();
+        }
+      }, refreshInterval);
+    }
+
+    return () => {
+      isMounted = false;
+      if (interval) {
+        clearInterval(interval);
+      }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
+  }, [refreshInterval, isPolling, loading, isRetrying, retryCount, maxRetries, retryDelay]);
+
+  // Additional cleanup effect for component unmount
+  useEffect(() => {
+    return () => {
+      // Clear any remaining timeouts on unmount
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const formatTimeAgo = (date: Date): string => {
     const now = new Date();
@@ -84,30 +209,155 @@ export const RealTimeStats: React.FC<RealTimeStatsProps> = ({
     return isActive ? theme.palette.success.main : theme.palette.grey[500];
   };
 
-  if (loading) {
+  // Enhanced loading state with retry information
+  if (loading && !isRetrying) {
     return (
       <Box
         display="flex"
+        flexDirection="column"
         justifyContent="center"
         alignItems="center"
         height={200}
+        gap={2}
       >
         <CircularProgress />
+        <Typography variant="body2" color="textSecondary">
+          Loading real-time statistics...
+        </Typography>
       </Box>
     );
   }
 
+  // Retry loading state
+  if (isRetrying) {
+    return (
+      <Box
+        display="flex"
+        flexDirection="column"
+        justifyContent="center"
+        alignItems="center"
+        height={200}
+        gap={2}
+      >
+        <CircularProgress size={40} />
+        <Typography variant="body2" color="textSecondary">
+          Retrying... (Attempt {retryCount + 1} of {maxRetries})
+        </Typography>
+      </Box>
+    );
+  }
+
+  // Enhanced error state with retry options and details
   if (error || !stats) {
     return (
-      <Paper sx={{ p: 3, textAlign: "center" }}>
-        <Typography color="error">{error || "No data available"}</Typography>
+      <Paper sx={{ p: 3 }}>
+        <Alert 
+          severity="error" 
+          action={
+            <Box display="flex" gap={1}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleRetry}
+                disabled={isRetrying}
+                startIcon={<Refresh />}
+              >
+                Retry
+              </Button>
+              <IconButton
+                size="small"
+                onClick={() => setShowErrorDetails(!showErrorDetails)}
+              >
+                {showErrorDetails ? <ExpandLess /> : <ExpandMore />}
+              </IconButton>
+            </Box>
+          }
+        >
+          <AlertTitle>Unable to Load Real-Time Statistics</AlertTitle>
+          {error || "No data available"}
+          
+          <Collapse in={showErrorDetails}>
+            <Box mt={2}>
+              <Typography variant="body2" color="textSecondary">
+                <strong>Error Details:</strong> {error || "Data source unavailable"}
+              </Typography>
+              <Typography variant="body2" color="textSecondary" mt={1}>
+                <strong>Retry Count:</strong> {retryCount} of {maxRetries}
+              </Typography>
+              <Typography variant="body2" color="textSecondary" mt={1}>
+                <strong>Last Attempt:</strong> {lastUpdated ? formatTimeAgo(lastUpdated) : "Never"}
+              </Typography>
+            </Box>
+          </Collapse>
+        </Alert>
+
+        {/* Fallback UI when analytics data is unavailable */}
+        <Box mt={3}>
+          <Typography variant="h6" gutterBottom>
+            Fallback Statistics
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card variant="outlined">
+                <CardContent sx={{ textAlign: 'center' }}>
+                  <Info sx={{ fontSize: 40, color: theme.palette.info.main, mb: 1 }} />
+                  <Typography variant="h6" color="textSecondary">
+                    Data Unavailable
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Real-time statistics are currently unavailable
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card variant="outlined">
+                <CardContent sx={{ textAlign: 'center' }}>
+                  <Warning sx={{ fontSize: 40, color: theme.palette.warning.main, mb: 1 }} />
+                  <Typography variant="h6" color="textSecondary">
+                    Connection Issue
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Check your internet connection
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card variant="outlined">
+                <CardContent sx={{ textAlign: 'center' }}>
+                  <Error sx={{ fontSize: 40, color: theme.palette.error.main, mb: 1 }} />
+                  <Typography variant="h6" color="textSecondary">
+                    Service Unavailable
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Analytics service may be down
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card variant="outlined">
+                <CardContent sx={{ textAlign: 'center' }}>
+                  <Refresh sx={{ fontSize: 40, color: theme.palette.primary.main, mb: 1 }} />
+                  <Typography variant="h6" color="textSecondary">
+                    Manual Refresh
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Click retry to attempt reconnection
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </Box>
       </Paper>
     );
   }
 
   return (
     <Box>
-      {/* Header with last updated timestamp */}
+      {/* Header with last updated timestamp and controls */}
       <Box
         display="flex"
         justifyContent="space-between"
@@ -117,20 +367,53 @@ export const RealTimeStats: React.FC<RealTimeStatsProps> = ({
         <Typography variant="h6" component="h3">
           Real-Time Statistics
         </Typography>
-        <Box display="flex" alignItems="center" gap={1}>
-          <Box
-            width={8}
-            height={8}
-            borderRadius="50%"
-            bgcolor={getActivityColor(stats.is_active)}
-          />
-          <Typography variant="caption" color="textSecondary">
-            {lastUpdated
-              ? `Updated ${formatTimeAgo(lastUpdated)}`
-              : "Loading..."}
-          </Typography>
+        <Box display="flex" alignItems="center" gap={2}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Box
+              width={8}
+              height={8}
+              borderRadius="50%"
+              bgcolor={getActivityColor(stats.is_active)}
+            />
+            <Typography variant="caption" color="textSecondary">
+              {lastUpdated
+                ? `Updated ${formatTimeAgo(lastUpdated)}`
+                : "Loading..."}
+            </Typography>
+          </Box>
+          
+          {/* Control buttons */}
+          <Box display="flex" gap={1}>
+            <Tooltip title={isPolling ? "Pause auto-refresh" : "Resume auto-refresh"}>
+              <IconButton
+                size="small"
+                onClick={togglePolling}
+                color={isPolling ? "primary" : "default"}
+              >
+                <Refresh />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Manual refresh">
+              <IconButton
+                size="small"
+                onClick={handleRefresh}
+                disabled={loading}
+              >
+                <Refresh />
+              </IconButton>
+            </Tooltip>
+          </Box>
         </Box>
       </Box>
+
+      {/* Success alert when data is loaded */}
+      <Collapse in={!!stats && !error}>
+        <Alert severity="success" sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            Real-time data loaded successfully. Auto-refresh is {isPolling ? "enabled" : "paused"}.
+          </Typography>
+        </Alert>
+      </Collapse>
 
       <Grid container spacing={3}>
         {/* Key Metrics Cards */}

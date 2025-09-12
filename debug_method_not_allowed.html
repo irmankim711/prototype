@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Method Not Allowed Error</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug METHOD_NOT_ALLOWED Error</h1>
+    
+    <div class="test-result info">
+        <strong>Problem:</strong> Frontend is somehow making GET request to POST-only endpoint
+        <code>/api/v1/nextgen/excel/generate-report</code>
+    </div>
+    
+    <h3>Test Different Request Methods</h3>
+    <button onclick="testGet()">🔴 Test GET (Should Fail)</button>
+    <button onclick="testPost()">🟢 Test POST (Should Work/401)</button>
+    <button onclick="testOptions()">🟡 Test OPTIONS (CORS)</button>
+    <button onclick="testWithAuth()">🔐 Test POST with Dev Auth</button>
+    
+    <div id="results"></div>
+    
+    <script>
+        const API_BASE = 'http://localhost:5001';
+        const ENDPOINT = '/api/v1/nextgen/excel/generate-report';
+        const FULL_URL = API_BASE + ENDPOINT;
+        
+        function addResult(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong> - ${message}`;
+            results.appendChild(div);
+        }
+        
+        async function testGet() {
+            addResult('🔴 Testing GET request...', 'info');
+            try {
+                const response = await fetch(FULL_URL, {
+                    method: 'GET',
+                    mode: 'cors',
+                    credentials: 'include'
+                });
+                
+                addResult(`GET Response: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+                
+                const text = await response.text();
+                addResult(`GET Body: <pre>${text}</pre>`, 'info');
+                
+            } catch (error) {
+                addResult(`GET Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testPost() {
+            addResult('🟢 Testing POST request...', 'info');
+            try {
+                const response = await fetch(FULL_URL, {
+                    method: 'POST',
+                    mode: 'cors',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        excelFilePath: 'test.xlsx',
+                        templateId: 'test-template',
+                        reportTitle: 'Test Report'
+                    })
+                });
+                
+                addResult(`POST Response: ${response.status} ${response.statusText}`, response.ok ? 'success' : (response.status === 401 ? 'info' : 'error'));
+                
+                const text = await response.text();
+                addResult(`POST Body: <pre>${text}</pre>`, 'info');
+                
+            } catch (error) {
+                addResult(`POST Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testOptions() {
+            addResult('🟡 Testing OPTIONS request (CORS preflight)...', 'info');
+            try {
+                const response = await fetch(FULL_URL, {
+                    method: 'OPTIONS',
+                    mode: 'cors',
+                    credentials: 'include'
+                });
+                
+                addResult(`OPTIONS Response: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+                addResult(`Allow Header: ${response.headers.get('Allow') || 'Not present'}`, 'info');
+                addResult(`Access-Control-Allow-Methods: ${response.headers.get('Access-Control-Allow-Methods') || 'Not present'}`, 'info');
+                
+            } catch (error) {
+                addResult(`OPTIONS Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testWithAuth() {
+            addResult('🔐 Testing POST with development auth...', 'info');
+            
+            // Enable development bypass
+            localStorage.setItem('devBypassEnabled', 'true');
+            localStorage.setItem('devUser', JSON.stringify({
+                id: 1,
+                email: 'dev@example.com',
+                username: 'devuser',
+                role: 'admin',
+                is_active: true,
+                first_name: 'Dev',
+                last_name: 'User',
+                full_name: 'Dev User'
+            }));
+            localStorage.setItem('accessToken', 'dev-bypass-token');
+            
+            try {
+                const response = await fetch(FULL_URL, {
+                    method: 'POST',
+                    mode: 'cors',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer dev-bypass-token'
+                    },
+                    body: JSON.stringify({
+                        excelFilePath: 'test.xlsx',
+                        templateId: 'test-template',
+                        reportTitle: 'Test Report'
+                    })
+                });
+                
+                addResult(`POST+Auth Response: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+                
+                const text = await response.text();
+                addResult(`POST+Auth Body: <pre>${text}</pre>`, 'info');
+                
+            } catch (error) {
+                addResult(`POST+Auth Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Log initial state
+        addResult('🚀 Debug page loaded. Ready to test HTTP methods.', 'info');
+        addResult(`Target URL: ${FULL_URL}`, 'info');
+    </script>
+</body>
+</html>

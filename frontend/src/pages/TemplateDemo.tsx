@@ -347,9 +347,39 @@ const TemplateDemo: React.FC = () => {
                         <strong>Filename:</strong> {reportResult.filename}
                       </div>
                       <button
-                        onClick={() =>
-                          window.open(reportResult.downloadUrl, "_blank")
-                        }
+                        onClick={async () => {
+                          // Check if this is the generation endpoint (incorrect URL)
+                          if (reportResult.downloadUrl.includes('/excel/generate-report')) {
+                            console.error('❌ Invalid download URL detected:', reportResult.downloadUrl);
+                            alert('Report download URL is invalid. Please regenerate the report.');
+                            return;
+                          }
+                          
+                          // Use proper download approach
+                          try {
+                            const response = await fetch(reportResult.downloadUrl, {
+                              method: 'GET',
+                              credentials: 'include'
+                            });
+                            
+                            if (response.ok) {
+                              const blob = await response.blob();
+                              const url = window.URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = reportResult.filename || 'report.pdf';
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              window.URL.revokeObjectURL(url);
+                            } else {
+                              throw new Error(`Download failed: ${response.statusText}`);
+                            }
+                          } catch (error) {
+                            console.error('Download error:', error);
+                            alert('Failed to download report. Please try again.');
+                          }
+                        }}
                         className="mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
                       >
                         Download Report

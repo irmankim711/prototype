@@ -5,9 +5,17 @@ Provides real Google Forms integration for automated reports
 
 from flask import Blueprint, request, jsonify, current_app, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.services.google_forms_service import google_forms_service
+try:
+    from app.services.google_forms_service import google_forms_service
+    GOOGLE_FORMS_ENABLED = google_forms_service is not None
+    print(f"Google Forms routes status: {'Enabled' if GOOGLE_FORMS_ENABLED else 'Disabled'}")
+except (ImportError, ValueError) as e:
+    google_forms_service = None
+    GOOGLE_FORMS_ENABLED = False
+    print(f"⚠️ Google Forms routes disabled - {str(e)}")
 from app.services.automated_report_system import automated_report_system
-from app.models import User, db
+from app import db
+from app.models import User
 import logging
 import os
 from typing import Dict, Any
@@ -18,11 +26,52 @@ logger = logging.getLogger(__name__)
 # Create blueprint
 google_forms_bp = Blueprint('google_forms', __name__, url_prefix='/api/google-forms')
 
+@google_forms_bp.route('/status', methods=['GET'])
+def get_service_status():
+    """Get the current status of the Google Forms service"""
+    try:
+        if not google_forms_service:
+            return jsonify({
+                'success': False,
+                'status': 'not_available',
+                'message': 'Google Forms service not imported'
+            }), 503
+        
+        if not google_forms_service.is_enabled():
+            return jsonify({
+                'success': False,
+                'status': 'disabled',
+                'message': 'Google Forms service is not configured - missing OAuth credentials',
+                'requires_config': True
+            }), 503
+        
+        return jsonify({
+            'success': True,
+            'status': 'enabled',
+            'message': 'Google Forms service is available and configured'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error checking service status: {e}")
+        return jsonify({
+            'success': False,
+            'status': 'error',
+            'message': 'Error checking service status'
+        }), 500
+
 @google_forms_bp.route('/forms', methods=['GET'])
 @jwt_required()
 def get_user_forms():
     """Get list of Google Forms accessible to the current user"""
     try:
+        # Check if service is enabled
+        if not google_forms_service or not google_forms_service.is_enabled():
+            return jsonify({
+                'success': False,
+                'error': 'Google Forms service is not configured',
+                'requires_config': True
+            }), 503
+        
         user_id = get_jwt_identity()
         page_size = request.args.get('page_size', 10, type=int)
         
@@ -48,6 +97,14 @@ def get_user_forms():
 def get_form_info(form_id: str):
     """Get detailed information about a specific Google Form"""
     try:
+        # Check if service is enabled
+        if not google_forms_service or not google_forms_service.is_enabled():
+            return jsonify({
+                'success': False,
+                'error': 'Google Forms service is not configured',
+                'requires_config': True
+            }), 503
+        
         user_id = get_jwt_identity()
         
         # Get form information via responses endpoint (includes form info)
@@ -76,6 +133,14 @@ def get_form_info(form_id: str):
 def get_form_responses(form_id: str):
     """Get responses for a specific Google Form"""
     try:
+        # Check if service is enabled
+        if not google_forms_service or not google_forms_service.is_enabled():
+            return jsonify({
+                'success': False,
+                'error': 'Google Forms service is not configured',
+                'requires_config': True
+            }), 503
+        
         user_id = get_jwt_identity()
         
         # Optional query parameters

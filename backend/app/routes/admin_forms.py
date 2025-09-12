@@ -7,7 +7,8 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
-from ..models import db, Form, User
+from .. import db
+from ..models import Form, User
 from ..decorators import require_permission, get_current_user
 import json
 import uuid

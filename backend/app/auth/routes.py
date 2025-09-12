@@ -8,6 +8,7 @@ from flask_jwt_extended import (
 from .. import db
 from ..models import User
 from . import auth_bp
+from datetime import datetime
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
@@ -40,28 +41,48 @@ def register():
 @auth_bp.route('/login', methods=['POST'])
 def login():
     try:
+        # Validate request format
+        if not request.is_json:
+            return jsonify({"msg": "Content-Type must be application/json"}), 400
+        
         payload = request.get_json(force=True)
         email = (payload.get("email") or "").lower().strip()
         password = payload.get("password")
 
+        # Enhanced validation
         if not email or not password:
             return jsonify({"msg": "Email and password are required"}), 400
 
+        # Log login attempt for debugging
+        current_app.logger.info(f"Login attempt for email: {email}")
+
         user: User | None = User.query.filter_by(email=email).first()
         if not user:
+            current_app.logger.warning(f"Login failed: User not found for email {email}")
             return jsonify({"msg": "Invalid credentials"}), 401
             
         if not user.check_password(password):
+            current_app.logger.warning(f"Login failed: Invalid password for user {email}")
             return jsonify({"msg": "Invalid credentials"}), 401
 
+        # Update last login
+        user.last_login = datetime.utcnow()
+        db.session.commit()
+
+        # Generate tokens
         access_token = create_access_token(identity=str(user.id))
         refresh_token = create_refresh_token(identity=str(user.id))
+
+        current_app.logger.info(f"Login successful for user {email}")
 
         resp = make_response(jsonify({
             "access_token": access_token,
             "user": {
                 "id": str(user.id),
                 "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "username": user.username,
                 "created_at": user.created_at.isoformat() if user.created_at else None
             }
         }), 200)
@@ -88,9 +109,7 @@ def login():
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        print(f"Login error: {str(e)}")
-        print(f"Full traceback: {error_details}")
-        current_app.logger.error(f"Login failed: {str(e)} - {error_details}")
+        current_app.logger.error(f"Login error: {str(e)} - {error_details}")
         return jsonify({"msg": "Internal server error", "error": str(e)}), 500
 
 @auth_bp.route('/refresh', methods=['POST'])
@@ -110,8 +129,8 @@ def refresh():
             print("No user identity found in refresh token")
             return jsonify({"msg": "Invalid refresh token"}), 401
         
-        # Create new access token
-        new_token = create_access_token(identity=current_user)
+        # Create new access token with string identity
+        new_token = create_access_token(identity=str(current_user))
         print(f"Generated new access token for user: {current_user}")
         
         return jsonify({"access_token": new_token}), 200
@@ -136,3 +155,20 @@ def me():
     user_id = get_jwt_identity()
     user = User.query.get_or_404(user_id)
     return jsonify({"id": user.id, "email": user.email, "is_active": user.is_active})
+
+@auth_bp.route('/logout', methods=['POST'])
+@jwt_required()
+def logout():
+    """Logout user by clearing cookies and invalidating tokens"""
+    try:
+        resp = make_response(jsonify({"msg": "Logged out successfully"}), 200)
+        
+        # Clear JWT cookies
+        resp.delete_cookie("access_token_cookie", path="/")
+        resp.delete_cookie("refresh_token_cookie", path="/api/auth/refresh")
+        
+        return resp
+        
+    except Exception as e:
+        current_app.logger.error(f"Logout error: {str(e)}")
+        return jsonify({"msg": "Logout failed"}), 500

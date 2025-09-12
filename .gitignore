@@ -64,6 +64,38 @@ credentials/
 fix_oauth_deleted_client.py
 test_real_data_complete.py
 
+# CRITICAL: Firebase and Service Account Files - NEVER COMMIT
+firebase-service-account.json
+*firebase-service-account*.json
+service-account-*.json
+firebase-adminsdk-*.json
+firebase-config.json
+firebaseConfig.js
+firebaseConfig.ts
+
+# JWT Tokens and Authentication
+*.jwt
+*access_token*
+*refresh_token*
+*bearer_token*
+auth_token*
+jwt_token*
+
+# Google API Keys and OAuth (CRITICAL)
+*AIzaSy*
+*GOCSPX-*
+google-api-key*
+google_api_key*
+*client_id*.json
+*client_secret*.json
+
+# Environment files with real credentials
+.env.production
+.env.real_data
+.env.api_integrations
+.env.backup*
+*.env.backup*
+
 # Database files
 *.db
 *.sqlite
@@ -237,6 +269,45 @@ static/generated/
 *.key
 *.p12
 *.pfx
+
+# Database connection strings and URLs (found in scan)
+*DATABASE_URL*
+*connection_string*
+*db_url*
+*postgres://*
+*mysql://*
+*redis://*
+
+# Hardcoded API keys in source files (CRITICAL SECURITY)
+*sk-[a-zA-Z0-9]*
+*AIza[a-zA-Z0-9]*
+*GOCSPX-*
+*access_token*
+*secret_key*
+
+# Configuration files with embedded secrets
+config/production.js
+config/production.json
+config/secrets.*
+firebase.config.ts
+firebase.config.js
+
+# Test files with hardcoded credentials
+*test*password*
+*admin*password*
+test_*_password*
+*password123*
+
+# Development and backup environment files
+.env.development
+.env.dev
+.env.local
+.env.staging
+env.production*
+backend/.env
+frontend/.env
+backend/.env.*
+frontend/.env.*
 
 # Database migrations (if they contain sensitive data)
 # migrations/

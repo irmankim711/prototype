@@ -8,7 +8,8 @@ from .enhanced_report_service import enhanced_report_service
 from .ai_service import ai_service
 from .google_forms_service import google_forms_service
 from .enhanced_report_generator import enhanced_report_generator
-from ..models import Report, Form, FormSubmission, User, db
+from .. import db
+from ..models import Report, Form, FormSubmission, User
 import pandas as pd
 import numpy as np
 import matplotlib

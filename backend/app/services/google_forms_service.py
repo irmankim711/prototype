@@ -13,7 +13,7 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from app import db
-from app.models import User, FormSubmission
+from app.models import User, FormResponse
 
 logger = logging.getLogger(__name__)
 
@@ -27,22 +27,35 @@ class ProductionGoogleFormsService:
     ]
     
     def __init__(self):
-        # Get credentials from environment variables with proper error handling
+        """Initialize production Google Forms service with real API credentials"""
+        self.SCOPES = [
+            'https://www.googleapis.com/auth/forms',
+            'https://www.googleapis.com/auth/forms.responses.readonly',
+            'https://www.googleapis.com/auth/drive.readonly'
+        ]
+        
+        # Get configuration from environment
         self.client_id = os.getenv('GOOGLE_CLIENT_ID')
         self.client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
-        self.project_id = os.getenv('GOOGLE_PROJECT_ID', 'stratosys')
+        self.project_id = os.getenv('GOOGLE_PROJECT_ID', 'default-project')
         self.redirect_uri = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:5000/api/google-forms/callback')
         
         # Credentials can be from file or environment
         self.credentials_json = os.getenv('GOOGLE_CREDENTIALS')
         self.credentials_file = os.getenv('GOOGLE_CREDENTIALS_FILE', 'credentials.json')
         
-        # Ensure we have all required configuration
-        if not all([self.client_id, self.client_secret]):
-            logger.error("Missing required Google OAuth configuration. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET")
-            raise ValueError("Missing required Google OAuth configuration")
+        # Check if we have required configuration
+        if not self.client_id or not self.client_secret:
+            logger.warning("⚠️ Google OAuth credentials not configured - service will be disabled")
+            self.enabled = False
+            return
         
+        self.enabled = True
         logger.info("Production Google Forms service initialized with real API credentials")
+    
+    def is_enabled(self) -> bool:
+        """Check if the service is properly configured and enabled"""
+        return getattr(self, 'enabled', False)
     
     def _get_credentials_config(self) -> Dict[str, Any]:
         """Get credentials configuration from environment or file"""
@@ -769,7 +782,23 @@ class ProductionGoogleFormsService:
         return recommendations
 
 # Global instance for use in routes
-production_google_forms_service = ProductionGoogleFormsService()
+import os
+
+try:
+    # Check if Google OAuth credentials are available
+    if os.getenv('GOOGLE_CLIENT_ID') and os.getenv('GOOGLE_CLIENT_SECRET'):
+        production_google_forms_service = ProductionGoogleFormsService()
+        if production_google_forms_service.is_enabled():
+            print("✅ Google Forms service initialized successfully")
+        else:
+            print("⚠️ Google Forms service disabled - not properly configured")
+            production_google_forms_service = None
+    else:
+        production_google_forms_service = None
+        print("⚠️ Google Forms service disabled - OAuth credentials not configured")
+except Exception as e:
+    production_google_forms_service = None
+    print(f"⚠️ Google Forms service disabled - Error: {str(e)}")
 
 # For backward compatibility with existing imports
 google_forms_service = production_google_forms_service

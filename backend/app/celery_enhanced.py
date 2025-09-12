@@ -349,3 +349,58 @@ if __name__ == "__main__":
     print("Celery configuration loaded successfully")
     print(f"Broker URL: {config.broker_url}")
     print(f"Task queues: {[q.name for q in config.task_queues]}")
+
+
+# Create the actual Celery application instance
+from celery import Celery
+import os
+
+# Create Celery app
+celery = Celery('app')
+
+# Configure from environment variables
+celery.conf.update(
+    broker_url=os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0'),
+    result_backend=os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0'),
+    task_serializer='json',
+    accept_content=['json'],
+    result_serializer='json',
+    timezone='UTC',
+    enable_utc=True,
+    task_default_queue='default',
+    task_queues=(
+        Queue('default', Exchange('default'), routing_key='default'),
+        Queue('reports', Exchange('reports'), routing_key='reports'),
+        Queue('ai', Exchange('ai'), routing_key='ai'),
+        Queue('exports', Exchange('exports'), routing_key='exports'),
+        Queue('emails', Exchange('emails'), routing_key='emails'),
+        Queue('high_priority', Exchange('high_priority'), routing_key='high_priority'),
+    ),
+    task_routes={
+        'app.tasks.enhanced_report_tasks.generate_comprehensive_report_task': {'queue': 'reports'},
+        'app.tasks.enhanced_report_tasks.export_form_to_excel_task': {'queue': 'exports'},
+        'app.tasks.enhanced_report_tasks.auto_generate_form_report_task': {'queue': 'reports'},
+    },
+    task_default_retry_delay=60,
+    task_max_retries=3,
+    task_retry_jitter=True,
+    worker_prefetch_multiplier=1,
+    task_acks_late=True,
+    worker_max_tasks_per_child=1000,
+    worker_max_memory_per_child=200000,
+    task_time_limit=30 * 60,
+    task_soft_time_limit=25 * 60,
+    task_compression='gzip',
+    result_expires=3600,
+    result_persistent=True,
+    task_send_sent_event=True,
+    task_track_started=True,
+    worker_hijack_root_logger=False,
+    worker_log_color=False,
+)
+
+# Import tasks to register them
+celery.autodiscover_tasks(['app.tasks'])
+
+# Make celery available for import
+__all__ = ['celery']

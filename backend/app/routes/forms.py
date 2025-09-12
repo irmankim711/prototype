@@ -6,10 +6,18 @@ from datetime import datetime
 from sqlalchemy import desc, func
 from sqlalchemy.exc import SQLAlchemyError
 from marshmallow import ValidationError
-from ..models import db, Form, FormSubmission, Permission, User, FormQRCode, QuickAccessToken, FormAccessCode
+from .. import db
+from ..models import Form, FormSubmission, Permission, User, FormQRCode, QuickAccessToken, FormAccessCode
 from ..decorators import require_permission, get_current_user_id, get_current_user
 from ..validation import validate_json, FormCreationSchema, FormUpdateSchema, FormSubmissionSchema, ErrorHandler
-from .quick_auth import check_quick_access_permission
+# Import quick_auth function with error handling to avoid circular imports
+try:
+    from .quick_auth import check_quick_access_permission
+except ImportError:
+    # Fallback function if quick_auth is not available
+    def check_quick_access_permission(token, form_id):
+        """Fallback function when quick_auth is not available"""
+        return False, "Quick access not available"
 import json
 import uuid
 import qrcode
@@ -2143,3 +2151,386 @@ def submit_form_with_code_access(form_id):
         db.session.rollback()
         current_app.logger.error(f"Error submitting form with code access: {str(e)}")
         return jsonify({'error': 'Failed to submit form'}), 500
+
+@forms_bp.route('/<int:form_id>/fetch-data-excel', methods=['POST'])
+@jwt_required()
+@limiter.limit("50 per hour")
+def fetch_form_data_for_excel(form_id):
+    """
+    Fetch form data and export to Excel using ExcelPipelineService
+    POST /api/forms/{form_id}/fetch-data-excel
+    """
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        # Check if form exists and user has permission
+        form = Form.query.get_or_404(form_id)
+        
+        # Check user permissions for this form
+        if not hasattr(user, 'id') or not user.id:
+            return jsonify({'error': 'Invalid user'}), 400
+        
+        # Get request data
+        data = request.get_json() or {}
+        include_analytics = data.get('include_analytics', True)
+        date_range = data.get('date_range', {})
+        filters = data.get('filters', {})
+        excel_options = data.get('excel_options', {})
+        
+        # Build query for FormSubmission
+        query = FormSubmission.query.filter_by(form_id=form_id)
+        
+        # Apply date filters if provided
+        if date_range.get('start'):
+            try:
+                start_date = datetime.fromisoformat(date_range['start'])
+                query = query.filter(FormSubmission.created_at >= start_date)
+            except ValueError:
+                return jsonify({'error': 'Invalid start date format. Use ISO format (YYYY-MM-DD)'}), 400
+        
+        if date_range.get('end'):
+            try:
+                end_date = datetime.fromisoformat(date_range['end'])
+                query = query.filter(FormSubmission.created_at <= end_date)
+            except ValueError:
+                return jsonify({'error': 'Invalid end date format. Use ISO format (YYYY-MM-DD)'}), 400
+        
+        # Apply status filter
+        if filters.get('status') and filters['status'] != 'all':
+            query = query.filter(FormSubmission.status == filters['status'])
+        
+        # Apply submitter email filter
+        if filters.get('submitter_email'):
+            query = query.filter(FormSubmission.submitter_email.ilike(f"%{filters['submitter_email']}%"))
+        
+        # Get submissions
+        submissions = query.order_by(FormSubmission.created_at.desc()).all()
+        
+        if not submissions:
+            return jsonify({
+                'success': False,
+                'message': 'No submissions found matching the criteria',
+                'form_title': form.title,
+                'filters_applied': {
+                    'date_range': date_range,
+                    'filters': filters
+                }
+            }), 404
+        
+        # Prepare data for Excel export
+        excel_data = []
+        
+        # Add headers row
+        headers = ['Submission ID', 'Submitted At', 'Status', 'Submitter Email']
+        
+        # Add form field headers
+        if form.schema and 'fields' in form.schema:
+            for field in form.schema['fields']:
+                headers.append(field.get('label', field.get('id', 'Unknown Field')))
+        
+        excel_data.append(headers)
+        
+        # Add data rows
+        for submission in submissions:
+            row = [
+                submission.id,
+                submission.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                submission.status or 'submitted',
+                submission.submitter_email or 'Anonymous'
+            ]
+            
+            # Add form field values
+            if form.schema and 'fields' in form.schema:
+                for field in form.schema['fields']:
+                    field_id = field.get('id')
+                    value = submission.data.get(field_id, '') if submission.data else ''
+                    row.append(str(value) if value is not None else '')
+            
+            excel_data.append(row)
+        
+        # Configure Excel options
+        excel_config = {
+            'filename': f"{form.title.replace(' ', '_')}_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            'sheet_name': 'Form Submissions',
+            'include_form_schema': excel_options.get('include_form_schema', True),
+            'include_submission_metadata': excel_options.get('include_submission_metadata', True),
+            'formatting': excel_options.get('formatting', 'professional'),
+            'compression': excel_options.get('compression', True)
+        }
+        
+        # Initialize ExcelPipelineService
+        try:
+            from app.services.excel_pipeline_service import ExcelPipelineService
+            excel_service = ExcelPipelineService()
+            
+            # Generate Excel file
+            result = excel_service.generate_excel_from_data(
+                data=excel_data,
+                config=excel_config,
+                form_schema=form.schema if excel_options.get('include_form_schema') else None,
+                metadata={
+                    'form_title': form.title,
+                    'form_description': form.description,
+                    'total_submissions': len(submissions),
+                    'export_date': datetime.now().isoformat(),
+                    'filters_applied': {
+                        'date_range': date_range,
+                        'filters': filters
+                    }
+                } if excel_options.get('include_submission_metadata') else None
+            )
+            
+            if result['success']:
+                # Return download URL
+                download_url = f"/api/forms/download/{os.path.basename(result['file_path'])}"
+                return jsonify({
+                    'success': True,
+                    'message': f'Excel file generated successfully with {len(submissions)} submissions',
+                    'download_url': download_url,
+                    'filename': excel_config['filename'],
+                    'submissions_count': len(submissions),
+                    'file_size': result.get('file_size', 'Unknown'),
+                    'generated_at': datetime.now().isoformat()
+                }), 200
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': result.get('error', 'Failed to generate Excel file')
+                }), 500
+                
+        except ImportError:
+            # Fallback to basic Excel generation
+            return jsonify({
+                'success': False,
+                'error': 'ExcelPipelineService not available. Please install required dependencies.'
+            }), 503
+        except Exception as e:
+            current_app.logger.error(f"Excel generation error: {str(e)}")
+            return jsonify({
+                'success': False,
+                'error': f'Excel generation failed: {str(e)}'
+            }), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"Error in fetch_form_data_for_excel: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Internal server error: {str(e)}'
+        }), 500
+
+@forms_bp.route('/google-forms/<form_id>/export-excel', methods=['POST'])
+@jwt_required()
+@limiter.limit("50 per hour")
+def export_google_forms_to_excel(form_id):
+    """
+    Export Google Forms data to Excel
+    POST /api/forms/google-forms/{form_id}/export-excel
+    """
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        # Get request data
+        data = request.get_json() or {}
+        include_analytics = data.get('include_analytics', True)
+        date_range = data.get('date_range', {})
+        filters = data.get('filters', {})
+        excel_options = data.get('excel_options', {})
+        
+        # Import Google Forms service
+        try:
+            from app.services.google_forms_service import google_forms_service
+            if not google_forms_service or not google_forms_service.is_enabled():
+                return jsonify({
+                    'success': False,
+                    'error': 'Google Forms service not available or not configured'
+                }), 503
+        except ImportError:
+            return jsonify({
+                'success': False,
+                'error': 'Google Forms service not available'
+            }), 503
+        
+        # Get Google Form information
+        try:
+            form_info = google_forms_service.get_form_info(str(user.id), form_id)
+            if not form_info:
+                return jsonify({
+                    'success': False,
+                    'error': 'Google Form not found or access denied'
+                }), 404
+        except Exception as e:
+            current_app.logger.error(f"Error fetching Google Form info: {str(e)}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to fetch Google Form: {str(e)}'
+            }), 500
+        
+        # Get form responses
+        try:
+            responses = google_forms_service.get_form_responses(str(user.id), form_id)
+            if not responses:
+                return jsonify({
+                    'success': False,
+                    'message': 'No responses found for this Google Form',
+                    'form_title': form_info.get('title', 'Unknown Form')
+                }), 404
+        except Exception as e:
+            current_app.logger.error(f"Error fetching Google Form responses: {str(e)}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to fetch form responses: {str(e)}'
+            }), 500
+        
+        # Apply date filters if provided
+        filtered_responses = responses
+        if date_range.get('start') or date_range.get('end'):
+            filtered_responses = []
+            for response in responses:
+                response_date = response.get('createdTime')
+                if response_date:
+                    try:
+                        response_datetime = datetime.fromisoformat(response_date.replace('Z', '+00:00'))
+                        
+                        # Check start date
+                        if date_range.get('start'):
+                            start_date = datetime.fromisoformat(date_range['start'])
+                            if response_datetime < start_date:
+                                continue
+                        
+                        # Check end date
+                        if date_range.get('end'):
+                            end_date = datetime.fromisoformat(date_range['end'])
+                            if response_datetime > end_date:
+                                continue
+                        
+                        filtered_responses.append(response)
+                    except ValueError:
+                        # Skip responses with invalid dates
+                        continue
+        
+        if not filtered_responses:
+            return jsonify({
+                'success': False,
+                'message': 'No responses found matching the date criteria',
+                'form_title': form_info.get('title', 'Unknown Form'),
+                'filters_applied': {'date_range': date_range}
+            }), 404
+        
+        # Prepare data for Excel export
+        excel_data = []
+        
+        # Add headers row
+        headers = ['Response ID', 'Submitted At', 'Respondent Email']
+        
+        # Add form field headers
+        if form_info.get('items'):
+            for item in form_info['items']:
+                if 'title' in item:
+                    headers.append(item['title'])
+        
+        excel_data.append(headers)
+        
+        # Add data rows
+        for response in filtered_responses:
+            row = [
+                response.get('responseId', 'Unknown'),
+                response.get('createdTime', 'Unknown'),
+                response.get('respondentEmail', 'Anonymous')
+            ]
+            
+            # Add form field values
+            if form_info.get('items') and response.get('answers'):
+                for item in form_info['items']:
+                    item_id = item.get('itemId')
+                    answer = response['answers'].get(item_id, {})
+                    
+                    # Extract answer value based on question type
+                    if 'textAnswers' in answer:
+                        value = answer['textAnswers']['answers'][0].get('value', '') if answer['textAnswers']['answers'] else ''
+                    elif 'choiceAnswers' in answer:
+                        value = answer['choiceAnswers']['answers'][0].get('value', '') if answer['choiceAnswers']['answers'] else ''
+                    elif 'fileUploadAnswers' in answer:
+                        value = 'File uploaded' if answer['fileUploadAnswers']['answers'] else ''
+                    else:
+                        value = ''
+                    
+                    row.append(str(value) if value is not None else '')
+            
+            excel_data.append(row)
+        
+        # Configure Excel options
+        excel_config = {
+            'filename': f"GoogleForm_{form_info.get('title', 'Unknown').replace(' ', '_')}_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            'sheet_name': 'Google Form Responses',
+            'include_form_schema': excel_options.get('include_form_schema', True),
+            'include_submission_metadata': excel_options.get('include_submission_metadata', True),
+            'formatting': excel_options.get('formatting', 'professional'),
+            'compression': excel_options.get('compression', True)
+        }
+        
+        # Initialize ExcelPipelineService
+        try:
+            from app.services.excel_pipeline_service import ExcelPipelineService
+            excel_service = ExcelPipelineService()
+            
+            # Generate Excel file
+            result = excel_service.generate_excel_from_data(
+                data=excel_data,
+                config=excel_config,
+                form_schema=form_info.get('items') if excel_options.get('include_form_schema') else None,
+                metadata={
+                    'form_title': form_info.get('title', 'Unknown'),
+                    'form_description': form_info.get('description', ''),
+                    'total_responses': len(filtered_responses),
+                    'export_date': datetime.now().isoformat(),
+                    'filters_applied': {
+                        'date_range': date_range,
+                        'filters': filters
+                    },
+                    'source': 'Google Forms'
+                } if excel_options.get('include_submission_metadata') else None
+            )
+            
+            if result['success']:
+                # Return download URL
+                download_url = f"/api/forms/download/{os.path.basename(result['file_path'])}"
+                return jsonify({
+                    'success': True,
+                    'message': f'Google Form exported to Excel successfully with {len(filtered_responses)} responses',
+                    'download_url': download_url,
+                    'filename': excel_config['filename'],
+                    'responses_count': len(filtered_responses),
+                    'file_size': result.get('file_size', 'Unknown'),
+                    'generated_at': datetime.now().isoformat(),
+                    'form_title': form_info.get('title', 'Unknown'),
+                    'source': 'Google Forms'
+                }), 200
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': result.get('error', 'Failed to generate Excel file')
+                }), 500
+                
+        except ImportError:
+            # Fallback to basic Excel generation
+            return jsonify({
+                'success': False,
+                'error': 'ExcelPipelineService not available. Please install required dependencies.'
+            }), 503
+        except Exception as e:
+            current_app.logger.error(f"Excel generation error: {str(e)}")
+            return jsonify({
+                'success': False,
+                'error': f'Excel generation failed: {str(e)}'
+            }), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"Error in export_google_forms_to_excel: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Internal server error: {str(e)}'
+        }), 500

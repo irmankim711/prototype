@@ -6,7 +6,7 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 // Types for the enhanced report editing system
 export interface ReportVersion {
@@ -517,6 +517,56 @@ class EnhancedReportService {
     }
   }
 
+  // New unified export against backend Step 1 endpoint
+  async exportUnifiedReports(data: {
+    template_id: string;
+    data_source: unknown;
+    formats: Array<"pdf" | "docx" | "html">;
+  }): Promise<{
+    status: "success" | "error";
+    urls?: { pdf?: string | null; docx?: string | null; html?: string | null };
+    error?: string;
+  }> {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/reports/export`,
+        data,
+        {
+          headers: this.getAuthHeaders(),
+          timeout: 60000,
+        }
+      );
+
+      const res = response.data;
+      // Normalize URLs to absolute if API returns relative paths
+      if (res?.urls) {
+        const base = API_BASE_URL.replace(/\/?api$/, "");
+        const absolutize = (u?: string | null) =>
+          u && u.startsWith("/") ? `${base}${u}` : u;
+        res.urls = {
+          pdf: absolutize(res.urls.pdf),
+          docx: absolutize(res.urls.docx),
+          html: absolutize(res.urls.html),
+        };
+      }
+      return res;
+    } catch (error: unknown) {
+      console.error("Error exporting via unified endpoint:", error);
+      let message = "Failed to export via unified endpoint";
+      if (typeof error === "object" && error !== null) {
+        const err = error as {
+          response?: { data?: { error?: string } };
+          message?: string;
+        };
+        message = err.response?.data?.error || err.message || message;
+      }
+      return {
+        status: "error",
+        error: message,
+      };
+    }
+  }
+
   async healthCheck(): Promise<{
     service: string;
     status: string;
@@ -537,7 +587,7 @@ class EnhancedReportService {
       );
 
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error checking health:", error);
       return {
         service: "Enhanced Report Builder",
@@ -548,8 +598,18 @@ class EnhancedReportService {
           excel_parser: false,
           preview_generator: false,
         },
-        error:
-          error.response?.data?.error || error.message || "Health check failed",
+        error: ((): string => {
+          if (typeof error === "object" && error !== null) {
+            const err = error as {
+              response?: { data?: { error?: string } };
+              message?: string;
+            };
+            return (
+              err.response?.data?.error || err.message || "Health check failed"
+            );
+          }
+          return "Health check failed";
+        })(),
       };
     }
   }

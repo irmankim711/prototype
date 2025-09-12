@@ -28,7 +28,7 @@ import {
   Description as TemplatesIcon,
   Logout as LogoutIcon,
   Person as PersonIcon,
-  AutoAwesome as AutomatedReportsIcon,
+  TableChart as TableChartIcon,
 } from "@mui/icons-material";
 import { AuthContext } from "../../context/AuthContext";
 import { useUser } from "../../hooks/useUser";
@@ -335,7 +335,7 @@ const navItems = [
     label: "Reports",
     icon: <ReportsIcon />,
     children: [
-      { label: "Report Builder", icon: <BuildIcon />, path: "/report-builder" },
+      { label: "Next-Gen Builder", icon: <BuildIcon />, path: "/next-gen-report-builder" },
       {
         label: "Report History",
         icon: <HistoryIcon />,
@@ -346,14 +346,10 @@ const navItems = [
         icon: <TemplatesIcon />,
         path: "/report-templates",
       },
-      {
-        label: "Google Forms",
-        icon: <AutomatedReportsIcon />,
-        path: "/google-forms",
-      },
     ],
   },
   { label: "Form Builder", icon: <BuildIcon />, path: "/form-builder-admin" },
+  { label: "Form Data Export", icon: <TableChartIcon />, path: "/form-data-export-demo" },
   { label: "Profile", icon: <PersonIcon />, path: "/profile" },
   { label: "Settings", icon: <SettingsIcon />, path: "/settings" },
 ];

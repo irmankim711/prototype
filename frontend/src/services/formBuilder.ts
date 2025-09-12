@@ -362,6 +362,72 @@ export const formBuilderAPI = {
   },
 
   // ========================================
+  // FORM DATA FETCHING AND EXCEL EXPORT
+  // ========================================
+
+  // Fetch form data with filtering and pagination
+  fetchFormData: async (
+    formId: number,
+    params?: {
+      page?: number;
+      per_page?: number;
+      status?: string;
+      date_from?: string;
+      date_to?: string;
+      submitter_email?: string;
+      include_metadata?: boolean;
+      include_analytics?: boolean;
+    }
+  ) => {
+    const response = await api.get(`/forms/${formId}/fetch-data`, {
+      params,
+    });
+    return response.data;
+  },
+
+  // Export form data to Excel
+  exportFormDataToExcel: async (formId: number, options: any): Promise<any> => {
+    try {
+      const response = await axiosInstance.post(`/api/forms/${formId}/fetch-data-excel`, options);
+      return response.data;
+    } catch (error) {
+      console.error('Error exporting form data to Excel:', error);
+      throw error;
+    }
+  },
+
+  // Export Google Forms data to Excel
+  exportGoogleFormsToExcel: async (formId: string, options: any): Promise<any> => {
+    try {
+      const response = await axiosInstance.post(`/api/forms/google-forms/${formId}/export-excel`, options);
+      return response.data;
+    } catch (error) {
+      console.error('Error exporting Google Forms data to Excel:', error);
+      throw error;
+    }
+  },
+
+  // Download generated Excel file
+  downloadExcelFile: async (downloadUrl: string) => {
+    const response = await api.get(downloadUrl, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  // Get form analytics summary
+  getFormAnalytics: async (formId: number, dateRange?: { start: string; end: string }) => {
+    const params: any = { include_analytics: true };
+    if (dateRange) {
+      params.date_from = dateRange.start;
+      params.date_to = dateRange.end;
+    }
+    
+    const response = await api.get(`/forms/${formId}/fetch-data`, { params });
+    return response.data.analytics;
+  },
+
+  // ========================================
   // ACCESS CODE MANAGEMENT
   // ========================================
 

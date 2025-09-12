@@ -49,7 +49,8 @@ class MockSns:
 plt = MockPlt()
 sns = MockSns()
 
-from ..models import db, Form, FormSubmission, Report, User
+from .. import db
+from ..models import Form, FormSubmission, Report, User
 from ..services.ai_service import AIService
 from ..services.report_generator import create_word_report, create_pdf_report
 from ..services.email_service import send_report_email

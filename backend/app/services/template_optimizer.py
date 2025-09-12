@@ -448,8 +448,9 @@ class TemplateDataMerger:
         """Build complete context from placeholders and Excel data."""
         context = {}
         
-        # Map program information
-        program_info = excel_data.get('program_info', {})
+        # Extract program information from Excel tables intelligently
+        program_info = self._extract_program_info_from_excel(excel_data)
+        
         context['program'] = {
             'title': program_info.get('title', 'PROGRAM TITLE'),
             'date': program_info.get('date', datetime.now().strftime('%d/%m/%Y')),
@@ -549,6 +550,85 @@ class TemplateDataMerger:
                     missing.append(placeholder)
         
         return missing
+    
+    def _extract_program_info_from_excel(self, excel_data: Dict) -> Dict[str, Any]:
+        """Extract program information from Excel tables intelligently."""
+        program_info = {}
+        
+        try:
+            tables = excel_data.get('tables', [])
+            
+            for table in tables:
+                if not isinstance(table, dict):
+                    continue
+                    
+                headers = table.get('headers', [])
+                data = table.get('data', [])
+                
+                if not headers or not data:
+                    continue
+                
+                # Look for common program information patterns
+                for i, header in enumerate(headers):
+                    header_lower = str(header).lower().strip()
+                    
+                    # Extract title
+                    if any(keyword in header_lower for keyword in ['title', 'nama', 'name', 'program']):
+                        if data and len(data) > 0 and len(data[0]) > i:
+                            program_info['title'] = str(data[0][i]) if data[0][i] else 'PROGRAM TITLE'
+                    
+                    # Extract date
+                    elif any(keyword in header_lower for keyword in ['date', 'tarikh', 'tanggal']):
+                        if data and len(data) > 0 and len(data[0]) > i:
+                            program_info['date'] = str(data[0][i]) if data[0][i] else datetime.now().strftime('%d/%m/%Y')
+                    
+                    # Extract location
+                    elif any(keyword in header_lower for keyword in ['location', 'tempat', 'venue', 'lokasi']):
+                        if data and len(data) > 0 and len(data[0]) > i:
+                            program_info['location'] = str(data[0][i]) if data[0][i] else 'LOCATION'
+                    
+                    # Extract objectives
+                    elif any(keyword in header_lower for keyword in ['objective', 'objektif', 'goal', 'target']):
+                        if data and len(data) > 0 and len(data[0]) > i:
+                            program_info['objectives'] = str(data[0][i]) if data[0][i] else 'PROGRAM OBJECTIVES'
+                    
+                    # Extract participants count
+                    elif any(keyword in header_lower for keyword in ['participant', 'peserta', 'total']):
+                        if data and len(data) > 0 and len(data[0]) > i:
+                            try:
+                                count = int(data[0][i]) if data[0][i] else 0
+                                program_info['total_participants'] = str(count)
+                            except (ValueError, TypeError):
+                                program_info['total_participants'] = '0'
+                
+                # If we found key information, break
+                if 'title' in program_info and 'date' in program_info:
+                    break
+            
+            # Set defaults for missing fields
+            if 'title' not in program_info:
+                program_info['title'] = 'PROGRAM TITLE'
+            if 'date' not in program_info:
+                program_info['date'] = datetime.now().strftime('%d/%m/%Y')
+            if 'objectives' not in program_info:
+                program_info['objectives'] = 'PROGRAM OBJECTIVES'
+            if 'location' not in program_info:
+                program_info['location'] = 'LOCATION'
+            if 'total_participants' not in program_info:
+                program_info['total_participants'] = '0'
+                
+        except Exception as e:
+            logger.error(f"Error extracting program info from Excel: {str(e)}")
+            # Set safe defaults
+            program_info = {
+                'title': 'PROGRAM TITLE',
+                'date': datetime.now().strftime('%d/%m/%Y'),
+                'objectives': 'PROGRAM OBJECTIVES',
+                'location': 'LOCATION',
+                'total_participants': '0'
+            }
+        
+        return program_info
 
 
 class TemplateOptimizerService:

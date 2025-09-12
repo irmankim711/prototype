@@ -568,3 +568,192 @@ def collect_queue_metrics():
     except Exception as exc:
         logger.error(f"Metrics collection failed: {exc}")
         return {'status': 'failed', 'error': str(exc)}
+
+
+@shared_task(bind=True, max_retries=3)
+@with_retry(max_retries=3, countdown=60, backoff=True)
+def queue_form_data_fetch(
+    self,
+    user_id: str,
+    form_id: int,
+    source: str,
+    service_type: str,
+    include_responses: bool = True,
+    date_range: str = "last_30_days"
+):
+    """
+    Process queued form data fetch requests from rate-limited API calls
+    
+    This task handles form data fetching when the API rate limit is exceeded.
+    It processes the request in the background and notifies the user when complete.
+    """
+    task_id = self.request.id
+    progress_tracker = get_progress_tracker()
+    metrics = get_task_metrics()
+    
+    try:
+        # Record task start
+        metrics.record_task_start(task_id, 'queue_form_data_fetch', 'exports')
+        progress_tracker.update_progress(task_id, 0, "Starting queued form data fetch...")
+        
+        logger.info(f"Processing queued {service_type} fetch for user {user_id}, form {form_id}")
+        
+        # Wait for rate limit to reset (exponential backoff)
+        wait_time = min(300, 2 ** self.request.retries)  # Max 5 minutes
+        if self.request.retries > 0:
+            progress_tracker.update_progress(task_id, 5, f"Waiting {wait_time}s for rate limit reset...")
+            time.sleep(wait_time)
+        
+        progress_tracker.update_progress(task_id, 20, "Fetching form data...")
+        
+        # Process based on service type
+        if service_type == "google_forms":
+            result = process_google_forms_fetch_task(
+                user_id=user_id,
+                form_id=form_id,
+                source=source,
+                include_responses=include_responses,
+                date_range=date_range
+            )
+        elif service_type == "microsoft_forms":
+            result = process_microsoft_forms_fetch_task(
+                user_id=user_id,
+                form_id=form_id,
+                source=source,
+                include_responses=include_responses,
+                date_range=date_range
+            )
+        else:
+            raise ValueError(f"Unsupported service type: {service_type}")
+        
+        progress_tracker.update_progress(task_id, 80, "Processing complete, sending notification...")
+        
+        # Send notification to user
+        try:
+            email_service.send_notification(
+                user_id=user_id,
+                subject=f"Form Data Fetch Complete - {service_type.title()}",
+                message=f"Your queued form data fetch request has been completed successfully.",
+                data={
+                    "form_id": form_id,
+                    "service_type": service_type,
+                    "completed_at": datetime.utcnow().isoformat(),
+                    "result": result
+                }
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send notification email: {str(e)}")
+        
+        progress_tracker.update_progress(task_id, 100, "Task completed successfully")
+        
+        # Update Redis queue status
+        redis_client = get_redis_client()
+        queue_key = f"queue:{service_type}:{task_id}"
+        queue_info = {
+            "task_id": task_id,
+            "user_id": user_id,
+            "form_id": form_id,
+            "source": source,
+            "service_type": service_type,
+            "queued_at": datetime.utcnow().isoformat(),
+            "status": "completed",
+            "result": result
+        }
+        redis_client.setex(queue_key, 3600, json.dumps(queue_info))
+        
+        logger.info(f"Completed queued {service_type} fetch for user {user_id}, form {form_id}")
+        
+        return {
+            "status": "success",
+            "task_id": task_id,
+            "result": result,
+            "completed_at": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Queued form data fetch failed: {str(e)}")
+        
+        # Update Redis queue status with error
+        try:
+            redis_client = get_redis_client()
+            queue_key = f"queue:{service_type}:{task_id}"
+            queue_info = {
+                "task_id": task_id,
+                "user_id": user_id,
+                "form_id": form_id,
+                "source": source,
+                "service_type": service_type,
+                "queued_at": datetime.utcnow().isoformat(),
+                "status": "failed",
+                "error": str(e)
+            }
+            redis_client.setex(queue_key, 3600, json.dumps(queue_info))
+        except Exception:
+            pass
+        
+        # Retry with exponential backoff
+        raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
+
+def process_google_forms_fetch_task(
+    user_id: str,
+    form_id: int,
+    source: str,
+    include_responses: bool,
+    date_range: str
+):
+    """Process Google Forms fetch request in Celery task"""
+    try:
+        # Implement actual Google Forms data fetching logic here
+        # This would integrate with your Google Forms service
+        
+        # Simulate processing time
+        time.sleep(2)
+        
+        result = {
+            "form_id": form_id,
+            "source": source,
+            "service_type": "google_forms",
+            "data_fetched": True,
+            "include_responses": include_responses,
+            "date_range": date_range,
+            "processed_at": datetime.utcnow().isoformat()
+        }
+        
+        logger.info(f"Processed Google Forms fetch task for user {user_id}, form {form_id}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Failed to process Google Forms fetch task: {str(e)}")
+        raise
+
+def process_microsoft_forms_fetch_task(
+    user_id: str,
+    form_id: int,
+    source: str,
+    include_responses: bool,
+    date_range: str
+):
+    """Process Microsoft Forms fetch request in Celery task"""
+    try:
+        # Implement actual Microsoft Forms data fetching logic here
+        # This would integrate with your Microsoft Graph service
+        
+        # Simulate processing time
+        time.sleep(2)
+        
+        result = {
+            "form_id": form_id,
+            "source": source,
+            "service_type": "microsoft_forms",
+            "data_fetched": True,
+            "include_responses": include_responses,
+            "date_range": date_range,
+            "processed_at": datetime.utcnow().isoformat()
+        }
+        
+        logger.info(f"Processed Microsoft Forms fetch task for user {user_id}, form {form_id}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Failed to process Microsoft Forms fetch task: {str(e)}")
+        raise

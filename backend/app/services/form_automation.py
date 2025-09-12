@@ -16,7 +16,8 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple
 import logging
-from ..models import db, Form, FormSubmission
+from .. import db
+from ..models import Form, FormSubmission
 from .template_optimizer import TemplateOptimizerService
 from .excel_parser import ExcelParserService
 from jinja2 import Template
@@ -602,8 +603,29 @@ class FormAutomationService:
                 }
             
             # Optimize template with Excel data
-            with open(template_path, 'r', encoding='utf-8') as f:
-                template_content = f.read()
+            # Handle different file types appropriately
+            file_ext = os.path.splitext(template_path)[1].lower()
+            
+            if file_ext == '.docx':
+                # For DOCX files, we need to extract text content
+                try:
+                    from docx import Document
+                    doc = Document(template_path)
+                    template_content = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+                except ImportError:
+                    return {
+                        'success': False,
+                        'error': 'python-docx library not available for DOCX processing'
+                    }
+                except Exception as e:
+                    return {
+                        'success': False,
+                        'error': f'Failed to read DOCX template: {str(e)}'
+                    }
+            else:
+                # For text-based templates, read as text
+                with open(template_path, 'r', encoding='utf-8') as f:
+                    template_content = f.read()
             
             optimization_result = self.template_optimizer.optimize_template_with_excel(
                 template_content, excel_path
@@ -659,11 +681,42 @@ class FormAutomationService:
             return result
             
         except Exception as e:
-            logger.error(f"Error generating report from Excel: {str(e)}")
-            return {
+            import traceback
+            logger.error(f"❌ Error in FormAutomationService.generate_report_from_excel: {str(e)}")
+            logger.error(f"❌ Error type: {type(e).__name__}")
+            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+            logger.error(f"❌ Excel path: {excel_path}")
+            logger.error(f"❌ Template path: {template_path}")
+            logger.error(f"❌ Output path: {output_path}")
+            
+            # Provide more specific error information
+            error_info = {
                 'success': False,
-                'error': str(e)
+                'error': str(e),
+                'error_type': type(e).__name__,
+                'excel_path': excel_path,
+                'template_path': template_path,
+                'output_path': output_path
             }
+            
+            # Add specific context based on where the error occurred
+            if 'excel_parser' in str(e) or 'parse_excel_file' in str(e):
+                error_info['stage'] = 'excel_parsing'
+                error_info['suggestion'] = 'Check Excel file format and structure'
+            elif 'template_optimizer' in str(e) or 'optimize_template' in str(e):
+                error_info['stage'] = 'template_optimization'
+                error_info['suggestion'] = 'Check template file format and placeholders'
+            elif 'Template' in str(e) or 'render' in str(e):
+                error_info['stage'] = 'template_rendering'
+                error_info['suggestion'] = 'Check template syntax and context data'
+            elif 'open' in str(e) or 'write' in str(e):
+                error_info['stage'] = 'file_operations'
+                error_info['suggestion'] = 'Check file permissions and disk space'
+            else:
+                error_info['stage'] = 'unknown'
+                error_info['suggestion'] = 'Check logs for detailed error information'
+            
+            return error_info
     
     def create_automated_workflow(self, template_path: str, workflow_name: str) -> Dict[str, Any]:
         """

@@ -764,4 +764,18 @@ class MicrosoftGraphService:
         }
 
 # Singleton instance for dependency injection
-microsoft_graph_service = MicrosoftGraphService()
+import os
+
+try:
+    # Check if Microsoft Graph credentials are available
+    if (os.getenv('MICROSOFT_TENANT_ID') and 
+        os.getenv('MICROSOFT_CLIENT_ID') and 
+        os.getenv('MICROSOFT_CLIENT_SECRET')):
+        microsoft_graph_service = MicrosoftGraphService()
+        print("✅ Microsoft Graph service initialized successfully")
+    else:
+        microsoft_graph_service = None
+        print("⚠️ Microsoft Graph service disabled - OAuth credentials not configured")
+except Exception as e:
+    microsoft_graph_service = None
+    print(f"⚠️ Microsoft Graph service disabled - Error: {str(e)}")

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc, and_
-from ..models import db, Report, User, ReportTemplate
+from .. import db
+from ..models import Report, User, ReportTemplate
 from typing import Dict, List, Any
 
 class DashboardService:

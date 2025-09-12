@@ -1,4 +1,5 @@
 import axios from "axios";
+import csrfService from "./csrfService";
 
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:5000";
@@ -8,6 +9,7 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true, // Enable cookies for CSRF token
 });
 
 // Auth API instance for authentication endpoints
@@ -16,24 +18,94 @@ const authApi = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true, // Enable cookies for CSRF token
 });
 
-// Add request interceptor to include auth token
-api.interceptors.request.use((config: any) => {
+// Add request interceptor to include auth token and CSRF token
+api.interceptors.request.use(async (config: any) => {
+  // Include auth token
   const token = localStorage.getItem("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  
+  // Include CSRF token for non-GET requests
+  if (config.method !== 'get' && config.method !== 'GET') {
+    try {
+      const csrfToken = await csrfService.ensureValidToken();
+      config.headers['X-CSRF-Token'] = csrfToken;
+    } catch (error) {
+      console.warn('⚠️ Failed to include CSRF token:', error);
+    }
+  }
+  
   return config;
 });
 
-authApi.interceptors.request.use((config: any) => {
+authApi.interceptors.request.use(async (config: any) => {
+  // Include auth token
   const token = localStorage.getItem("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  
+  // Include CSRF token for non-GET requests
+  if (config.method !== 'get' && config.method !== 'GET') {
+    try {
+      const csrfToken = await csrfService.ensureValidToken();
+      config.headers['X-CSRF-Token'] = csrfToken;
+    } catch (error) {
+      console.warn('⚠️ Failed to include CSRF token:', error);
+    }
+  }
+  
   return config;
 });
+
+// Add response interceptor to handle CSRF token errors
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 403 && error.response?.data?.error === 'CSRF_VIOLATION') {
+      console.warn('⚠️ CSRF token validation failed, refreshing token...');
+      try {
+        await csrfService.refreshToken();
+        // Retry the original request
+        const originalRequest = error.config;
+        const csrfToken = await csrfService.getToken();
+        originalRequest.headers['X-CSRF-Token'] = csrfToken;
+        return api(originalRequest);
+      } catch (refreshError) {
+        console.error('❌ Failed to refresh CSRF token:', refreshError);
+        // Redirect to login or show error
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+authApi.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 403 && error.response?.data?.error === 'CSRF_VIOLATION') {
+      console.warn('⚠️ CSRF token validation failed, refreshing token...');
+      try {
+        await csrfService.refreshToken();
+        // Retry the original request
+        const originalRequest = error.config;
+        const csrfToken = await csrfService.getToken();
+        originalRequest.headers['X-CSRF-Token'] = csrfToken;
+        return authApi(originalRequest);
+      } catch (refreshError) {
+        console.error('❌ Failed to refresh CSRF token:', refreshError);
+        // Redirect to login or show error
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Types
 export interface User {
@@ -140,9 +212,9 @@ export interface FormField {
 export const login = async (
   credentials: LoginRequest
 ): Promise<LoginResponse> => {
-  const { data } = await authApi.post("/login", credentials);
+  const { data } = await authApi.post("/auth/login", credentials); // ✅ FIXED: Remove /api prefix since baseURL already includes it
   if (data.access_token) {
-    localStorage.setItem("token", data.access_token);
+    localStorage.setItem("accessToken", data.access_token); // ✅ FIXED: Consistent key name
   }
   return data;
 };
@@ -152,20 +224,20 @@ export const register = async (userData: {
   password: string;
   confirmPassword: string;
 }): Promise<LoginResponse> => {
-  const { data } = await authApi.post("/register", userData);
+  const { data } = await authApi.post("/auth/register", userData); // ✅ FIXED: Remove /api prefix since baseURL already includes it
   if (data.access_token) {
-    localStorage.setItem("token", data.access_token);
+    localStorage.setItem("accessToken", data.access_token);
   }
   return data;
 };
 
 export const getCurrentUser = async (): Promise<User> => {
-  const { data } = await authApi.get("/me");
+  const { data } = await authApi.get("/auth/me"); // ✅ FIXED: Remove /api prefix since baseURL already includes it
   return data;
 };
 
 export const logout = (): void => {
-  localStorage.removeItem("token");
+  localStorage.removeItem("accessToken");
 };
 
 // Dashboard APIs
@@ -430,28 +502,3 @@ export const analyzeData = async (
   const { data: result } = await api.post("/ai/analyze", data);
   return result;
 };
-
-// Error handler
-api.interceptors.response.use(
-  (response: any) => response,
-  (error: any) => {
-    if (error.response?.status === 401) {
-      // Handle unauthorized access
-      localStorage.removeItem("token");
-      window.location.href = "/login";
-    }
-    return Promise.reject(error);
-  }
-);
-
-authApi.interceptors.response.use(
-  (response: any) => response,
-  (error: any) => {
-    if (error.response?.status === 401) {
-      // Handle unauthorized access
-      localStorage.removeItem("token");
-      window.location.href = "/login";
-    }
-    return Promise.reject(error);
-  }
-);

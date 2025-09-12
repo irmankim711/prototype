@@ -2,7 +2,8 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc
-from ..models import db, Report, User, ReportTemplate
+from .. import db
+from ..models import Report, User, ReportTemplate
 from ..services.report_service import report_service
 from ..services.dashboard_service import dashboard_service
 from ..decorators import get_current_user_id

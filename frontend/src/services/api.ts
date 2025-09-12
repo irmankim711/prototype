@@ -1,159 +1,70 @@
-import axios from "axios";
+import apiService from './apiService';
+import type {
+  User,
+  LoginRequest,
+  LoginResponse,
+  Report,
+  ReportTemplate,
+  ReportStats,
+  DashboardStats,
+  ChartData,
+  FileInfo,
+  FileStats,
+  Form,
+  FormField,
+  WordTemplate,
+  TemplateContent,
+  ReportGenerationRequest,
+  ReportGenerationResponse,
+  ExcelReportGenerationRequest,
+  ExcelReportGenerationResponse,
+  AIAnalysisRequest,
+  AIAnalysisResponse,
+  DatabaseTestResponse,
+  PaginatedResponse,
+  RequestConfig
+} from '../types/api.types';
 
-// API Configuration
-const API_BASE_URL = "http://localhost:5000";
-
-const api = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
-  headers: {
-    "Content-Type": "application/json",
-  },
-  withCredentials: true,
-});
-
-// Auth API instance for authentication endpoints
-const authApi = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
-  headers: {
-    "Content-Type": "application/json",
-  },
-  withCredentials: true,
-});
+// Re-export the apiService instance for backward compatibility
+export const api = apiService;
+export const authApi = apiService; // Use the same service for both
 
 // No authentication required - all endpoints are public
 
-// Types
-export interface User {
-  id: string;
-  email: string;
-  first_name?: string;
-  last_name?: string;
-  username?: string;
-  phone?: string;
-  company?: string;
-  job_title?: string;
-  bio?: string;
-  avatar_url?: string;
-  timezone?: string;
-  language?: string;
-  theme?: string;
-  email_notifications?: boolean;
-  push_notifications?: boolean;
-  full_name?: string;
-  role?: string;
-  is_active?: boolean;
-  created_at: string;
-  updated_at?: string;
-  last_login?: string;
-  permissions?: string[];
-}
+// Re-export types for backward compatibility
+export type {
+  User,
+  LoginRequest,
+  LoginResponse,
+  Report,
+  ReportTemplate,
+  ReportStats,
+  DashboardStats,
+  ChartData,
+  FileInfo,
+  FileStats,
+  Form,
+  FormField,
+  WordTemplate,
+  TemplateContent,
+  ReportGenerationRequest,
+  ReportGenerationResponse,
+  ExcelReportGenerationRequest,
+  ExcelReportGenerationResponse,
+  AIAnalysisRequest,
+  AIAnalysisResponse,
+  DatabaseTestResponse,
+  PaginatedResponse,
+  RequestConfig
+};
 
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface LoginResponse {
-  access_token: string;
-  user: User;
-}
-
-export interface Report {
-  id: string;
-  title: string;
-  description?: string;
-  status: "draft" | "processing" | "completed" | "failed";
-  createdAt: string;
-  updatedAt: string;
-  templateId: string;
-  templateFilename?: string;
-  outputUrl?: string;
-  data?: Record<string, unknown>;
-  analysis?: Record<string, unknown>;
-}
-
-export interface ReportTemplate {
-  id: string;
-  name: string;
-  description?: string;
-  schema: Record<string, unknown>;
-  isActive: boolean;
-}
-
-export interface ReportStats {
-  totalReports: number;
-  reportsThisMonth: number;
-  activeTemplates: number;
-  processingReports: number;
-}
-
-export interface DashboardStats {
-  totalReports: number;
-  completedReports: number;
-  pendingReports: number;
-  recentActivity: number;
-  successRate: number;
-  avgProcessingTime: number;
-}
-
-export interface ChartData {
-  type: string;
-  data: {
-    labels: string[];
-    data: number[];
-    backgroundColor?: string[];
-    borderColor?: string;
-  };
-}
-
-export interface FileInfo {
-  id: string;
-  filename: string;
-  file_size: number;
-  mime_type: string;
-  created_at: string;
-  uploader_id: string;
-  is_public: boolean;
-  url: string;
-}
-
-export interface FileStats {
-  total_files: number;
-  total_size_bytes: number;
-  total_size_mb: number;
-  public_files: number;
-  private_files: number;
-  weekly_uploads: number;
-}
-
-export interface Form {
-  id: string;
-  title: string;
-  description?: string;
-  fields: FormField[];
-  created_at: string;
-  is_active: boolean;
-  is_public?: boolean;
-}
-
-export interface FormField {
-  id: string;
-  name: string;
-  type: string;
-  label: string;
-  required: boolean;
-  options?: string[];
-}
+// All types are now imported from api.types.ts
 
 // Authentication APIs
 export const login = async (
   credentials: LoginRequest
 ): Promise<LoginResponse> => {
-  const { data } = await authApi.post("/auth/login", credentials);
-  if (data.access_token) {
-    localStorage.setItem("token", data.access_token);
-  }
-  return data;
+  return await apiService.login(credentials);
 };
 
 export const register = async (userData: {
@@ -161,33 +72,26 @@ export const register = async (userData: {
   password: string;
   confirmPassword: string;
 }): Promise<LoginResponse> => {
-  const { data } = await authApi.post("/auth/register", userData);
-  if (data.access_token) {
-    localStorage.setItem("token", data.access_token);
-  }
-  return data;
+  return await apiService.register(userData);
 };
 
 export const getCurrentUser = async (): Promise<User> => {
-  const { data } = await authApi.get("/auth/me");
-  return data;
+  return await apiService.getCurrentUser();
 };
 
-export const logout = (): void => {
-  localStorage.removeItem("token");
+export const logout = async (): Promise<void> => {
+  await apiService.logout();
 };
 
 // Dashboard APIs
 export const fetchDashboardStats = async (): Promise<DashboardStats> => {
-  const { data } = await api.get("/dashboard/stats");
-  return data;
+  return await apiService.get<DashboardStats>("/dashboard/stats");
 };
 
 export const fetchChartData = async (
   type: string = "reports_by_status"
 ): Promise<ChartData> => {
-  const { data } = await api.get(`/dashboard/charts?type=${type}`);
-  return data;
+  return await apiService.get<ChartData>(`/dashboard/charts?type=${type}`);
 };
 
 export const fetchRecentActivity = async (
@@ -196,8 +100,10 @@ export const fetchRecentActivity = async (
   recent_activity: Report[];
   total: number;
 }> => {
-  const { data } = await api.get(`/dashboard/recent?limit=${limit}`);
-  return data;
+  return await apiService.get<{
+    recent_activity: Report[];
+    total: number;
+  }>(`/dashboard/recent?limit=${limit}`);
 };
 
 export const fetchDashboardSummary = async (): Promise<{
@@ -206,23 +112,28 @@ export const fetchDashboardSummary = async (): Promise<{
   recentReports: Report[];
   availableTemplates: ReportTemplate[];
 }> => {
-  const { data } = await api.get("/dashboard/summary");
-  return data;
+  return await apiService.get<{
+    user: User;
+    quickStats: Record<string, number>;
+    recentReports: Report[];
+    availableTemplates: ReportTemplate[];
+  }>("/dashboard/summary");
 };
 
 export const refreshDashboard = async (): Promise<{
   message: string;
   timestamp: string;
 }> => {
-  const { data } = await api.post("/dashboard/refresh");
-  return data;
+  return await apiService.post<{
+    message: string;
+    timestamp: string;
+  }>("/dashboard/refresh");
 };
 
 export const fetchPerformanceMetrics = async (): Promise<
   Record<string, unknown>
 > => {
-  const { data } = await api.get("/dashboard/performance");
-  return data;
+  return await apiService.get<Record<string, unknown>>("/dashboard/performance");
 };
 
 export const fetchTimelineData = async (
@@ -231,19 +142,19 @@ export const fetchTimelineData = async (
   timeline: Record<string, unknown>[];
   period: string;
 }> => {
-  const { data } = await api.get(`/api/dashboard/timeline?days=${days}`);
-  return data;
+  return await apiService.get<{
+    timeline: Record<string, unknown>[];
+    period: string;
+  }>(`/dashboard/timeline?days=${days}`);
 };
 
 // Reports APIs
 export const fetchReports = async (): Promise<Report[]> => {
-  const { data } = await api.get("/reports");
-  return data;
+  return await apiService.get<Report[]>("/reports");
 };
 
 export const fetchRecentReports = async (): Promise<Report[]> => {
-  const { data } = await api.get("/reports/recent");
-  return data;
+  return await apiService.get<Report[]>("/reports/recent");
 };
 
 export const fetchReportsHistory = async (
@@ -270,45 +181,74 @@ export const fetchReportsHistory = async (
   if (status) params.append("status", status);
   if (search) params.append("search", search);
 
-  const { data } = await api.get(`/reports/history?${params.toString()}`);
-  return data;
+  return await apiService.get<{
+    reports: Report[];
+    pagination: {
+      page: number;
+      pages: number;
+      per_page: number;
+      total: number;
+      has_next: boolean;
+      has_prev: boolean;
+    };
+  }>(`/reports/history?${params.toString()}`);
 };
 
 export const fetchReportStats = async (): Promise<ReportStats> => {
-  const { data } = await api.get("/reports/stats");
-  return data;
+  return await apiService.get<ReportStats>("/reports/stats");
 };
 
 export const fetchReportTemplates = async (): Promise<ReportTemplate[]> => {
-  const { data } = await api.get("/reports/templates");
-  return data;
+  return await apiService.get<ReportTemplate[]>("/production/reports/templates");
 };
 
 export const updateReportTemplate = async (
   id: string,
   templateData: Partial<ReportTemplate>
 ): Promise<ReportTemplate> => {
-  const { data } = await api.put(`/reports/templates/${id}`, templateData);
-  return data;
+  return await apiService.put<ReportTemplate>(`/production/reports/templates/${id}`, templateData);
+};
+
+export const createReportTemplate = async (
+  templateData: Partial<ReportTemplate>
+): Promise<ReportTemplate> => {
+  return await apiService.post<ReportTemplate>('/production/reports/templates', templateData);
+};
+
+export const uploadReportTemplate = async (
+  file: File,
+  name?: string,
+  description?: string,
+  type?: string
+): Promise<ReportTemplate> => {
+  const formData = new FormData();
+  formData.append('template_file', file);
+  if (name) formData.append('name', name);
+  if (description) formData.append('description', description);
+  if (type) formData.append('type', type);
+  
+  return await apiService.post<ReportTemplate>('/production/reports/templates/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
 };
 
 export const createReport = async (
   reportData: Partial<Report>
 ): Promise<Report> => {
-  const { data } = await api.post("/reports", reportData);
-  return data;
+  return await apiService.post<Report>("/reports", reportData);
 };
 
 export const updateReport = async (
   id: string,
   reportData: Partial<Report>
 ): Promise<Report> => {
-  const { data } = await api.put(`/reports/${id}`, reportData);
-  return data;
+  return await apiService.put<Report>(`/reports/${id}`, reportData);
 };
 
 export const deleteReport = async (id: string): Promise<void> => {
-  await api.delete(`/reports/${id}`);
+  await apiService.delete(`/reports/${id}`);
 };
 
 export const getReportStatus = async (
@@ -317,14 +257,15 @@ export const getReportStatus = async (
   status: string;
   result?: Record<string, unknown>;
 }> => {
-  const { data } = await api.get(`/reports/${taskId}`);
-  return data;
+  return await apiService.get<{
+    status: string;
+    result?: Record<string, unknown>;
+  }>(`/reports/${taskId}`);
 };
 
 // Users APIs
 export const fetchUserProfile = async (): Promise<User> => {
-  const { data } = await api.get("/users/profile");
-  return data;
+  return await apiService.get<User>("/users/profile");
 };
 
 export interface UpdateUserProfileResponse {
@@ -335,43 +276,37 @@ export interface UpdateUserProfileResponse {
 export const updateUserProfile = async (
   userData: Partial<User>
 ): Promise<UpdateUserProfileResponse> => {
-  const { data } = await api.put("/users/profile", userData);
-  return data;
+  return await apiService.put<UpdateUserProfileResponse>("/users/profile", userData);
 };
 
 export const fetchUserSettings = async (): Promise<Record<string, unknown>> => {
-  const { data } = await api.get("/users/settings");
-  return data;
+  return await apiService.get<Record<string, unknown>>("/users/settings");
 };
 
 export const updateUserSettings = async (
   settings: Record<string, unknown>
 ): Promise<Record<string, unknown>> => {
-  const { data } = await api.put("/users/settings", settings);
-  return data;
+  return await apiService.put<Record<string, unknown>>("/users/settings", settings);
 };
 
 // Forms APIs
 export const fetchForms = async (): Promise<Form[]> => {
-  const { data } = await api.get("/forms/");
-  return data;
+  return await apiService.get<Form[]>("/forms/");
 };
 
 export const createForm = async (formData: Partial<Form>): Promise<Form> => {
-  const { data } = await api.post("/forms/", formData);
-  return data;
+  return await apiService.post<Form>("/forms/", formData);
 };
 
 export const updateForm = async (
   id: string,
   formData: Partial<Form>
 ): Promise<Form> => {
-  const { data } = await api.put(`/forms/${id}`, formData);
-  return data;
+  return await apiService.put<Form>(`/forms/${id}`, formData);
 };
 
 export const deleteForm = async (id: string): Promise<void> => {
-  await api.delete(`/forms/${id}`);
+  await apiService.delete(`/forms/${id}`);
 };
 
 // Files APIs
@@ -387,51 +322,57 @@ export const fetchFiles = async (
     total: number;
   };
 }> => {
-  const { data } = await api.get(`/files/?page=${page}&per_page=${perPage}`);
-  return data;
+  return await apiService.get<{
+    files: FileInfo[];
+    pagination: {
+      page: number;
+      pages: number;
+      per_page: number;
+      total: number;
+    };
+  }>(`/files/?page=${page}&per_page=${perPage}`);
 };
 
 export const uploadFile = async (formData: FormData): Promise<FileInfo> => {
-  const { data } = await api.post("/files/upload", formData, {
+  return await apiService.post<FileInfo>("/files/upload", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
   });
-  return data;
 };
 
 export const downloadFile = async (fileId: string): Promise<Blob> => {
-  const response = await api.get(`/files/${fileId}/download`, {
-    responseType: "blob",
+  // For blob downloads, we need to use axios directly with responseType
+  const response = await apiService.get<Blob>(`/files/${fileId}/download`, {
+    headers: {
+      'Accept': 'application/octet-stream',
+    },
   });
-  return response.data;
+  return response;
 };
 
 export const deleteFile = async (fileId: string): Promise<void> => {
-  await api.delete(`/files/${fileId}`);
+  await apiService.delete(`/files/${fileId}`);
 };
 
 export const fetchFileStats = async (): Promise<FileStats> => {
-  const { data } = await api.get("/files/stats");
-  return data;
+  return await apiService.get<FileStats>("/files/stats");
 };
 
 export const updateFileVisibility = async (
   fileId: string,
   isPublic: boolean
 ): Promise<{ message: string; is_public: boolean }> => {
-  const { data } = await api.put(`/files/${fileId}/visibility`, {
+  return await apiService.put<{ message: string; is_public: boolean }>(`/files/${fileId}/visibility`, {
     is_public: isPublic,
   });
-  return data;
 };
 
 export const renameFile = async (
   fileId: string,
   filename: string
 ): Promise<{ message: string; filename: string }> => {
-  const { data } = await api.put(`/files/${fileId}/rename`, { filename });
-  return data;
+  return await apiService.put<{ message: string; filename: string }>(`/files/${fileId}/rename`, { filename });
 };
 
 export const searchFiles = async (
@@ -448,22 +389,28 @@ export const searchFiles = async (
     total: number;
   };
 }> => {
-  const { data } = await api.get(
-    `/files/search?q=${encodeURIComponent(
-      query
-    )}&page=${page}&per_page=${perPage}`
-  );
-  return data;
+  return await apiService.get<{
+    query: string;
+    files: FileInfo[];
+    pagination: {
+      page: number;
+      pages: number;
+      per_page: number;
+      total: number;
+    };
+  }>(`/files/search?q=${encodeURIComponent(
+    query
+  )}&page=${page}&per_page=${perPage}`);
 };
 
 // Fetch placeholders for a given template (Word docx)
 export const fetchTemplatePlaceholders = async (
   templateName: string
 ): Promise<string[]> => {
-  const { data } = await api.get(
+  const result = await apiService.get<{ placeholders: string[] }>(
     `/mvp/templates/${encodeURIComponent(templateName)}/placeholders`
   );
-  return data.placeholders;
+  return result.placeholders;
 };
 
 // Fetch list of available Word templates
@@ -476,8 +423,13 @@ export const fetchWordTemplates = async (): Promise<
     previewUrl?: string;
   }>
 > => {
-  const { data } = await api.get("/mvp/templates/list");
-  return data;
+  return await apiService.get<Array<{
+    id: string;
+    name: string;
+    description: string;
+    filename: string;
+    previewUrl?: string;
+  }>>("/mvp/templates/list");
 };
 
 // Extract template content for frontend editing
@@ -487,10 +439,10 @@ export const fetchTemplateContent = async (
   content: Array<{ type: string; text: string; style: string }>;
   placeholders: string[];
 }> => {
-  const { data } = await api.get(
-    `/mvp/templates/${encodeURIComponent(templateName)}/content`
-  );
-  return data;
+  return await apiService.get<{
+    content: Array<{ type: string; text: string; style: string }>;
+    placeholders: string[];
+  }>(`/mvp/templates/${encodeURIComponent(templateName)}/content`);
 };
 
 // Generate live preview of filled template
@@ -501,13 +453,12 @@ export const generateLivePreview = async (
   preview: string;
   filename: string;
 }> => {
-  const { data: result } = await api.post(
-    `/mvp/templates/${encodeURIComponent(templateName)}/preview`,
-    {
-      data,
-    }
-  );
-  return result;
+  return await apiService.post<{
+    preview: string;
+    filename: string;
+  }>(`/mvp/templates/${encodeURIComponent(templateName)}/preview`, {
+    data,
+  });
 };
 
 // Generate final report using MVP endpoint
@@ -518,20 +469,27 @@ export const generateReport = async (
   downloadUrl: string;
   message: string;
 }> => {
-  const { data: result } = await api.post("/mvp/generate-report", {
+  return await apiService.post<{
+    downloadUrl: string;
+    message: string;
+  }>("/mvp/generate-report", {
     templateFilename,
     data,
   });
-  return result;
 };
 
 // Fetch a template file (e.g., Temp1.docx) as Blob from server templates dir
 export const fetchTemplateBlob = async (templateName: string): Promise<Blob> => {
-  const response = await api.get(
+  // For blob downloads, we need to use axios directly with responseType
+  const response = await apiService.get<Blob>(
     `/mvp/templates/${encodeURIComponent(templateName)}/download`,
-    { responseType: "blob" }
+    {
+      headers: {
+        'Accept': 'application/octet-stream',
+      },
+    }
   );
-  return response.data;
+  return response;
 };
 
 // Generate report by uploading Excel + DOCX template to backend mapper
@@ -560,12 +518,19 @@ export const generateReportWithExcel = async (
     );
     formData.append("excel_file", excelFile);
 
-    const { data } = await api.post(`/mvp/templates/generate-with-excel`, formData, {
+    return await apiService.post<{
+      success: boolean;
+      downloadUrl: string;
+      filename: string;
+      message: string;
+      context_used?: Record<string, unknown>;
+      optimizations?: Record<string, unknown>;
+      missing_fields?: string[];
+    }>(`/mvp/templates/generate-with-excel`, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
     });
-    return data;
   } catch (err: any) {
     const status = err?.response?.status;
     const server = err?.response?.data || {};
@@ -584,7 +549,7 @@ export const downloadReport = async (
     // If downloadUrl is relative, make it absolute
     const fullUrl = downloadUrl.startsWith("http")
       ? downloadUrl
-      : `${API_BASE_URL}${downloadUrl}`;
+      : `${apiService.getBaseURL()}${downloadUrl}`;
 
     // Fetch the file
     const response = await fetch(fullUrl);
@@ -618,8 +583,11 @@ export const testDatabaseConnection = async (): Promise<{
   message: string;
   table_count: number;
 }> => {
-  const { data } = await api.get("/test-db");
-  return data;
+  return await apiService.get<{
+    status: string;
+    message: string;
+    table_count: number;
+  }>("/test-db");
 };
 
 // AI Analysis (placeholder for future implementation)
@@ -631,31 +599,12 @@ export const analyzeData = async (
   suggestions: string;
 }> => {
   // This would connect to an AI service when implemented
-  const { data: result } = await api.post("/ai/analyze", data);
-  return result;
+  return await apiService.post<{
+    summary: string;
+    insights: string[];
+    suggestions: string;
+  }>("/ai/analyze", data);
 };
 
-// Error handler
-api.interceptors.response.use(
-  (response: any) => response,
-  (error: any) => {
-    if (error.response?.status === 401) {
-      // Handle unauthorized access
-      localStorage.removeItem("token");
-      window.location.href = "/";
-    }
-    return Promise.reject(error);
-  }
-);
-
-authApi.interceptors.response.use(
-  (response: any) => response,
-  (error: any) => {
-    if (error.response?.status === 401) {
-      // Handle unauthorized access
-      localStorage.removeItem("token");
-      window.location.href = "/";
-    }
-    return Promise.reject(error);
-  }
-);
+// Note: Interceptors are now handled by the ApiService class
+// No need for manual interceptor setup here

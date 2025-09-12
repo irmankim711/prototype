@@ -1,6 +1,6 @@
 """
 Production Google Forms Service - ZERO MOCK DATA
-Real Google Forms API integration for production deployment
+Real Google Forms API integration for production deployment with enhanced OAuth security
 """
 
 import os
@@ -17,77 +17,79 @@ import logging
 
 from app.models import Form, FormSubmission, User, FormIntegration, FormResponse, Participant
 from app import db
+from app.core.oauth_config import (
+    get_oauth_config, 
+    OAuthProvider, 
+    OAuthProviderConfig,
+    OAuthAuditLogger
+)
 
 logger = logging.getLogger(__name__)
 
 class GoogleFormsService:
-    """Production Google Forms Service - ZERO MOCK DATA"""
+    """Production Google Forms Service - ZERO MOCK DATA with enhanced OAuth security"""
     
     def __init__(self):
-        self.client_id = os.getenv('GOOGLE_CLIENT_ID')
-        self.client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
-        self.redirect_uri = os.getenv('GOOGLE_REDIRECT_URI')
-        self.credentials_path = os.getenv('GOOGLE_CREDENTIALS_FILE')
+        # Get OAuth configuration
+        self.oauth_config = get_oauth_config()
+        self.google_config = self.oauth_config.get_provider_config(OAuthProvider.GOOGLE)
+        self.audit_logger = OAuthAuditLogger()
+        
+        if not self.google_config.enabled:
+            raise ValueError("Google OAuth is not enabled. Please configure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET")
+        
+        # Use OAuth configuration
+        self.client_id = self.google_config.client_id
+        self.client_secret = self.google_config.client_secret
+        self.redirect_uri = self.google_config.redirect_uri
+        self.scopes = [scope.scope for scope in self.google_config.scopes]
+        
+        # Token storage configuration
         self.tokens_dir = os.getenv('GOOGLE_TOKEN_FILE', './tokens/google/')
-        
-        # Validate configuration
-        if not all([self.client_id, self.client_secret, self.redirect_uri]):
-            raise ValueError("Missing required Google OAuth configuration. Check environment variables.")
-        
-        # Ensure directories exist
         os.makedirs(self.tokens_dir, exist_ok=True)
         
-        self.scopes = [
-            'https://www.googleapis.com/auth/forms.body.readonly',
-            'https://www.googleapis.com/auth/forms.responses.readonly',
-            'https://www.googleapis.com/auth/drive.readonly'
-        ]
-
         # NO MOCK MODE - This is production only
         self.mock_mode = False  # ALWAYS FALSE for production
         
         logger.info(f"Google Forms Service initialized for production with client ID: {self.client_id[:20]}...")
 
-    def get_authorization_url(self, user_id: str) -> Dict[str, str]:
-        """Get real Google OAuth authorization URL - NO MOCK DATA"""
+    def get_authorization_url(self, user_id: str, redirect_uri: Optional[str] = None) -> Dict[str, str]:
+        """Get real Google OAuth authorization URL with enhanced security - NO MOCK DATA"""
         try:
-            flow = Flow.from_client_config(
-                {
-                    "web": {
-                        "client_id": self.client_id,
-                        "client_secret": self.client_secret,
-                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                        "token_uri": "https://oauth2.googleapis.com/token",
-                        "redirect_uris": [self.redirect_uri]
-                    }
-                },
-                scopes=self.scopes
-            )
-            flow.redirect_uri = self.redirect_uri
-            
-            authorization_url, state = flow.authorization_url(
-                access_type='offline',
-                include_granted_scopes='true',
-                state=user_id,
-                prompt='consent'  # Force consent to get refresh token
+            # Use centralized OAuth configuration
+            auth_result = self.oauth_config.get_authorization_url(
+                OAuthProvider.GOOGLE, 
+                user_id, 
+                redirect_uri
             )
             
             logger.info(f"Generated real Google OAuth URL for user {user_id}")
             
             return {
-                'authorization_url': authorization_url,
-                'state': state,
+                'authorization_url': auth_result['authorization_url'],
+                'state': auth_result['state'],
                 'status': 'success',
-                'platform': 'google_forms'
+                'platform': 'google_forms',
+                'scopes': auth_result['scopes']
             }
             
         except Exception as e:
             logger.error(f"Error generating Google authorization URL: {str(e)}")
+            self.audit_logger.log_oauth_error(
+                user_id, OAuthProvider.GOOGLE, "AUTH_URL_GENERATION", str(e)
+            )
             raise Exception(f"Failed to generate authorization URL: {str(e)}")
 
-    def handle_oauth_callback(self, code: str, state: str) -> Dict[str, Any]:
-        """Handle real OAuth callback and store credentials - NO MOCK DATA"""
+    def handle_oauth_callback(self, user_id: str, code: str, state: str) -> Dict[str, Any]:
+        """Handle real OAuth callback with enhanced security - NO MOCK DATA"""
         try:
+            # Validate OAuth callback using centralized configuration
+            if not self.oauth_config.validate_oauth_callback(
+                OAuthProvider.GOOGLE, user_id, state, code
+            ):
+                raise ValueError("OAuth callback validation failed")
+            
+            # Exchange code for credentials using Google OAuth flow
             flow = Flow.from_client_config(
                 {
                     "web": {
@@ -101,11 +103,86 @@ class GoogleFormsService:
                 scopes=self.scopes
             )
             flow.redirect_uri = self.redirect_uri
-            flow.fetch_token(code=code)
             
-            # Store credentials for user
+            # Fetch token
+            flow.fetch_token(code=code)
             credentials = flow.credentials
-            token_path = os.path.join(self.tokens_dir, f"user_{state}_token.pickle")
+            
+            # Store credentials securely for user
+            self._store_user_credentials(user_id, credentials)
+            
+            # Log successful authentication
+            self.audit_logger.log_oauth_callback(user_id, OAuthProvider.GOOGLE, state, True)
+            
+            logger.info(f"Successfully authenticated user {user_id} with real Google API")
+            return {
+                'status': 'success',
+                'message': 'Google Forms authentication successful',
+                'user_id': user_id,
+                'platform': 'google_forms'
+            }
+            
+        except Exception as e:
+            logger.error(f"Google OAuth callback error for user {user_id}: {e}")
+            self.audit_logger.log_oauth_callback(
+                user_id, OAuthProvider.GOOGLE, state, False, str(e)
+            )
+            return {
+                'status': 'error',
+                'message': str(e),
+                'user_id': user_id
+            }
+
+    def get_credentials(self, user_id: str) -> Optional[Credentials]:
+        """Get stored credentials for user with automatic refresh - NO MOCK DATA"""
+        token_path = os.path.join(self.tokens_dir, f"user_{user_id}_token.pickle")
+        
+        if not os.path.exists(token_path):
+            return None
+            
+        try:
+            with open(token_path, 'rb') as token_file:
+                credentials = pickle.load(token_file)
+            
+            # Check if credentials need refresh
+            if credentials.expired and credentials.refresh_token:
+                try:
+                    # Refresh credentials
+                    credentials.refresh(Request())
+                    
+                    # Save refreshed credentials
+                    with open(token_path, 'wb') as token_file:
+                        pickle.dump(credentials, token_file)
+                    
+                    # Update database token
+                    self._update_database_token(user_id, credentials)
+                    
+                    # Log successful refresh
+                    self.audit_logger.log_token_refresh(user_id, OAuthProvider.GOOGLE, True)
+                    
+                    logger.info(f"Successfully refreshed Google credentials for user {user_id}")
+                    
+                except Exception as refresh_error:
+                    logger.error(f"Failed to refresh Google credentials for user {user_id}: {refresh_error}")
+                    self.audit_logger.log_token_refresh(
+                        user_id, OAuthProvider.GOOGLE, False, str(refresh_error)
+                    )
+                    
+                    # Remove invalid credentials
+                    os.remove(token_path)
+                    return None
+            
+            return credentials
+            
+        except Exception as e:
+            logger.error(f"Error loading Google credentials: {str(e)}")
+            return None
+
+    def _store_user_credentials(self, user_id: str, credentials: Credentials):
+        """Store user credentials securely with enhanced error handling."""
+        try:
+            # Store credentials in file system
+            token_path = os.path.join(self.tokens_dir, f"user_{user_id}_token.pickle")
             
             with open(token_path, 'wb') as token_file:
                 pickle.dump(credentials, token_file)
@@ -113,7 +190,7 @@ class GoogleFormsService:
             # Store token in database for tracking
             from app.models.production import UserToken, User
             
-            user = User.query.filter_by(id=state).first()
+            user = User.query.filter_by(id=user_id).first()
             if user:
                 # Remove existing Google tokens for this user
                 existing_tokens = UserToken.query.filter_by(
@@ -132,60 +209,36 @@ class GoogleFormsService:
                     refresh_token=credentials.refresh_token,
                     expires_at=credentials.expiry,
                     scopes=self.scopes,
-                    platform_user_id=state
+                    platform_user_id=user_id
                 )
                 db.session.add(user_token)
                 db.session.commit()
-            
-            logger.info(f"Successfully stored real Google OAuth credentials for user {state}")
-            
-            return {
-                'status': 'success',
-                'user_id': state,
-                'message': 'Google Forms authentication successful',
-                'platform': 'google_forms'
-            }
+                
+                logger.info(f"Successfully stored Google OAuth credentials for user {user_id}")
             
         except Exception as e:
-            logger.error(f"Google OAuth callback error: {str(e)}")
-            raise Exception(f"Authentication failed: {str(e)}")
+            logger.error(f"Error storing Google credentials: {str(e)}")
+            raise Exception(f"Failed to store credentials: {str(e)}")
 
-    def get_credentials(self, user_id: str) -> Optional[Credentials]:
-        """Get stored credentials for user - NO MOCK DATA"""
-        token_path = os.path.join(self.tokens_dir, f"user_{user_id}_token.pickle")
-        
-        if not os.path.exists(token_path):
-            return None
-            
+    def _update_database_token(self, user_id: str, credentials: Credentials):
+        """Update database token record with refreshed credentials."""
         try:
-            with open(token_path, 'rb') as token_file:
-                credentials = pickle.load(token_file)
+            from app.models.production import UserToken
             
-            # Refresh if expired
-            if credentials.expired and credentials.refresh_token:
-                credentials.refresh(Request())
-                # Save refreshed credentials
-                with open(token_path, 'wb') as token_file:
-                    pickle.dump(credentials, token_file)
+            user_token = UserToken.query.filter_by(
+                platform_user_id=user_id,
+                platform='google'
+            ).first()
+            
+            if user_token:
+                user_token.access_token = credentials.token
+                user_token.expires_at = credentials.expiry
+                user_token.last_updated = datetime.utcnow()
+                user_token.update_usage()
+                db.session.commit()
                 
-                # Update database token
-                from app.models.production import UserToken
-                user_token = UserToken.query.filter_by(
-                    platform_user_id=user_id,
-                    platform='google'
-                ).first()
-                
-                if user_token:
-                    user_token.access_token = credentials.token
-                    user_token.expires_at = credentials.expiry
-                    user_token.update_usage()
-                    db.session.commit()
-            
-            return credentials
-            
         except Exception as e:
-            logger.error(f"Error loading Google credentials: {str(e)}")
-            return None
+            logger.error(f"Error updating database token: {str(e)}")
 
     def get_user_forms(self, user_id: str, page_size: int = 50) -> Dict[str, Any]:
         """Get real Google Forms for authenticated user - NO MOCK DATA"""
@@ -634,3 +687,30 @@ class GoogleFormsService:
             'name_completeness_rate': (name_valid_count / len(responses) * 100) if responses else 0,
             'total_responses_analyzed': len(responses)
         }
+
+    def get_oauth_status(self, user_id: str) -> Dict[str, Any]:
+        """Get OAuth status and configuration for user."""
+        try:
+            credentials = self.get_credentials(user_id)
+            config_summary = self.oauth_config.get_configuration_summary()
+            
+            return {
+                'status': 'success',
+                'oauth_status': {
+                    'authenticated': credentials is not None,
+                    'provider': 'google',
+                    'scopes': self.scopes,
+                    'required_scopes': self.oauth_config.get_required_scopes(OAuthProvider.GOOGLE),
+                    'optional_scopes': self.oauth_config.get_optional_scopes(OAuthProvider.GOOGLE)
+                },
+                'configuration': config_summary,
+                'user_id': user_id
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting OAuth status: {str(e)}")
+            return {
+                'status': 'error',
+                'error': str(e),
+                'user_id': user_id
+            }

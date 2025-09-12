@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Environment Variables Test</title>
+    <script type="module">
+        // Test Vite environment variables
+        console.log('🧪 Testing Vite Environment Variables in Browser...');
+        console.log('=' * 50);
+        
+        try {
+            // Check if we're in a Vite environment
+            if (typeof import.meta !== 'undefined' && import.meta.env) {
+                console.log('✅ Vite environment detected');
+                
+                // Test key environment variables
+                const envVars = [
+                    'VITE_API_URL',
+                    'VITE_ENVIRONMENT',
+                    'VITE_APP_NAME',
+                    'VITE_ENABLE_AI_FEATURES'
+                ];
+                
+                envVars.forEach(varName => {
+                    const value = import.meta.env[varName];
+                    if (value !== undefined) {
+                        console.log(`✅ ${varName}: ${value}`);
+                    } else {
+                        console.log(`❌ ${varName}: NOT SET`);
+                    }
+                });
+                
+                // Test API connectivity
+                console.log('\n🌐 Testing API Connectivity...');
+                testApiConnectivity();
+                
+            } else {
+                console.log('❌ Vite environment not detected');
+                console.log('This should be run in a Vite development server');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error testing environment variables:', error.message);
+        }
+        
+        async function testApiConnectivity() {
+            try {
+                // Test health endpoint (no auth required)
+                const response = await fetch('http://localhost:5000/health', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': 'http://localhost:5173'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ API Health Check Success:', data);
+                } else {
+                    console.log('❌ API Health Check Failed:', response.status, response.statusText);
+                }
+                
+                // Test CORS preflight
+                const corsResponse = await fetch('http://localhost:5000/api/v1/nextgen/data-sources', {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': 'http://localhost:5173',
+                        'Access-Control-Request-Method': 'GET',
+                        'Access-Control-Request-Headers': 'Content-Type,Authorization'
+                    }
+                });
+                
+                if (corsResponse.ok) {
+                    console.log('✅ CORS Preflight Success:', corsResponse.status);
+                    console.log('CORS Headers:', {
+                        'Allow-Origin': corsResponse.headers.get('Access-Control-Allow-Origin'),
+                        'Allow-Methods': corsResponse.headers.get('Access-Control-Allow-Methods'),
+                        'Allow-Credentials': corsResponse.headers.get('Access-Control-Allow-Credentials')
+                    });
+                } else {
+                    console.log('❌ CORS Preflight Failed:', corsResponse.status, corsResponse.statusText);
+                }
+                
+            } catch (error) {
+                console.error('❌ API Connectivity Test Failed:', error.message);
+            }
+        }
+        
+        console.log('\n' + '=' * 50);
+        console.log('✅ Environment Test Complete - Check Console for Results');
+    </script>
+</head>
+<body>
+    <h1>🧪 Environment Variables Test</h1>
+    <p>Open your browser console to see the test results.</p>
+    <p>This page tests:</p>
+    <ul>
+        <li>Vite environment variables</li>
+        <li>API connectivity to backend</li>
+        <li>CORS configuration</li>
+    </ul>
+    <p><strong>Status:</strong> <span id="status">Testing...</span></p>
+    
+    <script>
+        // Update status when tests complete
+        setTimeout(() => {
+            document.getElementById('status').textContent = 'Tests completed - check console';
+            document.getElementById('status').style.color = 'green';
+        }, 2000);
+    </script>
+</body>
+</html>

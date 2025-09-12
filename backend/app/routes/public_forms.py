@@ -9,7 +9,8 @@ from flask_limiter.util import get_remote_address
 from datetime import datetime
 import json
 import uuid
-from ..models import db, Form, FormSubmission, User
+from .. import db
+from ..models import Form, FormSubmission, User
 from ..utils.data_normalizer import normalize_form_data
 # from ..tasks.report_tasks import trigger_auto_report_generation  # Temporarily disabled
 
