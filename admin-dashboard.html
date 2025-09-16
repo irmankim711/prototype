@@ -152,49 +152,33 @@
     // Fetch data from backend (Google Sheets) or use mock if offline
     async function fetchDashboardData() {
       try {
-        const resp = await fetch('http://127.0.0.1:5000/api/dashboard/stats');
+        const resp = await fetch('http://127.0.0.1:5000/fetch-data');
         if (!resp.ok) throw new Error('Backend not running');
-        const stats = await resp.json();
-        
-        // Also fetch submissions data
-        const submissionsResp = await fetch('http://127.0.0.1:5000/fetch-data');
-        const submissionsResult = await submissionsResp.json();
-        
-        return {
-          stats: stats,
-          data: submissionsResult.data || []
-        };
+        const result = await resp.json();
+        return result.data || [];
       } catch (e) {
         // Fallback mock data
-        return {
-          stats: {
-            totalSubmissions: 6,
-            averageScore: 85.83,
-            activeUsers: 6,
-            topScore: 92,
-            medianScore: 86.5
-          },
-          data: [
-            { name: 'Alice', score: 90, date: '2025-05-10', group: 'Group A' },
-            { name: 'Bob', score: 85, date: '2025-05-09', group: 'Group B' },
-            { name: 'Charlie', score: 78, date: '2025-05-08', group: 'Group A' },
-            { name: 'Diana', score: 92, date: '2025-05-11', group: 'Group B' },
-            { name: 'Eve', score: 88, date: '2025-05-07', group: 'Group C' },
-            { name: 'Frank', score: 82, date: '2025-05-06', group: 'Group C' }
-          ]
-        };
+        return [
+          { name: 'Alice', score: 90, date: '2025-05-10', group: 'Group A' },
+          { name: 'Bob', score: 85, date: '2025-05-09', group: 'Group B' },
+          { name: 'Charlie', score: 78, date: '2025-05-08', group: 'Group A' },
+          { name: 'Diana', score: 92, date: '2025-05-11', group: 'Group B' },
+          { name: 'Eve', score: 88, date: '2025-05-07', group: 'Group C' },
+          { name: 'Frank', score: 82, date: '2025-05-06', group: 'Group C' }
+        ];
       }
     }
 
     let mainChart, secondaryChart;
     let dashboardData = [];
 
-    function updateAnalyticsCards(stats) {
-      document.getElementById('total-submissions').textContent = stats.totalSubmissions;
-      document.getElementById('avg-score').textContent = stats.averageScore;
-      document.getElementById('active-users').textContent = stats.activeUsers;
-      document.getElementById('top-score').textContent = stats.topScore;
-      document.getElementById('median-score').textContent = stats.medianScore;
+    function updateAnalyticsCards(data) {
+      document.getElementById('total-submissions').textContent = data.length;
+      const scores = data.map(d => Number(d.score)).filter(x => !isNaN(x));
+      document.getElementById('avg-score').textContent = (scores.reduce((sum, s) => sum + s, 0) / scores.length || 0).toFixed(2);
+      document.getElementById('active-users').textContent = data.length; 
+      document.getElementById('top-score').textContent = scores.length ? Math.max(...scores) : 0;
+      document.getElementById('median-score').textContent = median(scores).toFixed(2);
     }
 
     function renderMainChart(data, type, field, groupBy) {
@@ -300,9 +284,8 @@
     }
 
     async function refreshDashboard() {
-      const result = await fetchDashboardData();
-      dashboardData = result.data;
-      updateAnalyticsCards(result.stats);
+      dashboardData = await fetchDashboardData();
+      updateAnalyticsCards(dashboardData);
       // Get selected chart settings
       const type = document.getElementById('chart-type-select').value;
       const field = document.getElementById('field-select').value;

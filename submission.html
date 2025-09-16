@@ -117,35 +117,13 @@
       // We've removed the JavaScript navigation and theme toggle
 
       // Mock submission data (replace with backend data later)
-      let submissions = [];
-      
-      // Load submissions from backend
-      async function loadSubmissions() {
-        try {
-          const response = await fetch('http://127.0.0.1:5000/api/submissions');
-          if (response.ok) {
-            const data = await response.json();
-            submissions = data.map(sub => ({
-              ...sub,
-              details: 'Submitted successfully',
-              answers: ['Option 2', 'True', '1.25kg', 'Choice C', 'The Signature']
-            }));
-          } else {
-            throw new Error('Failed to load submissions');
-          }
-        } catch (error) {
-          console.error('Error loading submissions:', error);
-          // Fallback to mock data
-          submissions = [
-            { id: 1, name: 'Alice Johnson', email: 'alice@email.com', date: '2025-05-10', score: 93, group: 'Group A', details: 'Submitted successfully via Form A', answers: ['Option 2', 'True', '1.25kg', 'Choice C', 'The Signature'] },
-            { id: 2, name: 'Bob Smith', email: 'bob@email.com', date: '2025-05-09', score: 85, group: 'Group B', details: 'Completed all sections', answers: ['Option 1', 'False', '2.5kg', 'Choice A', 'The Document'] },
-            { id: 3, name: 'Charlie Brown', email: 'charlie@email.com', date: '2025-05-08', score: 78, group: 'Group A', details: 'Late submission', answers: ['Option 3', 'True', '0.75kg', 'Choice B', 'The Contract'] },
-            { id: 4, name: 'Diana Ross', email: 'diana@email.com', date: '2025-05-11', score: 92, group: 'Group B', details: 'Excellence award', answers: ['Option 2', 'True', '1.5kg', 'Choice D', 'The Agreement'] },
-            { id: 5, name: 'Eve Williams', email: 'eve@email.com', date: '2025-05-07', score: 88, group: 'Group C', details: 'Good attempt', answers: ['Option 4', 'False', '3.0kg', 'Choice C', 'The Contract'] }
-          ];
-        }
-        renderSubmissions(submissions);
-      }
+      const submissions = [
+        { id: 1, name: 'Alice Johnson', email: 'alice@email.com', date: '2025-05-10', score: 93, group: 'Group A', details: 'Submitted successfully via Form A', answers: ['Option 2', 'True', '1.25kg', 'Choice C', 'The Signature'] },
+        { id: 2, name: 'Bob Smith', email: 'bob@email.com', date: '2025-05-09', score: 85, group: 'Group B', details: 'Completed all sections', answers: ['Option 1', 'False', '2.5kg', 'Choice A', 'The Document'] },
+        { id: 3, name: 'Charlie Brown', email: 'charlie@email.com', date: '2025-05-08', score: 78, group: 'Group A', details: 'Late submission', answers: ['Option 3', 'True', '0.75kg', 'Choice B', 'The Contract'] },
+        { id: 4, name: 'Diana Ross', email: 'diana@email.com', date: '2025-05-11', score: 92, group: 'Group B', details: 'Excellence award', answers: ['Option 2', 'True', '1.5kg', 'Choice D', 'The Agreement'] },
+        { id: 5, name: 'Eve Williams', email: 'eve@email.com', date: '2025-05-07', score: 88, group: 'Group C', details: 'Good attempt', answers: ['Option 4', 'False', '3.0kg', 'Choice C', 'The Contract'] }
+      ];
       
       // Render submissions table
       function renderSubmissions(data) {
@@ -231,7 +209,7 @@
       }
       
       // Initialize the submissions table
-      loadSubmissions();
+      renderSubmissions(submissions);
       
       // Add close functionality for modal
       document.querySelector('.close-modal').addEventListener('click', function() {
@@ -277,18 +255,7 @@
       
       // Export button click handler
       document.querySelector('.export-btn').addEventListener('click', function() {
-        // Generate CSV export
-        const csvContent = "data:text/csv;charset=utf-8," 
-          + "Name,Email,Date,Score,Group\n"
-          + submissions.map(sub => `${sub.name},${sub.email},${sub.date},${sub.score},${sub.group}`).join("\n");
-        
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "submissions_export.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        alert('Export functionality would be implemented here!');
       });
     });
   </script>
