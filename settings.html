@@ -240,19 +240,47 @@
     // Add Save button functionality
     document.querySelectorAll('.save-btn').forEach(button => {
       button.addEventListener('click', function() {
-        // Show save notification
-        showNotification('Changes saved successfully!');
+        // Collect form data
+        const formData = new FormData();
+        const inputs = this.closest('.settings-card').querySelectorAll('input, select');
+        inputs.forEach(input => {
+          if (input.type === 'checkbox') {
+            formData.append(input.name || input.id, input.checked);
+          } else {
+            formData.append(input.name || input.id, input.value);
+          }
+        });
+        
+        // Send to backend
+        fetch('http://127.0.0.1:5000/api/settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(Object.fromEntries(formData))
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            showNotification('Error saving settings: ' + data.error, 'error');
+          } else {
+            showNotification('Changes saved successfully!');
+          }
+        })
+        .catch(error => {
+          showNotification('Error saving settings: ' + error.message, 'error');
+        });
       });
     });
 
     // Notification function
-    function showNotification(message) {
+    function showNotification(message, type = 'success') {
       // Create notification element
       const notification = document.createElement('div');
-      notification.className = 'notification';
+      notification.className = `notification ${type}`;
       notification.innerHTML = `
         <div class="notification-content">
-          <i class="fas fa-check-circle"></i>
+          <i class="fas ${type === 'error' ? 'fa-exclamation-circle' : 'fa-check-circle'}"></i>
           <span>${message}</span>
         </div>
       `;
@@ -273,6 +301,26 @@
         }, 300);
       }, 3000);
     }
+    
+    // Load current settings
+    fetch('http://127.0.0.1:5000/api/settings')
+      .then(response => response.json())
+      .then(settings => {
+        // Populate form fields with current settings
+        Object.keys(settings).forEach(key => {
+          const input = document.querySelector(`[name="${key}"], #${key}`);
+          if (input) {
+            if (input.type === 'checkbox') {
+              input.checked = settings[key];
+            } else {
+              input.value = settings[key];
+            }
+          }
+        });
+      })
+      .catch(error => {
+        console.error('Error loading settings:', error);
+      });
   </script>
 </body>
 </html>
