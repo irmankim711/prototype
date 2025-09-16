@@ -1,4 +1,4 @@
-from ..models import Report, ReportTemplate
+from ..models import Report#, ReportTemplate
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from reportlab.pdfgen import canvas
@@ -17,21 +17,22 @@ class ReportService:
             self.credentials = Credentials.from_authorized_user_info(json.loads(token_info))
 
     def get_templates(self):
-        templates = ReportTemplate.query.filter_by(is_active=True).all()
-        return [{'id': t.id, 'name': t.name, 'description': t.description} for t in templates]
+        # templates = ReportTemplate.query.filter_by(is_active=True).all()
+        # return [{'id': t.id, 'name': t.name, 'description': t.description} for t in templates]
+        return []
 
     def generate_report(self, template_id, data):
-        template = ReportTemplate.query.get(template_id)
-        if not template:
-            raise ValueError("Template not found")
+        # template = ReportTemplate.query.get(template_id)
+        # if not template:
+        #     raise ValueError("Template not found")
 
-        # Generate PDF report
+        # # Generate PDF report
         output_path = f"reports/report_{template_id}_{data.get('id')}.pdf"
-        self.generate_pdf(template, data, output_path)
+        # self.generate_pdf(template, data, output_path)
 
-        # If template is linked to Google Sheets, update the sheet
-        if data.get('update_sheet'):
-            self.update_google_sheet(data)
+        # # If template is linked to Google Sheets, update the sheet
+        # if data.get('update_sheet'):
+        #     self.update_google_sheet(data)
 
         return output_path
 
