@@ -1,13 +1,13 @@
 from celery import shared_task
 from .services.report_service import report_service
-from .services.ai_service import ai_service
+from .services.ai_service import get_ai_service
 from .models import Report, db
 
 @shared_task
 def generate_report_task(user_id, data):
     try:
         # Get AI suggestions for the report
-        suggestions = ai_service.generate_report_suggestions(data)
+        suggestions = get_ai_service().generate_report_suggestions(data)
         
         # Merge suggestions with user data
         enriched_data = {**data, 'ai_suggestions': suggestions}

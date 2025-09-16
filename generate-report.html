@@ -163,7 +163,166 @@
       
       // Generate report button click handler
       document.getElementById('generate-report-btn').addEventListener('click', function() {
-        const form = document.querySelector('.report-form');
+        const reportType = document.getElementById('report-type').value;
+        const reportFormat = document.getElementById('report-format').value;
+        const dateFrom = document.getElementById('date-from').value;
+        const dateTo = document.getElementById('date-to').value;
+        
+        if (!reportType || !reportFormat) {
+          alert('Please select a report type and format');
+          return;
+        }
+        
+        // Show loading state
+        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+        this.disabled = true;
+        
+        // Make API call to generate report
+        fetch('http://127.0.0.1:5000/generate-report', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            report_type: reportType,
+            format: reportFormat,
+            date_from: dateFrom,
+            date_to: dateTo
+          })
+        })
+        .then(response => response.json())
+        .then(data => {
+          // Reset button
+          this.innerHTML = '<i class="fas fa-file-export"></i> Generate Report';
+          this.disabled = false;
+          
+          if (data.error) {
+            alert('Error generating report: ' + data.error);
+            return;
+          }
+          
+          // Add new report to the table
+          const reportsTable = document.querySelector('.reports-table tbody');
+          const newRow = document.createElement('tr');
+          const currentDate = new Date().toISOString().split('T')[0];
+          
+          newRow.innerHTML = `
+            <td>${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report</td>
+            <td>${reportType.charAt(0).toUpperCase() + reportType.slice(1)}</td>
+            <td>${currentDate}</td>
+            <td>${reportFormat.toUpperCase()}</td>
+            <td>
+              ${data.download_url ? 
+                `<a href="http://127.0.0.1:5000${data.download_url}" class="download-btn" target="_blank">
+                  <i class="fas fa-download"></i> Download
+                </a>` :
+                '<span class="processing">Processing...</span>'
+              }
+            </td>
+          `;
+          
+          reportsTable.prepend(newRow);
+          
+          // Show success message
+          const successMessage = document.createElement('div');
+          successMessage.className = 'success-message';
+          successMessage.style.backgroundColor = '#d1fae5';
+          successMessage.style.color = '#047857';
+          successMessage.style.padding = '12px';
+          successMessage.style.borderRadius = '6px';
+          successMessage.style.marginTop = '16px';
+          successMessage.style.display = 'flex';
+          successMessage.style.alignItems = 'center';
+          successMessage.style.gap = '8px';
+          
+          successMessage.innerHTML = `
+            <i class="fas fa-check-circle"></i>
+            Report generated successfully! 
+            ${data.download_url ? 
+              `<a href="http://127.0.0.1:5000${data.download_url}" style="color:#047857;font-weight:500;" target="_blank">Download now</a>` :
+              'Processing...'
+            }
+          `;
+          
+          document.querySelector('.report-form').appendChild(successMessage);
+          
+          // Remove success message after 5 seconds
+          setTimeout(() => {
+            successMessage.remove();
+          }, 5000);
+        })
+        .catch(error => {
+          // Reset button
+          this.innerHTML = '<i class="fas fa-file-export"></i> Generate Report';
+          this.disabled = false;
+          alert('Error generating report: ' + error.message);
+        });
+      });
+      
+      // Load existing reports
+      loadExistingReports();
+    });
+    
+    // Function to load existing reports
+    function loadExistingReports() {
+      fetch('http://127.0.0.1:5000/api/reports')
+        .then(response => response.json())
+        .then(reports => {
+          const tbody = document.getElementById('reports-tbody');
+          tbody.innerHTML = reports.map(report => `
+            <tr>
+              <td>${report.title}</td>
+              <td>${report.type}</td>
+              <td>${report.created_at}</td>
+              <td>${report.format.toUpperCase()}</td>
+              <td>
+                <a href="http://127.0.0.1:5000/download-report/${report.id}" class="download-btn" target="_blank">
+                  <i class="fas fa-download"></i> Download
+                </a>
+              </td>
+            </tr>
+          `).join('');
+        })
+        .catch(error => {
+          console.error('Error loading reports:', error);
+          // Keep the mock data as fallback
+        });
+    }
+  </script>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Mock previous reports data (fallback)
+      const reports = [
+        { name: 'Monthly Summary Report', type: 'Summary', date: '2025-05-10', format: 'PDF' },
+        { name: 'User Engagement Analysis', type: 'Analytics', date: '2025-05-05', format: 'Excel' },
+        { name: 'Detailed Submissions Q1', type: 'Detailed', date: '2025-04-15', format: 'PDF' },
+        { name: 'Custom User Report', type: 'Custom', date: '2025-04-01', format: 'CSV' }
+      ];
+      
+      // Only populate if tbody is empty (no real data loaded)
+      const tbody = document.getElementById('reports-tbody');
+      if (tbody.children.length === 0) {
+        tbody.innerHTML = reports.map(report => `
+          <tr>
+            <td>${report.name}</td>
+            <td>${report.type}</td>
+            <td>${report.date}</td>
+            <td>${report.format}</td>
+            <td>
+              <button class="download-btn"><i class="fas fa-download"></i> Download</button>
+            </td>
+          </tr>
+        `).join('');
+      }
+    });
+  </script>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Generate report button click handler (fallback for mock data)
+      const generateBtn = document.getElementById('generate-report-btn');
+      if (generateBtn && !generateBtn.hasAttribute('data-real-handler')) {
         const reportType = document.getElementById('report-type').value;
         const reportFormat = document.getElementById('report-format').value;
         
@@ -221,8 +380,6 @@
           }, 5000);
         }, 2000);
       });
-
-      // We've removed the JavaScript navigation since we're now using direct HTML links
     });
   </script>
   
