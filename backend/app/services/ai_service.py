@@ -61,4 +61,10 @@ class AIService:
         except json.JSONDecodeError:
             return {"error": "Failed to decode OpenAI response"}
 
-ai_service = AIService()
+ai_service = None
+
+def get_ai_service():
+    global ai_service
+    if ai_service is None:
+        ai_service = AIService()
+    return ai_service
