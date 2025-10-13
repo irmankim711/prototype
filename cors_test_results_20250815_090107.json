@@ -1,0 +1,50 @@
+[
+  {
+    "test": "Health Endpoint CORS",
+    "status": "PASS",
+    "details": "Status: 200, Response: healthy",
+    "timestamp": "2025-08-15T09:00:53.560705"
+  },
+  {
+    "test": "CORS Preflight Request",
+    "status": "PASS",
+    "details": "Status: 200, Headers: {'Access-Control-Allow-Origin': 'http://localhost:3000', 'Access-Control-Allow-Methods': 'GET,PUT,POST,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Requested-With', 'Access-Control-Allow-Credentials': 'true'}",
+    "timestamp": "2025-08-15T09:00:55.594785"
+  },
+  {
+    "test": "Actual Request with CORS",
+    "status": "PASS",
+    "details": "Status: 401 (401 expected for auth)",
+    "timestamp": "2025-08-15T09:00:57.654892"
+  },
+  {
+    "test": "CORS Origin http://localhost:3000",
+    "status": "PASS",
+    "details": "Status: 200, Allowed Origin: http://localhost:3000",
+    "timestamp": "2025-08-15T09:00:59.686502"
+  },
+  {
+    "test": "CORS Origin http://localhost:3001",
+    "status": "PASS",
+    "details": "Status: 200, Allowed Origin: http://localhost:3001",
+    "timestamp": "2025-08-15T09:01:01.719641"
+  },
+  {
+    "test": "CORS Origin http://localhost:5173",
+    "status": "PASS",
+    "details": "Status: 200, Allowed Origin: http://localhost:5173",
+    "timestamp": "2025-08-15T09:01:03.735844"
+  },
+  {
+    "test": "CORS Origin http://localhost:5174",
+    "status": "PASS",
+    "details": "Status: 200, Allowed Origin: http://localhost:5174",
+    "timestamp": "2025-08-15T09:01:05.794322"
+  },
+  {
+    "test": "CORS Credentials Support",
+    "status": "PASS",
+    "details": "Credentials Allowed: True",
+    "timestamp": "2025-08-15T09:01:07.819716"
+  }
+]

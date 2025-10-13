@@ -1,0 +1,333 @@
+/* Enhanced Form Builder Dashboard Styles */
+/* Following Donald Norman's HCI principles and modern design trends */
+
+/* Global animations */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -468px 0;
+  }
+  100% {
+    background-position: 468px 0;
+  }
+}
+
+/* Enhanced form card hover effects */
+.form-card-enhanced {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.form-card-enhanced::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  transition: left 0.5s;
+  z-index: 1;
+}
+
+.form-card-enhanced:hover::before {
+  left: 100%;
+}
+
+/* Loading skeleton animation */
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+/* Micro-interactions for buttons */
+.button-enhanced {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.button-enhanced::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.3s, height 0.3s;
+}
+
+.button-enhanced:active::before {
+  width: 300px;
+  height: 300px;
+}
+
+/* Search input focus effects */
+.search-input-enhanced {
+  transition: all 0.3s ease;
+}
+
+.search-input-enhanced:focus-within {
+  transform: scale(1.02);
+  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.15);
+}
+
+/* Tab indicator animation */
+.tab-indicator-enhanced {
+  position: relative;
+}
+
+.tab-indicator-enhanced::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, #6366f1, #06b6d4);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+  border-radius: 2px;
+}
+
+.tab-indicator-enhanced.active::after {
+  transform: scaleX(1);
+}
+
+/* Card stack effect for analytics */
+.analytics-card-stack {
+  position: relative;
+}
+
+.analytics-card-stack::before,
+.analytics-card-stack::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: inherit;
+  border-radius: inherit;
+  z-index: -1;
+}
+
+.analytics-card-stack::before {
+  transform: translate(4px, 4px);
+  opacity: 0.2;
+}
+
+.analytics-card-stack::after {
+  transform: translate(8px, 8px);
+  opacity: 0.1;
+}
+
+/* Floating action button with material design */
+.fab-enhanced {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fab-enhanced:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+}
+
+/* Progress indicators */
+.progress-ring {
+  transform: rotate(-90deg);
+}
+
+.progress-ring-circle {
+  stroke: #e5e7eb;
+  stroke-width: 4;
+  fill: transparent;
+  transition: stroke-dasharray 0.35s;
+}
+
+.progress-ring-progress {
+  stroke: #6366f1;
+  stroke-width: 4;
+  fill: transparent;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.35s;
+}
+
+/* Tooltip enhancements */
+.tooltip-enhanced {
+  background: rgba(15, 23, 42, 0.9);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.75rem;
+  padding: 8px 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Status indicators */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.status-dot.active {
+  background: #10b981;
+  animation: pulse 2s infinite;
+}
+
+.status-dot.inactive {
+  background: #94a3b8;
+}
+
+/* Glass morphism effects */
+.glass-card {
+  background: rgba(255, 255, 255, 0.25);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+}
+
+/* Responsive grid animations */
+.grid-item-enter {
+  animation: slideInUp 0.4s ease-out;
+}
+
+.grid-item-enter:nth-child(2n) {
+  animation-delay: 0.1s;
+}
+
+.grid-item-enter:nth-child(3n) {
+  animation-delay: 0.2s;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .form-card-enhanced {
+    margin-bottom: 1rem;
+  }
+
+  .fab-enhanced {
+    bottom: 16px;
+    right: 16px;
+    width: 48px;
+    height: 48px;
+  }
+
+  .analytics-card-stack::before,
+  .analytics-card-stack::after {
+    display: none;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .glass-card {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+    background-size: 200% 100%;
+  }
+
+  .tooltip-enhanced {
+    background: rgba(255, 255, 255, 0.9);
+    color: #0f172a;
+  }
+}
+
+/* Print styles */
+@media print {
+  .fab-enhanced,
+  .form-actions,
+  .search-controls {
+    display: none !important;
+  }
+
+  .form-card-enhanced {
+    break-inside: avoid;
+    margin-bottom: 1rem;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .form-card-enhanced {
+    border: 2px solid #000;
+  }
+
+  .button-enhanced {
+    border: 2px solid currentColor;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .form-card-enhanced::before {
+    display: none;
+  }
+
+  .button-enhanced::before {
+    display: none;
+  }
+}

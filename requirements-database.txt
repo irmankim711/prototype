@@ -1,0 +1,43 @@
+# Production Database Dependencies
+
+# Core SQLAlchemy
+SQLAlchemy==2.0.23
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.5
+
+# PostgreSQL Support
+psycopg2-binary==2.9.9
+psycopg2-pool==1.1
+
+# MySQL Support (Optional)
+# PyMySQL==1.1.0
+# cryptography==41.0.7
+
+# Database Monitoring and Performance
+# pg_stat_statements (PostgreSQL extension - install on database server)
+# performance_schema (MySQL - enabled by default)
+
+# Connection Pooling
+# SQLAlchemy includes QueuePool by default
+# For advanced pooling, consider:
+# pgbouncer (PostgreSQL)
+# proxysql (MySQL)
+
+# Migration Tools
+# Alembic (included with Flask-Migrate)
+
+# Performance Monitoring
+# prometheus-client (for metrics export)
+# psutil (for system resource monitoring)
+
+# Development and Testing
+# pytest-sqlalchemy==1.1.0
+# factory-boy==3.3.0
+
+# Optional: Advanced Features
+# redis (for connection state caching)
+# celery (for background database operations)
+# sentry-sdk (for error tracking)
+
+# Note: Some dependencies may already be included in the main requirements.txt
+# This file lists database-specific dependencies for clarity

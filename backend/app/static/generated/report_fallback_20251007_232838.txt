@@ -1,0 +1,39 @@
+
+AUTOMATED REPORT - Report from SENARAI SEMAK PUNCAK ALAM.xlsx
+Generated: 2025-10-07 23:28:38
+Source: None_23e91c5998e54507a56f8a4b842ac448_SENARAI SEMAK PUNCAK ALAM.xlsx
+Template: 04- LAPORAN FU _ PUNCAK ALAM_final.docx
+
+EXCEL DATA SUMMARY:
+- Total rows: 46
+- Total columns: 15
+- Columns: BIL, NAMA PESERTA HADIR, KAD PENGENALAN, NO TELEFON, JANTINA, ALAMAT, KEHADIRAH 
+(SABTU), KEHADIRAN
+(AHAD), NAMA PRE, MARKAH_PRE, NAMA POST, MARKAH_POST, NAMA PENILAIAN, PENILAIAN, ALASAN
+
+DATA PREVIEW (First 10 rows):
+    BIL                        NAMA PESERTA HADIR  KAD PENGENALAN  NO TELEFON    JANTINA                                                                                   ALAMAT KEHADIRAH \n(SABTU) KEHADIRAN\n(AHAD)                                  NAMA PRE  MARKAH_PRE                                 NAMA POST MARKAH_POST  NAMA PENILAIAN  PENILAIAN  ALASAN
+0   1.0           ABDUL RAZAK @AZLAN BIN ABDULLAH    7.102141e+11   193446269     LELAKI       NO.37, JALAN ANGGERIK 3/5, \nSUNGAI BULOH COUNTRY RESORT\n47000 SG.BULOH. SELANGOR         TIDAK HADIR       TIDAK HADIR           ABDUL RAZAK @AZLAN BIN ABDULLAH         NaN           ABDUL RAZAK @AZLAN BIN ABDULLAH         NaN             NaN        NaN     NaN
+1   2.0                         ABDUS SALAM ERMAN    8.212181e+11   183732420     LELAKI        NO.6 LORONG GUGUSAN ALAM, 7/10 BANDAR PUNCAK ALAM 42300 KUALA SELANGOR, SELANGOR                HADIR             HADIR                         ABDUS SALAM ERMAN        19.0                         ABDUS SALAM ERMAN          18             NaN        NaN     NaN
+2   3.0                   AINUR ZAFIRAH BT FAUZI     9.309100e+11   189642420  PEREMPUAN        NO.6 LORONG GUGUSAN ALAM, 7/10 BANDAR PUNCAK ALAM 42300 KUALA SELANGOR, SELANGOR                HADIR             HADIR                   AINUR ZAFIRAH BT FAUZI         19.0                   AINUR ZAFIRAH BT FAUZI           20             NaN        NaN     NaN
+3   4.0                AMJAD BIN MOHAMED IBRAHIM     9.012251e+11   163552590     LELAKI                     NO.13 JALAN SP 5/8 TAMAN SERI PERISTANA 47000 SUNGAI BULOH SELANGOR                HADIR             HADIR                AMJAD BIN MOHAMED IBRAHIM          7.0                AMJAD BIN MOHAMED IBRAHIM           10             NaN        NaN     NaN
+4   5.0            CHE FAZHANA BINTI CHE MOHAMMED    8.211170e+11   102114346  PEREMPUAN                   A3-01 DAHLIA APARTMENT \nSAUJANA UTAMA 2\n47000 SUNGAI BULOH\nSELANGOR               HADIR             HADIR            CHE FAZHANA BINTI CHE MOHAMMED        18.0            CHE FAZHANA BINTI CHE MOHAMMED          20             NaN        NaN     NaN
+5   6.0  HALIMAH AYOBEE BINTI SELLAHUDDIN AYOBEE     8.309251e+11  1135611983  PEREMPUAN  NO 19, LORONG CAKERA PURNAMA 12/13E,\nSEKSYEN 12, BANDAR PUNCAK ALAM,\n 42300 SELANGOR.         TIDAK HADIR       TIDAK HADIR  HALIMAH AYOBEE BINTI SELLAHUDDIN AYOBEE          NaN  HALIMAH AYOBEE BINTI SELLAHUDDIN AYOBEE          NaN             NaN        NaN     NaN
+6   7.0                 HARTINI BT MDZAIN@ HASHIM    7.910120e+11   183108004  PEREMPUAN           PERMTA G1/26 JALAN ASTANA 13/2 ASTANA ALAM 3 42300 BANDAR PUNCAK ALAM SELANGOR               HADIR             HADIR                 HARTINI BT MDZAIN@ HASHIM        16.0                 HARTINI BT MDZAIN@ HASHIM          17             NaN        NaN     NaN
+7   8.0                    HASLINDA BINTI ISMAIL     7.403250e+11   195598008  PEREMPUAN                                       156 JALAN BS2/3 BUKIT SAUJANA 47000 SAUJANA UTAMA                HADIR             HADIR                    HASLINDA BINTI ISMAIL         16.0                    HASLINDA BINTI ISMAIL           19             NaN        NaN     NaN
+8   9.0                        HASRYZAL BIN HAMRI    7.905151e+11   192874780     LELAKI                         NO15, JALAN CHENGAL 2, SAUJANA UTAMA 2, 47000 SG BULOH, SELANGOR               HADIR             HADIR                        HASRYZAL BIN HAMRI        20.0                        HASRYZAL BIN HAMRI          20             NaN        NaN     NaN
+9  10.0                 HUBAIYAH BINTI ABD HAMID     7.804191e+11  1114269989  PEREMPUAN             LOT.3179,JLN.TAHIR MANAN,KG.BUKIT KUCHING TENGAH,45800 JERAM KUALA SELANGOR                HADIR             HADIR                 HUBAIYAH BINTI ABD HAMID         17.0                 HUBAIYAH BINTI ABD HAMID           20             NaN        NaN     NaN
+
+BASIC STATISTICS:
+             BIL  KAD PENGENALAN  MARKAH_PRE  NAMA PENILAIAN  PENILAIAN  ALASAN
+count  42.000000    4.000000e+01   32.000000             0.0        0.0     0.0
+mean   21.500000    8.882080e+11   16.781250             NaN        NaN     NaN
+std    12.267844    6.985631e+11    2.848139             NaN        NaN     NaN
+min     1.000000    6.022110e+10    7.000000             NaN        NaN     NaN
+25%    11.250000    7.503909e+11   16.000000             NaN        NaN     NaN
+50%    21.500000    7.907636e+11   17.000000             NaN        NaN     NaN
+75%    31.750000    8.527322e+11   19.000000             NaN        NaN     NaN
+max    42.000000    5.104270e+12   20.000000             NaN        NaN     NaN
+
+---
+Report generated using fallback method due to primary service unavailability.

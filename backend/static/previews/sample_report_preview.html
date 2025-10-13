@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document Preview</title>
+<style>
+
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                background-color: #f5f5f5;
+                margin: 0;
+                padding: 20px;
+            }
+            
+            .docx-preview-container {
+                max-width: 800px;
+                margin: 0 auto;
+                background: white;
+                padding: 40px;
+                box-shadow: 0 0 20px rgba(0,0,0,0.1);
+                border-radius: 8px;
+            }
+            
+            .title {
+                font-size: 2em;
+                font-weight: bold;
+                text-align: center;
+                margin-bottom: 1em;
+                color: #2c3e50;
+                border-bottom: 3px solid #3498db;
+                padding-bottom: 10px;
+            }
+            
+            .subtitle {
+                font-size: 1.3em;
+                font-weight: 600;
+                text-align: center;
+                margin-bottom: 1.5em;
+                color: #7f8c8d;
+            }
+            
+            .heading-1 {
+                font-size: 1.8em;
+                color: #2c3e50;
+                margin-top: 1.5em;
+                margin-bottom: 0.8em;
+                border-bottom: 2px solid #ecf0f1;
+                padding-bottom: 5px;
+            }
+            
+            .heading-2 {
+                font-size: 1.5em;
+                color: #34495e;
+                margin-top: 1.3em;
+                margin-bottom: 0.7em;
+            }
+            
+            .heading-3 {
+                font-size: 1.3em;
+                color: #34495e;
+                margin-top: 1.1em;
+                margin-bottom: 0.6em;
+            }
+            
+            .paragraph {
+                margin-bottom: 1em;
+                text-align: justify;
+            }
+            
+            .docx-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 1.5em 0;
+                background: white;
+            }
+            
+            .table-cell {
+                border: 1px solid #ddd;
+                padding: 12px;
+                text-align: left;
+            }
+            
+            .docx-table th {
+                background-color: #f8f9fa;
+                font-weight: 600;
+                color: #2c3e50;
+            }
+            
+            .docx-table tr:nth-child(even) {
+                background-color: #f8f9fa;
+            }
+            
+            strong {
+                color: #2c3e50;
+            }
+            
+            em {
+                color: #7f8c8d;
+            }
+            
+            @media print {
+                body {
+                    background: white;
+                    padding: 0;
+                }
+                
+                .docx-preview-container {
+                    box-shadow: none;
+                    padding: 20px;
+                }
+            }
+            
+            @media (max-width: 768px) {
+                .docx-preview-container {
+                    padding: 20px;
+                    margin: 10px;
+                }
+                
+                .title {
+                    font-size: 1.5em;
+                }
+                
+                .docx-table {
+                    font-size: 0.9em;
+                }
+                
+                .table-cell {
+                    padding: 8px;
+                }
+            }
+        
+</style>
+</head>
+<body>
+<div class="docx-preview-container">
+<p class="title">Sample Business Report</p>
+<h2 class="heading-2">Q3 2024 Performance Analysis</h2>
+<p class="paragraph">This is a sample business report demonstrating the DOCX preview functionality.</p>
+<h1 class="heading-1">Executive Summary</h1>
+<p class="paragraph">Our Q3 2024 performance shows strong growth across all key metrics. Revenue increased by 15% compared to Q2, while customer satisfaction reached an all-time high of 94%.</p>
+<h1 class="heading-1">Key Performance Indicators</h1>
+<h1 class="heading-1">Detailed Analysis</h1>
+<p class="paragraph">The significant growth in Q3 can be attributed to several factors:</p>
+<p class="paragraph">• Launch of new product line in July</p>
+<p class="paragraph">• Expansion into two new markets</p>
+<p class="paragraph">• Improved customer service response times</p>
+<p class="paragraph">• Strategic partnerships with key vendors</p>
+<h1 class="heading-1">Recommendations</h1>
+<p class="paragraph">Based on the strong Q3 performance, we recommend:</p>
+<p class="paragraph">1. Continue investment in the new product line</p>
+<p class="paragraph">2. Accelerate market expansion plans</p>
+<p class="paragraph">3. Maintain focus on customer satisfaction initiatives</p>
+<table class="docx-table">
+<tr>
+<th class="table-cell">Metric</th>
+<th class="table-cell">Q2 2024</th>
+<th class="table-cell">Q3 2024</th>
+</tr>
+<tr>
+<td class="table-cell">Revenue</td>
+<td class="table-cell">$1.2M</td>
+<td class="table-cell">$1.38M</td>
+</tr>
+<tr>
+<td class="table-cell">Customer Count</td>
+<td class="table-cell">1,250</td>
+<td class="table-cell">1,420</td>
+</tr>
+<tr>
+<td class="table-cell">Satisfaction Score</td>
+<td class="table-cell">89%</td>
+<td class="table-cell">94%</td>
+</tr>
+<tr>
+<td class="table-cell">Market Share</td>
+<td class="table-cell">12%</td>
+<td class="table-cell">14%</td>
+</tr>
+</table>
+</div>
+</body>
+</html>

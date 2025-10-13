@@ -1,0 +1,67 @@
+/* Mobile CSS Variables */
+:root {
+  /* Mobile Breakpoints */
+  --mobile-small: 320px;
+  --mobile-medium: 375px;
+  --mobile-large: 414px;
+  --tablet-portrait: 768px;
+  --tablet-landscape: 1024px;
+  --desktop: 1200px;
+  --desktop-large: 1920px;
+
+  /* Mobile Touch Targets */
+  --touch-target-min: 44px;
+  --touch-target-comfortable: 48px;
+
+  /* Mobile Spacing */
+  --mobile-spacing-xs: 4px;
+  --mobile-spacing-sm: 8px;
+  --mobile-spacing-md: 16px;
+  --mobile-spacing-lg: 24px;
+  --mobile-spacing-xl: 32px;
+
+  /* Mobile Typography */
+  --mobile-font-size-xs: 12px;
+  --mobile-font-size-sm: 14px;
+  --mobile-font-size-md: 16px;
+  --mobile-font-size-lg: 18px;
+  --mobile-font-size-xl: 20px;
+  --mobile-font-size-xxl: 24px;
+
+  /* Mobile Z-Index */
+  --mobile-z-dropdown: 1000;
+  --mobile-z-modal: 1050;
+  --mobile-z-navigation: 1100;
+  --mobile-z-toast: 1200;
+
+  /* Mobile Animation */
+  --mobile-transition-fast: 150ms ease-out;
+  --mobile-transition-normal: 250ms ease-out;
+  --mobile-transition-slow: 350ms ease-out;
+
+  /* Mobile Colors */
+  --mobile-primary: #0066cc;
+  --mobile-primary-hover: #0052a3;
+  --mobile-secondary: #6c757d;
+  --mobile-success: #28a745;
+  --mobile-warning: #ffc107;
+  --mobile-error: #dc3545;
+  --mobile-background: #ffffff;
+  --mobile-surface: #f8f9fa;
+  --mobile-border: #dee2e6;
+  --mobile-text: #212529;
+  --mobile-text-secondary: #6c757d;
+}
+
+/* Dark mode mobile variables */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mobile-primary: #4dabf7;
+    --mobile-primary-hover: #339af0;
+    --mobile-background: #121212;
+    --mobile-surface: #1e1e1e;
+    --mobile-border: #333333;
+    --mobile-text: #ffffff;
+    --mobile-text-secondary: #adb5bd;
+  }
+}

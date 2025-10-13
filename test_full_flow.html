@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Full Login + Analytics Test</title>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+        #results { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>Complete Login + Analytics Flow Test</h1>
+    
+    <div class="test-section">
+        <h2>Step 1: Login</h2>
+        <button onclick="testLogin()">Test Login</button>
+        <div id="login-results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Step 2: Analytics (requires login)</h2>
+        <button onclick="testAnalytics()">Test Analytics</button>
+        <div id="analytics-results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Step 3: Full Flow</h2>
+        <button onclick="testFullFlow()">Login → Analytics</button>
+        <div id="full-results"></div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://localhost:5001';
+        
+        async function testLogin() {
+            const resultsDiv = document.getElementById('login-results');
+            resultsDiv.innerHTML = '<p class="info">Testing login...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        password: 'password123'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Store the token
+                    localStorage.setItem('accessToken', data.access_token);
+                    
+                    resultsDiv.innerHTML = `
+                        <p class="success">✅ Login Successful!</p>
+                        <p><strong>User:</strong> ${data.user.email}</p>
+                        <p><strong>Token stored:</strong> ${data.access_token.substring(0, 20)}...</p>
+                    `;
+                    return data.access_token;
+                } else {
+                    resultsDiv.innerHTML = `
+                        <p class="error">❌ Login Failed</p>
+                        <p><strong>Status:</strong> ${response.status}</p>
+                        <p><strong>Error:</strong> ${data.error || 'Unknown error'}</p>
+                    `;
+                    return null;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <p class="error">❌ Connection Failed</p>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                `;
+                return null;
+            }
+        }
+        
+        async function testAnalytics() {
+            const resultsDiv = document.getElementById('analytics-results');
+            resultsDiv.innerHTML = '<p class="info">Testing analytics...</p>';
+            
+            const token = localStorage.getItem('accessToken');
+            if (!token) {
+                resultsDiv.innerHTML = '<p class="error">❌ No token found! Please login first.</p>';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/analytics/real-time`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultsDiv.innerHTML = `
+                        <p class="success">✅ Analytics Success!</p>
+                        <p><strong>Data:</strong> ${JSON.stringify(data, null, 2)}</p>
+                    `;
+                } else {
+                    resultsDiv.innerHTML = `
+                        <p class="error">❌ Analytics Failed</p>
+                        <p><strong>Status:</strong> ${response.status}</p>
+                        <p><strong>Error:</strong> ${data.error || data.message || 'Unknown error'}</p>
+                    `;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <p class="error">❌ Analytics Connection Failed</p>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p><strong>Type:</strong> ${error.name}</p>
+                `;
+            }
+        }
+        
+        async function testFullFlow() {
+            const resultsDiv = document.getElementById('full-results');
+            resultsDiv.innerHTML = '<p class="info">Testing full flow...</p>';
+            
+            try {
+                // Step 1: Login
+                resultsDiv.innerHTML += '<p class="info">Step 1: Logging in...</p>';
+                const token = await testLogin();
+                
+                if (!token) {
+                    resultsDiv.innerHTML += '<p class="error">❌ Full flow failed at login</p>';
+                    return;
+                }
+                
+                // Step 2: Wait a moment
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Step 3: Test Analytics
+                resultsDiv.innerHTML += '<p class="info">Step 2: Testing analytics...</p>';
+                await testAnalytics();
+                
+                resultsDiv.innerHTML += '<p class="success">✅ Full flow completed! Check individual sections above for details.</p>';
+                
+            } catch (error) {
+                resultsDiv.innerHTML += `
+                    <p class="error">❌ Full Flow Error: ${error.message}</p>
+                `;
+            }
+        }
+        
+        // Show current token status on load
+        window.onload = function() {
+            const token = localStorage.getItem('accessToken');
+            if (token) {
+                console.log('Token found:', token.substring(0, 20) + '...');
+            } else {
+                console.log('No token found in localStorage');
+            }
+        };
+    </script>
+</body>
+</html>

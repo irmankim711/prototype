@@ -5,6 +5,17 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Auth backend specific
+auth-backend/.env
+auth-backend/node_modules/
+
+# Frontend specific
+frontend/.env
+
+# Backend specific
+backend/credentials.json
+backend/credentials.json.example
+
 # Environment variables and secrets - COMPREHENSIVE PROTECTION
 .env
 .env.*
@@ -331,3 +342,51 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+
+# Ignore environment files
+*.env
+.env.local
+.env.development
+.env.production
+frontend/.env
+auth-backend/.env
+backend/credentials.json
+backend/credentials.json.example
+
+# Ignore node_modules
+node_modules/
+auth-backend/node_modules/
+frontend/node_modules/
+
+
+# Environment
+*.env
+.env.*
+auth-backend/.env
+frontend/.env
+backend/credentials.json
+backend/credentials.json.example
+
+# Dependencies
+node_modules/
+auth-backend/node_modules/
+frontend/node_modules/
+
+
+# Node modules
+node_modules/
+**/node_modules/
+
+# Environment files
+.env
+*.env
+**/*.env
+
+# Credentials
+credentials.json
+credentials.json.example
+
+
+backend/service/*.json
+firebase-backup-*.json

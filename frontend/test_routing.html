@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Routing Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 800px;
+        }
+        .route-test {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .test-link {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 5px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .test-link:hover {
+            background-color: #0056b3;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            margin: 5px 0;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>React Router Testing Dashboard</h1>
+        <p>Test your React app's routing configuration by clicking the links below:</p>
+
+        <div class="route-test">
+            <h3>Core Routes</h3>
+            <a href="http://localhost:5176/" target="_blank" class="test-link">Home (Landing)</a>
+            <a href="http://localhost:5176/about" target="_blank" class="test-link">About</a>
+            <a href="http://localhost:5176/dashboard" target="_blank" class="test-link">Dashboard</a>
+        </div>
+
+        <div class="route-test">
+            <h3>Form Routes</h3>
+            <a href="http://localhost:5176/forms/public" target="_blank" class="test-link">Public Forms</a>
+            <a href="http://localhost:5176/public-form-builder" target="_blank" class="test-link">Form Builder</a>
+            <a href="http://localhost:5176/submission" target="_blank" class="test-link">Submissions</a>
+        </div>
+
+        <div class="route-test">
+            <h3>Report Builder Routes</h3>
+            <a href="http://localhost:5176/next-gen-report-builder" target="_blank" class="test-link">NextGen Report Builder</a>
+            <a href="http://localhost:5176/reports" target="_blank" class="test-link">Reports</a>
+            <a href="http://localhost:5176/report-history" target="_blank" class="test-link">Report History</a>
+        </div>
+
+        <div class="route-test">
+            <h3>User & Settings</h3>
+            <a href="http://localhost:5176/profile" target="_blank" class="test-link">Profile</a>
+            <a href="http://localhost:5176/settings" target="_blank" class="test-link">Settings</a>
+        </div>
+
+        <div class="route-test">
+            <h3>Invalid Route Test</h3>
+            <a href="http://localhost:5176/invalid-route-test" target="_blank" class="test-link">Non-existent Route (Should redirect to /)</a>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <h3>Expected Results:</h3>
+            <div class="status success">✅ Valid routes should load their respective components</div>
+            <div class="status success">✅ Invalid routes should redirect to the landing page (/)</div>
+            <div class="status warning">⚠️ If you see a blank page, check browser console for errors</div>
+            <div class="status error">❌ If routes don't work, verify your React dev server is running on port 5176</div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <h4>Debugging Steps:</h4>
+            <ol>
+                <li>Ensure your React dev server is running: <code>npm run dev</code></li>
+                <li>Check browser console (F12) for JavaScript errors</li>
+                <li>Verify BrowserRouter is properly configured</li>
+                <li>Check if all route components are properly imported</li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>
