@@ -36,14 +36,17 @@ env.development
 
 # API Keys and Secrets - CRITICAL SECURITY
 *api*key*
-*secret*
-*token*
-*password*
-*auth*
+*secret*.json
+*secret*.txt
+*token*.json
+*token*.txt
+*password*.txt
+*.auth.json
+auth_token*
 apikey*
-client_secret*
-access_token*
-refresh_token*
+client_secret*.json
+access_token*.json
+refresh_token*.json
 private_key*
 api_secret*
 
