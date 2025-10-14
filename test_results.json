@@ -1,0 +1,68 @@
+[
+  {
+    "test": "Backend Health Check",
+    "status": "PASS",
+    "message": "Server is running",
+    "timestamp": "2025-10-14 01:49:44"
+  },
+  {
+    "test": "Bar Chart Generation",
+    "status": "PASS",
+    "message": "Generated: c:\\Users\\IRMAN\\OneDrive\\Desktop\\prototype\\static\\charts\\bar_chart_20251014_014945.png",
+    "timestamp": "2025-10-14 01:49:45"
+  },
+  {
+    "test": "Line Chart Generation",
+    "status": "PASS",
+    "message": "Generated: c:\\Users\\IRMAN\\OneDrive\\Desktop\\prototype\\static\\charts\\line_chart_20251014_014945.png",
+    "timestamp": "2025-10-14 01:49:45"
+  },
+  {
+    "test": "Pie Chart Generation",
+    "status": "PASS",
+    "message": "Generated: c:\\Users\\IRMAN\\OneDrive\\Desktop\\prototype\\static\\charts\\pie_chart_20251014_014945.png",
+    "timestamp": "2025-10-14 01:49:45"
+  },
+  {
+    "test": "Excel Upload",
+    "status": "PASS",
+    "message": "Uploaded to: C:\\Users\\IRMAN\\OneDrive\\Desktop\\prototype\\backend\\app\\static\\uploads\\excel\\None_ad66ea6ed376406eb2240b1fe042bd4a_SENARAI SEMAK PUNCAK ALAM.xlsx",
+    "timestamp": "2025-10-14 01:49:48"
+  },
+  {
+    "test": "Report Generation",
+    "status": "PASS",
+    "message": "Report ID: 96",
+    "timestamp": "2025-10-14 01:50:00"
+  },
+  {
+    "test": "Report Preview",
+    "status": "FAIL",
+    "message": "Status code: 404",
+    "timestamp": "2025-10-14 01:50:02"
+  },
+  {
+    "test": "Download PDF",
+    "status": "FAIL",
+    "message": "Status code: 404",
+    "timestamp": "2025-10-14 01:50:04"
+  },
+  {
+    "test": "Download DOCX",
+    "status": "FAIL",
+    "message": "Status code: 404",
+    "timestamp": "2025-10-14 01:50:06"
+  },
+  {
+    "test": "Download EXCEL",
+    "status": "FAIL",
+    "message": "Status code: 404",
+    "timestamp": "2025-10-14 01:50:08"
+  },
+  {
+    "test": "Data Mapping",
+    "status": "PASS",
+    "message": "Mapped 2 records",
+    "timestamp": "2025-10-14 01:50:08"
+  }
+]

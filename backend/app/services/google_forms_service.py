@@ -784,21 +784,35 @@ class ProductionGoogleFormsService:
 # Global instance for use in routes
 import os
 
-try:
-    # Check if Google OAuth credentials are available
-    if os.getenv('GOOGLE_CLIENT_ID') and os.getenv('GOOGLE_CLIENT_SECRET'):
-        production_google_forms_service = ProductionGoogleFormsService()
-        if production_google_forms_service.is_enabled():
-            print("✅ Google Forms service initialized successfully")
-        else:
-            print("⚠️ Google Forms service disabled - not properly configured")
-            production_google_forms_service = None
-    else:
-        production_google_forms_service = None
-        print("⚠️ Google Forms service disabled - OAuth credentials not configured")
-except Exception as e:
-    production_google_forms_service = None
-    print(f"⚠️ Google Forms service disabled - Error: {str(e)}")
+# Lazy initialization to ensure environment variables are loaded
+_google_forms_service_instance = None
+_initialization_attempted = False
 
-# For backward compatibility with existing imports
-google_forms_service = production_google_forms_service
+def _initialize_google_forms_service():
+    """Lazy initialization of Google Forms service"""
+    global _google_forms_service_instance, _initialization_attempted
+
+    if _initialization_attempted:
+        return _google_forms_service_instance
+
+    _initialization_attempted = True
+
+    try:
+        # Check if Google OAuth credentials are available
+        if os.getenv('GOOGLE_CLIENT_ID') and os.getenv('GOOGLE_CLIENT_SECRET'):
+            service = ProductionGoogleFormsService()
+            if service.is_enabled():
+                print("✅ Google Forms service initialized successfully")
+                _google_forms_service_instance = service
+                return service
+            else:
+                print("⚠️ Google Forms service disabled - not properly configured")
+        else:
+            print("⚠️ Google Forms service disabled - OAuth credentials not configured")
+    except Exception as e:
+        print(f"⚠️ Google Forms service disabled - Error: {str(e)}")
+
+    return None
+
+# Initialize on first import, but this will be called after environment is loaded
+google_forms_service = _initialize_google_forms_service()

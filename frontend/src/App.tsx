@@ -44,6 +44,7 @@ import NextGenReportBuilderPage from "./pages/NextGenReportBuilder/NextGenReport
 import AuthTestPage from "./pages/NextGenReportBuilder/AuthTestPage";
 import ErrorHandlingDemo from "./pages/ErrorHandlingDemo/ErrorHandlingDemo";
 import FormDataExportDemo from "./pages/FormDataExportDemo/FormDataExportDemo";
+import GoogleFormsExport from "./pages/GoogleFormsExport/GoogleFormsExport";
 import ReportsPage from "./pages/ReportsPage";
 
 const queryClient = new QueryClient();
@@ -89,6 +90,7 @@ function AppLayout() {
 
           <Route path="/error-handling-demo" element={<ErrorHandlingDemo />} />
           <Route path="/form-data-export-demo" element={<FormDataExportDemo />} />
+          <Route path="/google-forms-export" element={<GoogleFormsExport />} />
           <Route path="/reports" element={<ReportsPage />} />
 
           <Route path="/report-history" element={<ReportHistory />} />

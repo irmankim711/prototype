@@ -349,7 +349,7 @@ const navItems = [
     ],
   },
   { label: "Form Builder", icon: <BuildIcon />, path: "/form-builder-admin" },
-  { label: "Form Data Export", icon: <TableChartIcon />, path: "/form-data-export-demo" },
+  { label: "Google Forms Export", icon: <TableChartIcon />, path: "/google-forms-export" },
   { label: "Profile", icon: <PersonIcon />, path: "/profile" },
   { label: "Settings", icon: <SettingsIcon />, path: "/settings" },
 ];

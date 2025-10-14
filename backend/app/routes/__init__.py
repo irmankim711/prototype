@@ -206,4 +206,12 @@ def register_blueprints(app):
     except Exception as e:
         app.logger.warning(f"Could not import reports_export: {e}")
 
+    # Google Forms integration routes
+    try:
+        from app.routes.google_forms_routes import google_forms_bp
+        app.register_blueprint(google_forms_bp)  # Already has prefix /api/google-forms
+        app.logger.info("✅ Google Forms routes registered")
+    except Exception as e:
+        app.logger.warning(f"Could not import google_forms_routes: {e}")
+
     app.logger.info("🎯 Blueprint registration completed - added missing API routes")

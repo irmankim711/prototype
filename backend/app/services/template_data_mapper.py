@@ -294,12 +294,16 @@ class TemplateDataMapper:
         """Default data mapping for other templates"""
         records = raw_data.get('records', raw_data.get('submissions', []))
 
+        # Create participants structure for all templates
+        participants = self._create_participants_data(records)
+
         return {
             'title': raw_data.get('title', 'Report'),
             'author': 'Automated Report System',
             'date': datetime.now().strftime('%Y-%m-%d'),
             'records': records,
             'total_records': len(records),
+            'participants': participants,  # Add participants structure
             'data': raw_data,
             'submissions': records
         }

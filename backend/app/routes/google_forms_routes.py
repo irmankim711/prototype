@@ -14,7 +14,16 @@ except (ImportError, ValueError) as e:
     google_forms_service = None
     GOOGLE_FORMS_ENABLED = False
     print(f"⚠️ Google Forms routes disabled - {str(e)}")
-from app.services.automated_report_system import automated_report_system
+
+# Lazy import to avoid app context issues
+automated_report_system = None
+def _get_automated_report_system():
+    global automated_report_system
+    if automated_report_system is None:
+        from app.services.automated_report_system import automated_report_system as ars
+        automated_report_system = ars
+    return automated_report_system
+
 from app import db
 from app.models import User
 import logging
@@ -202,7 +211,7 @@ def generate_automated_report(form_id: str):
             }), 400
         
         # Generate the automated report
-        result = automated_report_system.generate_google_forms_automated_report(
+        result = _get_automated_report_system().generate_google_forms_automated_report(
             form_id, report_config, user_id
         )
         
@@ -248,37 +257,69 @@ def authorize_google():
             'error': 'Internal server error'
         }), 500
 
-@google_forms_bp.route('/oauth/callback', methods=['POST'])
+@google_forms_bp.route('/oauth/callback', methods=['GET', 'POST'])
 def oauth_callback():
     """Handle Google OAuth callback"""
     try:
-        user_id = get_current_user_id()
-        data = request.get_json() or {}
-        
-        authorization_code = data.get('code')
-        
+        # Get authorization code from query params (GET) or body (POST)
+        if request.method == 'GET':
+            authorization_code = request.args.get('code')
+            state = request.args.get('state')
+        else:
+            data = request.get_json() or {}
+            authorization_code = data.get('code')
+            state = data.get('state')
+
         if not authorization_code:
             return jsonify({
                 'success': False,
                 'error': 'Authorization code is required'
             }), 400
-        
+
+        # Get user_id from state or current session
+        user_id = state if state and state != 'None' else None
+        if not user_id:
+            try:
+                user_id = get_current_user_id()
+            except:
+                return jsonify({
+                    'success': False,
+                    'error': 'Authentication required'
+                }), 401
+
         # Exchange code for tokens using existing method
         success = google_forms_service.handle_oauth_callback(authorization_code, str(user_id), state=str(user_id))
-        
+
         if not success:
             return jsonify({
                 'success': False,
                 'error': 'Failed to exchange authorization code'
             }), 400
-        
+
+        # For GET requests (browser redirects), return HTML that closes the popup
+        if request.method == 'GET':
+            return '''
+                <html>
+                    <body>
+                        <script>
+                            window.opener.postMessage({type: 'google-auth-success'}, '*');
+                            window.close();
+                        </script>
+                        <p>Authorization successful! You can close this window.</p>
+                    </body>
+                </html>
+            '''
+
+        # For POST requests, return JSON
         return jsonify({
             'success': True,
             'message': 'Google Forms access authorized successfully'
         })
-        
+
     except Exception as e:
         logger.error(f"Error handling OAuth callback: {e}")
+        if request.method == 'GET':
+            return f'<html><body><p>Error: {str(e)}</p></body></html>', 500
         return jsonify({
             'success': False,
             'error': 'Internal server error'
