@@ -78,9 +78,25 @@ def get_data_sources():
             forms_query = forms_query.filter(Form.title.ilike(f'%{search}%'))
         forms = forms_query.all()
 
+        # FIX N+1: Get all submission counts in a single query using GROUP BY
+        # This prevents N separate queries for each form
+        form_ids = [form.id for form in forms]
+        submission_counts = {}
+
+        if form_ids:
+            from sqlalchemy import func
+            counts_query = db.session.query(
+                FormSubmission.form_id,
+                func.count(FormSubmission.id).label('count')
+            ).filter(
+                FormSubmission.form_id.in_(form_ids)
+            ).group_by(FormSubmission.form_id).all()
+
+            submission_counts = {form_id: count for form_id, count in counts_query}
+
         data_sources = []
         for form in forms:
-            submission_count = FormSubmission.query.filter_by(form_id=form.id).count()
+            submission_count = submission_counts.get(form.id, 0)  # O(1) lookup instead of N queries
             data_sources.append({
                 'id': f'form_{form.id}',
                 'name': form.title,
@@ -315,7 +331,8 @@ def _get_sample_values(form_id: int, field_id: str) -> List[str]:
                 if value and str(value) not in values:
                     values.append(str(value))
         return values[:5]  # Return max 5 sample values
-    except:
+    except Exception as e:
+        logger.warning(f"Failed to get sample values for form {form_id}, field {field_id}: {str(e)}")
         return []
 
 # ================ TEMPLATES ================
@@ -612,9 +629,9 @@ def get_template_metadata(template_id):
                         'hasHeaders': 'word/header' in str(docx_zip.namelist()),
                         'hasFooters': 'word/footer' in str(docx_zip.namelist())
                     }
-            except:
-                metadata['documentInfo'] = {
-    'error': 'Could not read document structure'}
+            except (zipfile.BadZipFile, KeyError, IOError) as e:
+                logger.warning(f"Could not read document structure for {template_file}: {str(e)}")
+                metadata['documentInfo'] = {'error': 'Could not read document structure'}
 
         return jsonify({
             'success': True,
@@ -770,8 +787,8 @@ def upload_excel_file():
             # Clean up the uploaded file
             try:
                 os.remove(str(file_path))
-            except:
-                pass
+            except (OSError, FileNotFoundError) as e:
+                logger.warning(f"Failed to remove file {file_path}: {str(e)}")
             return jsonify({
                 'error': 'Failed to process Excel file',
                 'details': str(parse_error)
@@ -781,8 +798,8 @@ def upload_excel_file():
             # Clean up the uploaded file
             try:
                 os.remove(str(file_path))
-            except:
-                pass
+            except (OSError, FileNotFoundError) as e:
+                logger.warning(f"Failed to remove file {file_path}: {str(e)}")
             return jsonify({
                 'error': 'Failed to process Excel file',
                 'details': processing_result.get('error', 'Unknown error')
@@ -858,8 +875,8 @@ def upload_excel_file():
         try:
             if 'file_path' in locals():
                 os.remove(str(file_path))
-        except:
-            pass
+        except (OSError, FileNotFoundError) as cleanup_error:
+            logger.warning(f"Failed to cleanup Excel file after error: {str(cleanup_error)}")
         return jsonify(
             {'error': 'Failed to upload Excel file', 'details': str(e)}), 500
 

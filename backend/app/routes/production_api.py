@@ -60,7 +60,8 @@ def get_production_report_templates():
                     try:
                         with open(template_file, 'r', encoding='utf-8') as f:
                             content = f.read()
-                    except:
+                    except (IOError, UnicodeDecodeError) as e:
+                        logger.warning(f"Could not read template file {template_file}: {str(e)}")
                         content = ''
                     
                     template_info = {
@@ -81,7 +82,8 @@ def get_production_report_templates():
                     try:
                         with open(template_file, 'r', encoding='utf-8') as f:
                             content = f.read()
-                    except:
+                    except (IOError, UnicodeDecodeError) as e:
+                        logger.warning(f"Could not read template file {template_file}: {str(e)}")
                         content = ''
                     
                     template_info = {

@@ -172,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const response = await api.get("/users/profile");
+      const response = await api.get("/api/users/profile");
       const profileData = response.data;
       setUserProfile(profileData);
       console.log("User profile fetched successfully");

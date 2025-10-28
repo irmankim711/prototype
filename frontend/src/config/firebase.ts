@@ -5,6 +5,7 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator, GoogleAuthProvider } from 'firebase/auth';
+import { initializeFirebaseAppCheck } from './firebaseAppCheck';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
@@ -36,5 +37,9 @@ googleProvider.setCustomParameters({
 if (import.meta.env.MODE === 'development' && import.meta.env.VITE_FIREBASE_USE_EMULATOR === 'true') {
   connectAuthEmulator(auth, 'http://localhost:9099');
 }
+
+// Initialize App Check for production security
+// This helps prevent abuse and unauthorized access to your Firebase resources
+initializeFirebaseAppCheck();
 
 export default app;

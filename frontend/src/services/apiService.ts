@@ -3,7 +3,7 @@ import type { AxiosInstance } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { environmentConfig } from '../config/environment';
 import { auth } from '../config/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import type {
   IApiService,
   ApiConfig,
@@ -71,6 +71,7 @@ const STORAGE_KEYS = {
   REFRESH_TOKEN: 'refreshToken',
   TOKEN_EXPIRY: 'tokenExpiry',
   USER_DATA: 'userData',
+  FIREBASE_TOKEN: 'firebaseToken',
 } as const;
 
 export class ApiService implements IApiService {
@@ -99,7 +100,7 @@ export class ApiService implements IApiService {
       if (!user) return null;
       const newToken = await user.getIdToken(forceRefresh);
       // Persist for downstream usage
-      localStorage.setItem('firebaseToken', newToken);
+      localStorage.setItem(STORAGE_KEYS.FIREBASE_TOKEN, newToken);
       this.setAuthToken(newToken);
       return newToken;
     } catch (e) {
@@ -137,14 +138,14 @@ export class ApiService implements IApiService {
    * Setup request and response interceptors
    */
   private setupInterceptors(): void {
-    // Request interceptors
+    // Request interceptors - async for token refresh
     this.axiosInstance.interceptors.request.use(
-      this.handleRequest.bind(this),
+      (config) => this.handleRequest(config),
       this.handleRequestError.bind(this)
     );
 
     this.authAxiosInstance.interceptors.request.use(
-      this.handleRequest.bind(this),
+      (config) => this.handleRequest(config),
       this.handleRequestError.bind(this)
     );
 
@@ -163,7 +164,20 @@ export class ApiService implements IApiService {
   /**
    * Handle request interceptor
    */
-  private handleRequest(config: any): any {
+  private async handleRequest(config: any): Promise<any> {
+    // Check if token is expired and refresh if needed BEFORE making the request
+    if (this.isTokenExpired() && auth?.currentUser) {
+      try {
+        console.log('Token expired, refreshing before request...');
+        const freshToken = await this.getFreshFirebaseIdToken(true);
+        if (freshToken) {
+          console.log('Token refreshed successfully');
+        }
+      } catch (error) {
+        console.warn('Failed to refresh token before request:', error);
+      }
+    }
+
     const token = this.getAuthToken();
     if (token) {
       config.headers = {
@@ -368,10 +382,20 @@ export class ApiService implements IApiService {
   }
 
   public clearAuthToken(): void {
+    // Clear all auth-related data from localStorage
     localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
     localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
     localStorage.removeItem(STORAGE_KEYS.TOKEN_EXPIRY);
     localStorage.removeItem(STORAGE_KEYS.USER_DATA);
+    localStorage.removeItem(STORAGE_KEYS.FIREBASE_TOKEN);
+
+    // Also clear any other potential auth keys
+    localStorage.removeItem('firebaseToken'); // Legacy key
+
+    // Sign out from Firebase to clear Firebase's own auth state
+    signOut(auth).catch((error) => {
+      console.warn('Firebase signOut error:', error);
+    });
   }
 
   public setRequestTimeout(timeout: number): void {
@@ -384,14 +408,37 @@ export class ApiService implements IApiService {
   public async login(credentials: LoginRequest): Promise<LoginResponse> {
     try {
       // Firebase-based login flow: ensure we have a fresh Firebase ID token
-      let firebaseToken = localStorage.getItem('firebaseToken');
+      let firebaseToken = localStorage.getItem(STORAGE_KEYS.FIREBASE_TOKEN);
       if (!firebaseToken) {
         // If no token in storage, try signing in with Firebase using provided credentials
         if (credentials?.email && credentials?.password) {
           try {
             await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
-          } catch (e) {
-            throw new Error('Firebase sign-in failed. Please check your email/password.');
+          } catch (e: any) {
+            console.error('Firebase sign-in error:', e);
+            const errorCode = e?.code || 'unknown';
+            const errorMessage = e?.message || 'Unknown error';
+
+            // Provide user-friendly error messages based on Firebase error codes
+            if (errorCode === 'auth/user-not-found') {
+              throw new Error('No account found with this email. Please register first.');
+            } else if (errorCode === 'auth/wrong-password') {
+              throw new Error('Incorrect password. Please try again.');
+            } else if (errorCode === 'auth/invalid-email') {
+              throw new Error('Invalid email format.');
+            } else if (errorCode === 'auth/user-disabled') {
+              throw new Error('This account has been disabled.');
+            } else if (errorCode === 'auth/too-many-requests') {
+              throw new Error(
+                'Too many failed login attempts. This account is temporarily locked for security. ' +
+                'Please wait 15-30 minutes and try again, or reset your password using the "Forgot Password" link. ' +
+                'You can also try signing in with Google if available.'
+              );
+            } else if (errorCode === 'auth/network-request-failed') {
+              throw new Error('Network error. Please check your internet connection.');
+            } else {
+              throw new Error(`Firebase sign-in failed: ${errorMessage} (${errorCode})`);
+            }
           }
         }
         // After sign-in (or if already signed in), obtain an ID token
@@ -456,20 +503,66 @@ export class ApiService implements IApiService {
 
   public async register(userData: RegisterRequest): Promise<LoginResponse> {
     try {
-      const { data } = await this.authAxiosInstance.post('/api/auth/register', userData);
-      
-      if (data.access_token) {
-        this.setAuthToken(data.access_token);
-        if (data.refresh_token) {
-          localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token);
-        }
-        if (data.user) {
-          localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(data.user));
+      // Step 1: Create Firebase account
+      if (!userData.email || !userData.password) {
+        throw new Error('Email and password are required for registration');
+      }
+
+      let firebaseUser;
+      try {
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          userData.email,
+          userData.password
+        );
+        firebaseUser = userCredential.user;
+      } catch (e: any) {
+        console.error('Firebase registration error:', e);
+        const errorCode = e?.code || 'unknown';
+        const errorMessage = e?.message || 'Unknown error';
+
+        // Provide user-friendly error messages based on Firebase error codes
+        if (errorCode === 'auth/email-already-in-use') {
+          throw new Error('An account with this email already exists. Please login instead.');
+        } else if (errorCode === 'auth/invalid-email') {
+          throw new Error('Invalid email format.');
+        } else if (errorCode === 'auth/weak-password') {
+          throw new Error('Password is too weak. Please use at least 6 characters.');
+        } else if (errorCode === 'auth/operation-not-allowed') {
+          throw new Error('Email/password registration is not enabled. Please contact support.');
+        } else {
+          throw new Error(`Registration failed: ${errorMessage} (${errorCode})`);
         }
       }
-      
-      return data;
+
+      // Step 2: Get Firebase ID token
+      const firebaseToken = await firebaseUser.getIdToken();
+
+      // Step 3: Sync with backend
+      const syncResponse = await this.authAxiosInstance.post(
+        '/auth/firebase-sync',
+        {
+          firstName: userData.first_name,
+          lastName: userData.last_name
+        },
+        { headers: { Authorization: `Bearer ${firebaseToken}` } }
+      );
+
+      // Step 4: Store auth token
+      this.setAuthToken(firebaseToken);
+
+      // Step 5: Return user data
+      return {
+        user: syncResponse.data.user,
+        access_token: firebaseToken,
+        refresh_token: undefined,
+        expires_in: 3600
+      };
     } catch (error: any) {
+      // If it's already a formatted error message, rethrow it
+      if (error.message && !error.response) {
+        throw error;
+      }
       throw this.createApiError(error, 'REGISTRATION_FAILED');
     }
   }
@@ -494,18 +587,26 @@ export class ApiService implements IApiService {
       let firebaseToken = await this.getFreshFirebaseIdToken(true);
       if (!firebaseToken) {
         // Fallback: try existing stored token if available
-        firebaseToken = localStorage.getItem('firebaseToken');
+        firebaseToken = localStorage.getItem(STORAGE_KEYS.FIREBASE_TOKEN);
       }
       if (!firebaseToken) {
         this.clearAuthToken();
         throw new Error('No Firebase ID token available');
       }
 
-      await this.authAxiosInstance.post(
-        '/api/auth/firebase-sync',
-        {},
-        { headers: { Authorization: `Bearer ${firebaseToken}` } }
-      );
+      // Sync with backend using the fresh token
+      try {
+        await this.authAxiosInstance.post(
+          '/auth/firebase-sync',
+          {},
+          { headers: { Authorization: `Bearer ${firebaseToken}` } }
+        );
+      } catch (syncError: any) {
+        // If sync fails with 401, the token might still be invalid
+        // If sync fails with 500, it might be a backend issue but the token is valid
+        console.warn('Firebase sync failed during refresh:', syncError);
+        // Continue anyway if we have a fresh Firebase token
+      }
 
       // Keep using the Firebase token as our access token
       this.setAuthToken(firebaseToken);
@@ -682,7 +783,7 @@ export class ApiService implements IApiService {
   public getAuthToken(): string | null {
     return (
       localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN) ||
-      localStorage.getItem('firebaseToken')
+      localStorage.getItem(STORAGE_KEYS.FIREBASE_TOKEN)
     );
   }
 

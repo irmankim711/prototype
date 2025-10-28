@@ -60,6 +60,9 @@ class FormDataExportService:
             )
         }
 
+        # Formula injection protection - characters that can start a formula
+        self.formula_chars = ['=', '+', '-', '@', '\t', '\r']
+
     def ensure_export_directory(self):
         """Ensure the export directory exists"""
         Path(self.export_folder).mkdir(parents=True, exist_ok=True)
@@ -70,6 +73,41 @@ class FormDataExportService:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
         return f"form_{form_id}_export_{timestamp}_{unique_id}.{export_format}"
+
+    def sanitize_cell_value(self, value: Any) -> str:
+        """
+        Sanitize cell values to prevent CSV/Excel formula injection attacks.
+
+        CSV Injection (also known as Formula Injection) is a security vulnerability
+        where user-controlled data is exported to CSV/Excel files without proper
+        sanitization, allowing attackers to inject formulas that execute when the
+        file is opened.
+
+        Protection strategy:
+        1. Prefix dangerous characters with a single quote (')
+        2. This tells Excel/CSV readers to treat the cell as text
+        3. Preserves the original data while preventing formula execution
+
+        Args:
+            value: The cell value to sanitize
+
+        Returns:
+            Sanitized string value safe for Excel/CSV export
+        """
+        if value is None or value == '':
+            return ''
+
+        # Convert to string
+        str_value = str(value)
+
+        # Check if value starts with a potentially dangerous character
+        if str_value and str_value[0] in self.formula_chars:
+            # Prefix with single quote to force text interpretation
+            # Also escape any existing single quotes
+            str_value = "'" + str_value.replace("'", "''")
+            logger.debug(f"Sanitized potentially dangerous value: {value[:50]}...")
+
+        return str_value
 
     # ==================== MAIN EXPORT METHODS ====================
 
@@ -246,7 +284,10 @@ class FormDataExportService:
                 if isinstance(field_value, (dict, list)):
                     field_value = json.dumps(field_value, ensure_ascii=False)
 
-                cell = ws.cell(row=row_num, column=col_num, value=str(field_value))
+                # Sanitize value to prevent formula injection
+                sanitized_value = self.sanitize_cell_value(field_value)
+
+                cell = ws.cell(row=row_num, column=col_num, value=sanitized_value)
 
                 # Apply alternating row colors
                 if row_num % 2 == 0:
@@ -422,7 +463,9 @@ class FormDataExportService:
                 if isinstance(field_value, (dict, list)):
                     field_value = json.dumps(field_value)
 
-                row.append(str(field_value))
+                # Sanitize value to prevent formula injection
+                sanitized_value = self.sanitize_cell_value(field_value)
+                row.append(sanitized_value)
 
             writer.writerow(row)
 
@@ -647,7 +690,9 @@ class FormDataExportService:
                     # Try other answer types
                     answer_text = str(answer.get('value', ''))
 
-                ws.cell(row=row_num, column=col_num, value=answer_text)
+                # Sanitize value to prevent formula injection
+                sanitized_answer = self.sanitize_cell_value(answer_text)
+                ws.cell(row=row_num, column=col_num, value=sanitized_answer)
 
         # Auto-adjust columns
         for column in ws.columns:
@@ -707,7 +752,10 @@ class FormDataExportService:
                 answer_text = answer.get('textAnswer', {}).get('value', '')
                 if not answer_text:
                     answer_text = str(answer.get('value', ''))
-                row.append(answer_text)
+
+                # Sanitize value to prevent formula injection
+                sanitized_answer = self.sanitize_cell_value(answer_text)
+                row.append(sanitized_answer)
 
             writer.writerow(row)
 

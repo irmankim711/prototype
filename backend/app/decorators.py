@@ -10,10 +10,28 @@ def get_current_user_id():
     """Get current authenticated user ID from Firebase context."""
     return getattr(g, 'current_user_id', None)
 
+def get_user_id_safe(user):
+    """
+    Safely get user ID from either dict (Firestore) or User object (SQLAlchemy).
+
+    Args:
+        user: User dict from Firestore or User object from SQLAlchemy
+
+    Returns:
+        User ID string or None
+    """
+    if not user:
+        return None
+    return user.get('id') if isinstance(user, dict) else getattr(user, 'id', None)
+
 def firebase_auth_required(f):
     """Firebase authentication decorator - replaces @jwt_required()"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # Skip auth check for OPTIONS requests (CORS preflight)
+        if request.method == 'OPTIONS':
+            return f(*args, **kwargs)
+
         try:
             # Get Firebase token from Authorization header
             auth_header = request.headers.get('Authorization', '')
@@ -69,7 +87,8 @@ def firebase_auth_required(f):
 
             # Set user context in Flask's g object
             g.current_user = user
-            g.current_user_id = user.id
+            # Handle both dict (Firestore) and User object (SQLAlchemy)
+            g.current_user_id = user.get('id') if isinstance(user, dict) else user.id
             g.firebase_token = decoded_token
             g.firebase_uid = decoded_token.get('uid')
 
@@ -97,13 +116,17 @@ def require_role(*allowed_roles):
                     'code': 'AUTH_REQUIRED'
                 }), 401
 
-            user_role = current_user.role
-            if hasattr(user_role, 'value'):
-                user_role = user_role.value
-            elif hasattr(user_role, 'name'):
-                user_role = user_role.name
+            # Handle both dict (Firestore) and User object (SQLAlchemy)
+            if isinstance(current_user, dict):
+                user_role = current_user.get('role', 'user')
             else:
-                user_role = str(user_role)
+                user_role = current_user.role
+                if hasattr(user_role, 'value'):
+                    user_role = user_role.value
+                elif hasattr(user_role, 'name'):
+                    user_role = user_role.name
+                else:
+                    user_role = str(user_role)
 
             if user_role not in allowed_roles:
                 return jsonify({
@@ -172,7 +195,8 @@ def firebase_token_optional(f):
 
                     # Set user context if successful
                     g.current_user = user
-                    g.current_user_id = user.id if user else None
+                    # Handle both dict (Firestore) and User object (SQLAlchemy)
+                    g.current_user_id = (user.get('id') if isinstance(user, dict) else user.id) if user else None
                     g.firebase_token = decoded_token
                     g.firebase_uid = decoded_token.get('uid')
                 else:
@@ -228,4 +252,76 @@ def require_permission(*required_permissions):
 def require_auth(f):
     """Alias for firebase_auth_required for backward compatibility"""
     return firebase_auth_required(f)
+
+def require_form_access(f):
+    """
+    Decorator to check if user has access to a specific form.
+    Must be used after @firebase_auth_required.
+    Expects 'form_id' or 'google_form_id' in route parameters or request data.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        from .models import Form
+
+        current_user = get_current_user()
+
+        if not current_user:
+            return jsonify({
+                'success': False,
+                'error': 'Authentication required',
+                'code': 'AUTH_REQUIRED'
+            }), 401
+
+        # Get form_id from route parameters or request body
+        form_id = kwargs.get('form_id') or request.view_args.get('form_id')
+
+        # For Google Forms, we'll allow access if user is authenticated
+        # since they manage their own OAuth tokens
+        google_form_id = kwargs.get('google_form_id') or request.view_args.get('google_form_id')
+        if google_form_id:
+            # User has their own Google OAuth - they can only access their own forms
+            return f(*args, **kwargs)
+
+        if not form_id:
+            return jsonify({
+                'success': False,
+                'error': 'Form ID is required',
+                'code': 'MISSING_FORM_ID'
+            }), 400
+
+        # Check if form exists and user has access
+        form = Form.query.get(form_id)
+        if not form:
+            return jsonify({
+                'success': False,
+                'error': f'Form {form_id} not found',
+                'code': 'FORM_NOT_FOUND'
+            }), 404
+
+        # Check if user is the creator OR form is public OR user is admin
+        # Handle both dict (Firestore) and User object (SQLAlchemy)
+        if isinstance(current_user, dict):
+            user_role = current_user.get('role', 'user')
+            user_id = current_user.get('id')
+        else:
+            user_role = getattr(current_user.role, 'value', str(current_user.role))
+            user_id = current_user.id
+
+        is_admin = user_role in ('admin', 'ADMIN')
+        is_creator = form.creator_id == user_id
+        is_public = form.is_public
+
+        if not (is_admin or is_creator or is_public):
+            return jsonify({
+                'success': False,
+                'error': 'You do not have permission to access this form',
+                'code': 'INSUFFICIENT_PERMISSIONS'
+            }), 403
+
+        # Store form in g for use in the route
+        g.current_form = form
+
+        return f(*args, **kwargs)
+
+    return decorated_function
 

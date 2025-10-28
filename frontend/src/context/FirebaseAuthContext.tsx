@@ -33,6 +33,8 @@ import axiosInstance from "../services/axiosInstance";
 
 import { environmentConfig } from "../config/environment";
 
+import { securityMonitoring } from "../services/securityMonitoring";
+
 // Import types and context from separate file to fix HMR issues
 import {
   FirebaseAuthContext,
@@ -71,11 +73,12 @@ setUserProfile(null);
     
 setIsDevelopmentBypass(false);
 
-    // Clear localStorage
+    // Clear localStorage - INCLUDING firebaseToken!
     localStorage.removeItem("accessToken");
-    
+    localStorage.removeItem("firebaseToken");  // ← This was missing!
+
 localStorage.removeItem("devBypassEnabled");
-    
+
 localStorage.removeItem("devUser");
 
     // Clear axios headers
@@ -408,12 +411,12 @@ console.log(
       );
 
 try {
-        const response = await axiosInstance.get("/api/auth/profile");
-        
+        const response = await axiosInstance.get("/api/users/profile");
+
 const profileData = response.data;
-        
+
 setUserProfile(profileData);
-        
+
 console.log(`✅ [${profileId}] User profile fetched successfully`);
       } catch (err: any) {
         const error = normalizeError(err);
@@ -456,7 +459,7 @@ await fetchUserProfile();
   // Update user profile
   const updateUserProfile = async (data: Partial<User>) => {
     try {
-      const response = await axiosInstance.put("/users/profile", data);
+      const response = await axiosInstance.put("/api/users/profile", data);
       
 setUserProfile(response.data.user);
 
@@ -515,8 +518,19 @@ console.log(`✅ [${loginId}] Firebase authentication successful`);
       );
     } catch (err: any) {
       const error = normalizeError(err);
-      
+
 console.error(`❌ [${loginId}] Email login failed:`, error);
+
+      // Log security event
+      if (error.code === "auth/too-many-requests") {
+        securityMonitoring.logFirebaseRateLimit(email);
+      } else {
+        securityMonitoring.logLoginFailure(
+          error.code || 'unknown',
+          error.message || 'Unknown error',
+          email
+        );
+      }
 
       // Provide user-friendly error messages
       let errorMessage = "Login failed";
@@ -528,7 +542,10 @@ if (error.code === "auth/user-not-found") {
       } else if (error.code === "auth/invalid-email") {
         errorMessage = "Invalid email address";
       } else if (error.code === "auth/too-many-requests") {
-        errorMessage = "Too many failed attempts. Please try again later";
+        errorMessage =
+          "Too many failed login attempts. This account is temporarily locked for security. " +
+          "Please wait 15-30 minutes and try again, or reset your password using the 'Forgot Password' link. " +
+          "You can also try signing in with Google if available.";
       } else if (error.code === "auth/network-request-failed") {
         errorMessage = "Network error. Please check your connection and try again";
       } else if (error.code === "auth/user-disabled") {

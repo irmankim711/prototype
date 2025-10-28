@@ -273,7 +273,7 @@ export const getReportStatus = async (
 
 // Users APIs
 export const fetchUserProfile = async (): Promise<User> => {
-  return await apiService.get<User>("/users/profile");
+  return await apiService.get<User>("/api/users/profile");
 };
 
 export interface UpdateUserProfileResponse {
@@ -284,17 +284,17 @@ export interface UpdateUserProfileResponse {
 export const updateUserProfile = async (
   userData: Partial<User>
 ): Promise<UpdateUserProfileResponse> => {
-  return await apiService.put<UpdateUserProfileResponse>("/users/profile", userData);
+  return await apiService.put<UpdateUserProfileResponse>("/api/users/profile", userData);
 };
 
 export const fetchUserSettings = async (): Promise<Record<string, unknown>> => {
-  return await apiService.get<Record<string, unknown>>("/users/settings");
+  return await apiService.get<Record<string, unknown>>("/api/users/settings");
 };
 
 export const updateUserSettings = async (
   settings: Record<string, unknown>
 ): Promise<Record<string, unknown>> => {
-  return await apiService.put<Record<string, unknown>>("/users/settings", settings);
+  return await apiService.put<Record<string, unknown>>("/api/users/settings", settings);
 };
 
 // Forms APIs

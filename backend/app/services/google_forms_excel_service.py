@@ -138,16 +138,43 @@ class GoogleFormsExcelService:
 
     def _export_responses_to_sheet(self, ws, responses: List[Dict], form_info: Dict):
         """Export Google Forms responses to Excel worksheet"""
+        # CRITICAL: Add debugging to identify empty responses
+        logger.info(f"_export_responses_to_sheet called with {len(responses)} responses")
+
         if not responses:
             ws.cell(row=1, column=1, value="No responses found")
+            logger.warning("No responses to export - writing 'No responses found' message")
             return
 
         # Extract all unique question titles from responses
         all_questions = set()
-        for response in responses:
-            all_questions.update(response.get('answers', {}).keys())
+        for idx, response in enumerate(responses):
+            response_answers = response.get('answers', {})
+            if not response_answers:
+                logger.warning(f"Response {idx} (ID: {response.get('response_id', 'unknown')}) has empty answers dict!")
+            all_questions.update(response_answers.keys())
 
         question_list = sorted(list(all_questions))
+
+        # CRITICAL: Check if we found any questions
+        if not question_list:
+            logger.error("❌ CRITICAL BUG: No questions found in any response!")
+            logger.error("This means all responses have empty 'answers' dictionaries")
+            logger.error(f"Sample response structure: {json.dumps(responses[0] if responses else {}, indent=2)}")
+
+            # Still write headers with metadata only
+            ws.cell(row=1, column=1, value="Response ID")
+            ws.cell(row=1, column=2, value="Submission Time")
+            ws.cell(row=1, column=3, value="ERROR: No question data found")
+
+            # Write response IDs to show we received data
+            for row_idx, response in enumerate(responses, 2):
+                ws.cell(row=row_idx, column=1, value=response.get('response_id', ''))
+                ws.cell(row=row_idx, column=2, value=response.get('create_time', ''))
+                ws.cell(row=row_idx, column=3, value="Empty answers dict")
+            return
+
+        logger.info(f"Found {len(question_list)} unique questions: {question_list[:5]}...")
 
         # Prepare headers
         headers = ['Response ID', 'Submission Time', 'Last Modified']
@@ -164,11 +191,13 @@ class GoogleFormsExcelService:
             cell.alignment = Alignment(horizontal="center", wrap_text=True)
 
         # Write data rows
+        rows_written = 0
         for row_idx, response in enumerate(responses, 2):
             col = 1
 
             # Response metadata
-            ws.cell(row=row_idx, column=col, value=response.get('response_id', ''))
+            response_id = response.get('response_id', '')
+            ws.cell(row=row_idx, column=col, value=response_id)
             col += 1
 
             create_time = response.get('create_time', '')
@@ -190,19 +219,35 @@ class GoogleFormsExcelService:
                     ws.cell(row=row_idx, column=col, value=last_submitted)
             col += 1
 
-            # Response answers
+            # Response answers - CRITICAL: Iterate through questions in same order as headers
             answers = response.get('answers', {})
+            answers_written = 0
+
             for question in question_list:
                 answer = answers.get(question, '')
 
                 # Handle different answer types
-                if isinstance(answer, (dict, list)):
+                if isinstance(answer, list):
+                    # List of choices - join with commas
+                    answer = ', '.join([str(item) for item in answer if item])
+                elif isinstance(answer, dict):
+                    # Complex structure - convert to JSON
                     answer = json.dumps(answer, ensure_ascii=False)
-                elif answer is None:
+                elif answer is None or answer == '':
                     answer = ''
+                else:
+                    answer = str(answer)
 
-                ws.cell(row=row_idx, column=col, value=str(answer))
+                ws.cell(row=row_idx, column=col, value=answer)
+                if answer:  # Count non-empty answers
+                    answers_written += 1
                 col += 1
+
+            rows_written += 1
+            if row_idx == 2:  # Log first data row for debugging
+                logger.info(f"First data row written: Response ID={response_id}, Answers={answers_written}/{len(question_list)}")
+
+        logger.info(f"✅ Successfully wrote {rows_written} data rows with {len(question_list)} question columns")
 
         # Auto-adjust column widths
         for column in ws.columns:

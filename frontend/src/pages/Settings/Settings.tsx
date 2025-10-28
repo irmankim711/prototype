@@ -1,5 +1,5 @@
 import React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -15,12 +15,41 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material';
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useAuth } from '../../context/FirebaseAuthContext';
+import apiService from '../../services/apiService';
 
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
   value: number;
+}
+
+interface SettingsData {
+  general: {
+    companyName: string;
+    timezone: string;
+    enableNotifications: boolean;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    jobTitle: string;
+    bio: string;
+    avatarUrl: string;
+  };
+  preferences: {
+    theme: string;
+    language: string;
+    emailNotifications: boolean;
+    pushNotifications: boolean;
+  };
+  profile: {
+    email: string;
+    username: string;
+    isVerified: boolean;
+    createdAt: string | null;
+    lastLogin: string | null;
+  };
 }
 
 function TabPanel(props: TabPanelProps) {
@@ -42,15 +71,46 @@ function TabPanel(props: TabPanelProps) {
 export default function Settings() {
   const [activeTab, setActiveTab] = useState(0);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [formData, setFormData] = useState<any>({});
+  const { currentUser } = useAuth();
+
+  // Fetch user settings
+  const { data: settingsData, isLoading, refetch } = useQuery({
+    queryKey: ['userSettings'],
+    queryFn: async () => {
+      const response = await apiService.get('/api/settings');
+      return response.data as SettingsData;
+    },
+    enabled: !!currentUser,
+  });
+
+  // Initialize form data when settings are loaded
+  useEffect(() => {
+    if (settingsData) {
+      setFormData({
+        companyName: settingsData.general.companyName || '',
+        timezone: settingsData.general.timezone || 'UTC',
+        enableNotifications: settingsData.general.enableNotifications ?? true,
+        firstName: settingsData.general.firstName || '',
+        lastName: settingsData.general.lastName || '',
+        phone: settingsData.general.phone || '',
+        jobTitle: settingsData.general.jobTitle || '',
+        bio: settingsData.general.bio || '',
+        theme: settingsData.preferences.theme || 'light',
+        language: settingsData.preferences.language || 'en',
+        emailNotifications: settingsData.preferences.emailNotifications ?? true,
+        pushNotifications: settingsData.preferences.pushNotifications ?? false,
+      });
+    }
+  }, [settingsData]);
 
   const updateSettingsMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      return response.json();
+      const response = await apiService.post('/api/settings', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      refetch();
     },
   });
 
@@ -71,12 +131,22 @@ export default function Settings() {
     }
   };
 
+  const handleInputChange = (field: string, value: any) => {
+    setFormData((prev: any) => ({ ...prev, [field]: value }));
+  };
+
   const handleSaveSettings = async (event: React.FormEvent) => {
     event.preventDefault();
-    const formData = new FormData(event.target as HTMLFormElement);
-    const data = Object.fromEntries(formData.entries());
-    await updateSettingsMutation.mutateAsync(data);
+    await updateSettingsMutation.mutateAsync(formData);
   };
+
+  if (isLoading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box>
@@ -107,9 +177,46 @@ export default function Settings() {
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
+                  label="First Name"
+                  name="firstName"
+                  value={formData.firstName || ''}
+                  onChange={(e) => handleInputChange('firstName', e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Last Name"
+                  name="lastName"
+                  value={formData.lastName || ''}
+                  onChange={(e) => handleInputChange('lastName', e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Phone"
+                  name="phone"
+                  value={formData.phone || ''}
+                  onChange={(e) => handleInputChange('phone', e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Job Title"
+                  name="jobTitle"
+                  value={formData.jobTitle || ''}
+                  onChange={(e) => handleInputChange('jobTitle', e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
                   label="Company Name"
                   name="companyName"
-                  defaultValue=""
+                  value={formData.companyName || ''}
+                  onChange={(e) => handleInputChange('companyName', e.target.value)}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -117,13 +224,43 @@ export default function Settings() {
                   fullWidth
                   label="Default Time Zone"
                   name="timezone"
-                  defaultValue="UTC"
+                  value={formData.timezone || 'UTC'}
+                  onChange={(e) => handleInputChange('timezone', e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Bio"
+                  name="bio"
+                  multiline
+                  rows={3}
+                  value={formData.bio || ''}
+                  onChange={(e) => handleInputChange('bio', e.target.value)}
                 />
               </Grid>
               <Grid item xs={12}>
                 <FormControlLabel
-                  control={<Switch defaultChecked name="enableNotifications" />}
+                  control={
+                    <Switch
+                      checked={formData.enableNotifications ?? true}
+                      onChange={(e) => handleInputChange('enableNotifications', e.target.checked)}
+                      name="enableNotifications"
+                    />
+                  }
                   label="Enable Email Notifications"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.pushNotifications ?? false}
+                      onChange={(e) => handleInputChange('pushNotifications', e.target.checked)}
+                      name="pushNotifications"
+                    />
+                  }
+                  label="Enable Push Notifications"
                 />
               </Grid>
             </Grid>
@@ -241,13 +378,24 @@ export default function Settings() {
 
           <Divider sx={{ my: 3 }} />
 
-          <Box sx={{ px: 3, pb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+          <Box sx={{ px: 3, pb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {updateSettingsMutation.isSuccess && (
+              <Alert severity="success" sx={{ flex: 1, mr: 2 }}>
+                Settings updated successfully!
+              </Alert>
+            )}
+            {updateSettingsMutation.isError && (
+              <Alert severity="error" sx={{ flex: 1, mr: 2 }}>
+                Error updating settings. Please try again.
+              </Alert>
+            )}
             <Button
               type="submit"
               variant="contained"
-              disabled={updateSettingsMutation.isLoading}
+              disabled={updateSettingsMutation.isPending}
+              sx={{ minWidth: 150 }}
             >
-              {updateSettingsMutation.isLoading ? (
+              {updateSettingsMutation.isPending ? (
                 <CircularProgress size={24} />
               ) : (
                 'Save Settings'
@@ -255,18 +403,6 @@ export default function Settings() {
             </Button>
           </Box>
         </form>
-
-        {updateSettingsMutation.isSuccess && (
-          <Alert severity="success" sx={{ m: 3 }}>
-            Settings updated successfully!
-          </Alert>
-        )}
-
-        {updateSettingsMutation.isError && (
-          <Alert severity="error" sx={{ m: 3 }}>
-            Error updating settings. Please try again.
-          </Alert>
-        )}
       </Paper>
     </Box>
   );

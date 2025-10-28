@@ -25,34 +25,54 @@ limiter = SimpleLimiter()
 def create_app(config=None):
     """
     Application factory function that creates and configures the Flask app
-    
+
     Args:
         config: Configuration object or dictionary (optional)
-        
+
     Returns:
         Configured Flask application instance
     """
     app = Flask(__name__)
-    
+
     # Enable CORS for development
-    CORS(app, origins=['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174'],
+    CORS(app,
+         origins=['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174',
+                  'http://127.0.0.1:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174'],
          supports_credentials=True,
-         allow_headers=['Content-Type', 'Authorization', 'x-request-id', 'X-Request-ID'])
-    
+         allow_headers=['Content-Type', 'Authorization', 'x-request-id', 'X-Request-ID',
+                        'Accept', 'Origin', 'X-CSRF-Token', 'X-Requested-With'],
+         expose_headers=['Content-Length', 'X-JSON', 'X-Request-ID'],
+         methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+         max_age=3600)  # Cache preflight requests for 1 hour
+
     # Load configuration
     if config:
         app.config.from_mapping(config)
     else:
         # Default configuration
         app.config.from_object('app.config.DevelopmentConfig')
-    
+
     # Initialize extensions
     init_extensions(app)
-    
+
+    # Add global OPTIONS handler for preflight requests
+    @app.before_request
+    def handle_preflight():
+        from flask import request, make_response
+        if request.method == "OPTIONS":
+            response = make_response()
+            response.headers.add("Access-Control-Allow-Origin", request.headers.get('Origin', '*'))
+            response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+            response.headers.add("Access-Control-Allow-Headers",
+                                 "Content-Type, Authorization, x-request-id, X-Request-ID, Accept, Origin, X-CSRF-Token, X-Requested-With")
+            response.headers.add("Access-Control-Allow-Credentials", "true")
+            response.headers.add("Access-Control-Max-Age", "3600")
+            return response, 200
+
     # Register blueprints
     from app.routes import register_blueprints
     register_blueprints(app)
-    
+
     return app
 
 def init_extensions(app):

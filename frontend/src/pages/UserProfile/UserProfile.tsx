@@ -169,7 +169,7 @@ export default function UserProfile() {
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const { currentUser, updateUserData, refreshUserData } = useUser();
+  const { currentUser, updateUserData } = useUser();
   const [userData, setUserData] = useState({
     id: "",
     email: "",
@@ -192,75 +192,73 @@ export default function UserProfile() {
   });
   const [originalData, setOriginalData] = useState(userData);
 
-  const loadUserProfile = useCallback(async () => {
-    try {
-      setIsFetching(true);
-      setError(null);
-
-      // Use centralized user data refresh
-      await refreshUserData();
-
-      // Get profile data from centralized context
-      if (currentUser) {
-        const profileData = {
-          id: currentUser.id || "",
-          email: currentUser.email || "",
-          first_name: currentUser.first_name || "",
-          last_name: currentUser.last_name || "",
-          username: currentUser.username || "",
-          phone: currentUser.phone || "",
-          company: currentUser.company || "",
-          job_title: currentUser.job_title || "",
-          bio: currentUser.bio || "",
-          timezone: currentUser.timezone || "UTC",
-          language: currentUser.language || "en",
-          theme: currentUser.theme || "light",
-          email_notifications: currentUser.email_notifications !== false,
-          push_notifications: currentUser.push_notifications === true,
-          role: currentUser.role || "",
-          created_at: currentUser.created_at || "",
-          updated_at: currentUser.updated_at || "",
-          avatar_url: currentUser.avatar_url || "",
-        };
-        setUserData(profileData);
-        setOriginalData(profileData);
-      } else {
-        // Fallback to direct API call if currentUser is not available
-        const profile = await fetchUserProfile();
-        const profileData = {
-          id: profile.id || "",
-          email: profile.email || "",
-          first_name: profile.first_name || "",
-          last_name: profile.last_name || "",
-          username: profile.username || "",
-          phone: profile.phone || "",
-          company: profile.company || "",
-          job_title: profile.job_title || "",
-          bio: profile.bio || "",
-          timezone: profile.timezone || "UTC",
-          language: profile.language || "en",
-          theme: profile.theme || "light",
-          email_notifications: profile.email_notifications !== false,
-          push_notifications: profile.push_notifications === true,
-          role: profile.role || "",
-          created_at: profile.created_at || "",
-          updated_at: profile.updated_at || "",
-          avatar_url: profile.avatar_url || "",
-        };
-        setUserData(profileData);
-        setOriginalData(profileData);
-      }
-    } catch (err) {
-      setError("Failed to load profile data");
-      console.error("Error loading profile:", err);
-    } finally {
-      setIsFetching(false);
-    }
-  }, [currentUser, refreshUserData]);
-
+  // Load profile data from currentUser when it changes
   useEffect(() => {
-    loadUserProfile();
-  }, [loadUserProfile]);
+    if (!currentUser) {
+      // If no currentUser, try to fetch from API once
+      const fetchProfile = async () => {
+        try {
+          setIsFetching(true);
+          setError(null);
+          const profile = await fetchUserProfile();
+          const profileData = {
+            id: profile.id || "",
+            email: profile.email || "",
+            first_name: profile.first_name || "",
+            last_name: profile.last_name || "",
+            username: profile.username || "",
+            phone: profile.phone || "",
+            company: profile.company || "",
+            job_title: profile.job_title || "",
+            bio: profile.bio || "",
+            timezone: profile.timezone || "UTC",
+            language: profile.language || "en",
+            theme: profile.theme || "light",
+            email_notifications: profile.email_notifications !== false,
+            push_notifications: profile.push_notifications === true,
+            role: profile.role || "",
+            created_at: profile.created_at || "",
+            updated_at: profile.updated_at || "",
+            avatar_url: profile.avatar_url || "",
+          };
+          setUserData(profileData);
+          setOriginalData(profileData);
+        } catch (err) {
+          setError("Failed to load profile data");
+          console.error("Error loading profile:", err);
+        } finally {
+          setIsFetching(false);
+        }
+      };
+      fetchProfile();
+      return;
+    }
+
+    // Use data from currentUser context
+    const profileData = {
+      id: currentUser.id || "",
+      email: currentUser.email || "",
+      first_name: currentUser.first_name || "",
+      last_name: currentUser.last_name || "",
+      username: currentUser.username || "",
+      phone: currentUser.phone || "",
+      company: currentUser.company || "",
+      job_title: currentUser.job_title || "",
+      bio: currentUser.bio || "",
+      timezone: currentUser.timezone || "UTC",
+      language: currentUser.language || "en",
+      theme: currentUser.theme || "light",
+      email_notifications: currentUser.email_notifications !== false,
+      push_notifications: currentUser.push_notifications === true,
+      role: currentUser.role || "",
+      created_at: currentUser.created_at || "",
+      updated_at: currentUser.updated_at || "",
+      avatar_url: currentUser.avatar_url || "",
+    };
+    setUserData(profileData);
+    setOriginalData(profileData);
+    setIsFetching(false);
+  }, [currentUser]); // Only depend on currentUser, not refreshUserData
 
   const handleChange = (_: React.SyntheticEvent, newValue: number) => {
     setValue(newValue);

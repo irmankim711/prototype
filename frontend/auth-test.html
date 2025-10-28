@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Auth Fix - Report Generation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        
+        .section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #007bff;
+        }
+        
+        .result {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        button:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+        
+        .btn-success {
+            background: #28a745;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        
+        .status {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-on {
+            background: #28a745;
+        }
+        
+        .status-off {
+            background: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Quick Authentication Fix</h1>
+        <div class="result info">
+            <strong>Problem:</strong> Report generation fails with 401/500 error because authentication is required.
+        </div>
+        
+        <div class="section">
+            <h3>🔍 Current Authentication Status</h3>
+            <div id="auth-status">Checking...</div>
+        </div>
+        
+        <div class="section">
+            <h3>⚡ Quick Fix Options</h3>
+            
+            <div style="margin: 20px 0;">
+                <h4>Option 1: Enable Development Bypass (Recommended)</h4>
+                <p>This will bypass authentication for testing report generation:</p>
+                <button onclick="enableDevBypass()" class="btn-success">
+                    🔓 Enable Development Bypass
+                </button>
+                <button onclick="disableDevBypass()" class="btn-warning">
+                    🔒 Disable Development Bypass
+                </button>
+            </div>
+            
+            <div style="margin: 20px 0;">
+                <h4>Option 2: Test Report Generation</h4>
+                <p>Try generating a test report with current authentication:</p>
+                <button onclick="testReportGeneration()" class="btn-primary">
+                    📊 Test Report Generation
+                </button>
+            </div>
+            
+            <div style="margin: 20px 0;">
+                <h4>Option 3: Manual Authentication</h4>
+                <p>Enter authentication token manually:</p>
+                <input type="text" id="manual-token" placeholder="Enter JWT token..." style="width: 300px; padding: 10px; margin-right: 10px;">
+                <button onclick="setManualToken()" class="btn-primary">
+                    🔑 Set Token
+                </button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>🧪 Test Results</h3>
+            <div id="test-results">
+                <div class="result info">Ready to test...</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>📋 Next Steps</h3>
+            <ol>
+                <li><strong>Enable development bypass</strong> using the button above</li>
+                <li><strong>Go back to your React app</strong> and try generating a report</li>
+                <li><strong>If it works</strong> - great! Your system is ready</li>
+                <li><strong>If it still fails</strong> - check browser console for more errors</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'http://127.0.0.1:5001';
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('auth-status');
+            statusDiv.innerHTML = `<div class="result ${type}">${message}</div>`;
+        }
+
+        function addTestResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('test-results');
+            const timestamp = new Date().toLocaleTimeString();
+            resultsDiv.innerHTML += `<div class="result ${type}">[${timestamp}] ${message}</div>`;
+        }
+
+        function checkAuthStatus() {
+            const devBypass = localStorage.getItem('devBypassEnabled') === 'true';
+            const token = localStorage.getItem('accessToken');
+            const devUser = localStorage.getItem('devUser');
+            
+            let status = '';
+            
+            if (devBypass && devUser) {
+                const user = JSON.parse(devUser);
+                status = `<span class="status status-on"></span><strong>Development Bypass ACTIVE</strong><br>
+                         <small>User: ${user.full_name} (${user.email})</small>`;
+                updateStatus(status, 'success');
+            } else if (token) {
+                status = `<span class="status status-on"></span><strong>JWT Token Found</strong><br>
+                         <small>Token: ${token.substring(0, 20)}...</small>`;
+                updateStatus(status, 'success');
+            } else {
+                status = `<span class="status status-off"></span><strong>No Authentication</strong><br>
+                         <small>No development bypass or JWT token found</small>`;
+                updateStatus(status, 'error');
+            }
+        }
+
+        function enableDevBypass() {
+            const devUser = {
+                id: 1,
+                email: 'dev@example.com',
+                username: 'devuser',
+                role: 'admin',
+                is_active: true,
+                first_name: 'Dev',
+                last_name: 'User',
+                full_name: 'Dev User'
+            };
+
+            localStorage.setItem('devBypassEnabled', 'true');
+            localStorage.setItem('devUser', JSON.stringify(devUser));
+            localStorage.setItem('accessToken', 'dev-bypass-token');
+
+            addTestResult('🔓 Development bypass enabled successfully!', 'success');
+            checkAuthStatus();
+
+            // Show next steps
+            addTestResult('✅ Next: Go to your React app and try generating a report', 'info');
+        }
+
+        function disableDevBypass() {
+            localStorage.removeItem('devBypassEnabled');
+            localStorage.removeItem('devUser');
+            localStorage.removeItem('accessToken');
+
+            addTestResult('🔒 Development bypass disabled', 'warning');
+            checkAuthStatus();
+        }
+
+        function setManualToken() {
+            const token = document.getElementById('manual-token').value;
+            if (token.trim()) {
+                localStorage.setItem('accessToken', token.trim());
+                addTestResult('🔑 Manual token set successfully', 'success');
+                checkAuthStatus();
+            } else {
+                addTestResult('❌ Please enter a valid token', 'error');
+            }
+        }
+
+        async function testReportGeneration() {
+            addTestResult('🧪 Testing report generation...', 'info');
+
+            const token = localStorage.getItem('accessToken');
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const payload = {
+                templateId: "d88443ff-efce-46ef-89ea-c7cdd6608950",
+                title: "Authentication Test Report",
+                excelDataSource: "mock-excel-1",
+                reportFormat: "pdf"
+            };
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/v1/nextgen/excel/generate-report`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.status === 401) {
+                    addTestResult('❌ Authentication required (401) - Enable development bypass', 'error');
+                } else if (response.status === 500) {
+                    addTestResult('❌ Server error (500) - Check backend logs', 'error');
+                } else if (response.status === 200 || response.status === 201) {
+                    const result = await response.json();
+                    addTestResult('✅ Report generation successful!', 'success');
+                    addTestResult(`📊 Result: ${JSON.stringify(result, null, 2)}`, 'info');
+                } else {
+                    addTestResult(`⚠️ Unexpected status: ${response.status}`, 'warning');
+                }
+
+            } catch (error) {
+                addTestResult(`❌ Request failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuthStatus();
+            addTestResult('🚀 Authentication test page loaded', 'info');
+            addTestResult('💡 Use development bypass to quickly fix report generation', 'info');
+        });
+    </script>
+</body>
+</html>

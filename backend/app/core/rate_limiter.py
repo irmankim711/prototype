@@ -81,9 +81,21 @@ class RateLimiter:
     """
     
     def __init__(self, redis_client: Optional[redis.Redis] = None):
-        self.redis_client = redis_client or redis.from_url(
-            os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-        )
+        try:
+            self.redis_client = redis_client or redis.from_url(
+                os.getenv('REDIS_URL', 'redis://localhost:6379/0'),
+                socket_connect_timeout=2,
+                socket_timeout=2,
+                decode_responses=False
+            )
+            # Test connection
+            self.redis_client.ping()
+            self.redis_available = True
+            logger.info("Redis connection established for rate limiting")
+        except Exception as e:
+            logger.warning(f"Redis unavailable for rate limiting: {str(e)}. Rate limiting will be disabled.")
+            self.redis_client = None
+            self.redis_available = False
         
         # Default rules
         self.default_rules = {
@@ -107,6 +119,27 @@ class RateLimiter:
                 window=3600,  # 1 hour
                 strategy=RateLimitStrategy.SLIDING_WINDOW,
                 scope=RateLimitScope.USER
+            ),
+            'form_export': RateLimitRule(
+                name='form_export',
+                requests=10,  # Max 10 exports per hour per user
+                window=3600,  # 1 hour
+                strategy=RateLimitStrategy.SLIDING_WINDOW,
+                scope=RateLimitScope.USER
+            ),
+            'google_forms_export': RateLimitRule(
+                name='google_forms_export',
+                requests=5,  # Max 5 Google Forms exports per hour per user
+                window=3600,  # 1 hour
+                strategy=RateLimitStrategy.SLIDING_WINDOW,
+                scope=RateLimitScope.USER
+            ),
+            'export_download': RateLimitRule(
+                name='export_download',
+                requests=50,  # Max 50 downloads per hour per IP
+                window=3600,  # 1 hour
+                strategy=RateLimitStrategy.SLIDING_WINDOW,
+                scope=RateLimitScope.IP
             )
         }
         
@@ -149,13 +182,17 @@ class RateLimiter:
 
     def check_rate_limit(self, rule_name: str, identifier: str) -> Tuple[bool, int]:
         """Check if request is within rate limit"""
+        # If Redis is not available, allow all requests
+        if not self.redis_available or self.redis_client is None:
+            return True, 0
+
         if rule_name not in self.rules:
             logger.warning(f"Rate limit rule '{rule_name}' not found")
             return True, 0
-            
+
         rule = self.rules[rule_name]
         key = f"rate_limit:{rule_name}:{identifier}"
-        
+
         try:
             current_time = time.time()
             
@@ -202,12 +239,16 @@ class RateLimiter:
             # On error, allow request but log
             return True, 0
 
-    def rate_limit(self, rule_name: str, requests: int = None, window: int = None, 
+    def rate_limit(self, rule_name: str, requests: int = None, window: int = None,
                    strategy: RateLimitStrategy = None, scope: RateLimitScope = None):
         """Decorator for rate limiting endpoints"""
         def decorator(f):
             @wraps(f)
             def decorated_function(*args, **kwargs):
+                # Skip rate limiting for OPTIONS requests (CORS preflight)
+                if request.method == 'OPTIONS':
+                    return f(*args, **kwargs)
+
                 # Create rule if not exists
                 if rule_name not in self.rules:
                     rule = RateLimitRule(

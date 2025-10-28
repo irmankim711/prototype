@@ -10,6 +10,23 @@ from ..decorators import get_current_user_id
 
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/api/dashboard')
 
+@dashboard_bp.route('/metrics', methods=['GET'])
+def get_dashboard_metrics():
+    """Get dashboard metrics for the current user (for Dashboard.tsx)"""
+    try:
+        # Return mock data for now that matches the Dashboard.tsx interface
+        metrics = {
+            'reportsCreated': 24,
+            'reportsData': [12, 19, 15, 21, 24, 18, 24],  # Last 7 days
+            'formsActive': 8,
+            'formsMaximum': 10,
+            'platformUsageChange': 15  # +15% vs last month
+        }
+        return jsonify(metrics), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @dashboard_bp.route('/stats', methods=['GET'])
 def get_dashboard_stats():
     """Get dashboard statistics for the current user"""
@@ -17,7 +34,7 @@ def get_dashboard_stats():
         user_id = get_current_user_id()
         stats = dashboard_service.get_user_dashboard_stats(user_id)
         return jsonify(stats), 200
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

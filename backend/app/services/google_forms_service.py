@@ -92,9 +92,10 @@ class ProductionGoogleFormsService:
             flow.redirect_uri = self.redirect_uri
             
             # Generate authorization URL with state parameter for security
+            # Note: Not using include_granted_scopes to avoid scope changes
             authorization_url, state = flow.authorization_url(
                 access_type='offline',
-                include_granted_scopes='true',
+                prompt='consent',  # Force consent screen to refresh scopes
                 state=user_id  # Use user_id as state for security
             )
             
@@ -153,14 +154,16 @@ class ProductionGoogleFormsService:
         # Create tokens directory if it doesn't exist
         tokens_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'tokens')
         os.makedirs(tokens_dir, exist_ok=True)
-        
+
         state_path = os.path.join(tokens_dir, f"user_{user_id}_oauth_state.json")
+        # Use longer timeout (30 minutes) to account for timezone issues and slow authorization
+        now = datetime.utcnow()
         state_data = {
             'state': state,
-            'created_at': datetime.utcnow().isoformat(),
-            'expires_at': (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+            'created_at': now.isoformat(),
+            'expires_at': (now + timedelta(minutes=30)).isoformat()
         }
-        
+
         with open(state_path, 'w') as f:
             json.dump(state_data, f)
     
@@ -179,11 +182,23 @@ class ProductionGoogleFormsService:
             # Check if state matches and hasn't expired
             stored_state = state_data.get('state')
             expires_at = datetime.fromisoformat(state_data.get('expires_at'))
-            
+
+            # Check state match first
+            state_matches = stored_state == state
+
+            # Check expiration with some tolerance for timezone issues
+            now = datetime.utcnow()
+            is_not_expired = now < expires_at
+
             # Clean up state file
             os.remove(state_path)
-            
-            return stored_state == state and datetime.utcnow() < expires_at
+
+            if not state_matches:
+                logger.error(f"State mismatch: expected {stored_state}, got {state}")
+            if not is_not_expired:
+                logger.error(f"State expired: created at {state_data.get('created_at')}, expires at {expires_at}, now is {now.isoformat()}")
+
+            return state_matches and is_not_expired
             
         except Exception as e:
             logger.error(f"Error verifying OAuth state: {e}")

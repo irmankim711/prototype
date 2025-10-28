@@ -4,12 +4,21 @@ Provides real Google Forms integration for automated reports
 """
 
 from flask import Blueprint, request, jsonify, current_app, send_file
-from ..decorators import get_current_user_id
+from ..decorators import get_current_user_id, firebase_auth_required, firebase_token_optional
 
 try:
-    from app.services.google_forms_service import google_forms_service
+    from app.services.google_forms_service import google_forms_service, _initialize_google_forms_service
     GOOGLE_FORMS_ENABLED = google_forms_service is not None
     print(f"Google Forms routes status: {'Enabled' if GOOGLE_FORMS_ENABLED else 'Disabled'}")
+
+    # If service is None but we have credentials, try to initialize again
+    if google_forms_service is None:
+        import os
+        if os.getenv('GOOGLE_CLIENT_ID') and os.getenv('GOOGLE_CLIENT_SECRET'):
+            print("🔄 Retrying Google Forms service initialization...")
+            google_forms_service = _initialize_google_forms_service()
+            GOOGLE_FORMS_ENABLED = google_forms_service is not None
+            print(f"🔄 Retry result: {'Enabled' if GOOGLE_FORMS_ENABLED else 'Still Disabled'}")
 except (ImportError, ValueError) as e:
     google_forms_service = None
     GOOGLE_FORMS_ENABLED = False
@@ -38,39 +47,95 @@ logger = logging.getLogger(__name__)
 google_forms_bp = Blueprint('google_forms', __name__, url_prefix='/api/google-forms')
 
 @google_forms_bp.route('/status', methods=['GET'])
+@firebase_token_optional
 def get_service_status():
-    """Get the current status of the Google Forms service"""
+    """Get the current status of the Google Forms service AND user authorization"""
     try:
+        # Check service availability first
         if not google_forms_service:
             return jsonify({
                 'success': False,
                 'status': 'not_available',
-                'message': 'Google Forms service not imported'
+                'message': 'Google Forms service not imported',
+                'service_enabled': False,
+                'is_authenticated': False,
+                'is_authorized': False,
+                'has_valid_token': False,
+                'requires_config': True
             }), 503
-        
+
         if not google_forms_service.is_enabled():
             return jsonify({
                 'success': False,
                 'status': 'disabled',
                 'message': 'Google Forms service is not configured - missing OAuth credentials',
+                'service_enabled': False,
+                'is_authenticated': False,
+                'is_authorized': False,
+                'has_valid_token': False,
                 'requires_config': True
             }), 503
-        
+
+        # Service is enabled - now check user authorization
+        user_id = get_current_user_id()
+
+        if not user_id:
+            # Not authenticated with app
+            return jsonify({
+                'success': True,
+                'status': 'enabled',
+                'message': 'Google Forms service is available',
+                'service_enabled': True,
+                'is_authenticated': False,
+                'is_authorized': False,
+                'has_valid_token': False,
+                'requires_auth': True
+            })
+
+        # User is authenticated - check Google Forms authorization
+        is_authorized = False
+        forms_count = 0
+
+        try:
+            credentials = google_forms_service._get_user_credentials(str(user_id))
+            is_authorized = credentials is not None
+
+            if is_authorized:
+                # Verify token is valid by trying to get forms
+                try:
+                    forms = google_forms_service.get_user_forms(str(user_id), page_size=1)
+                    forms_count = len(forms) if forms else 0
+                except Exception as e:
+                    logger.warning(f"Token validation failed for user {user_id}: {e}")
+                    is_authorized = False
+        except Exception as e:
+            logger.error(f"Error checking user authorization: {e}")
+
         return jsonify({
             'success': True,
             'status': 'enabled',
-            'message': 'Google Forms service is available and configured'
+            'message': 'Google Forms service is available and configured',
+            'service_enabled': True,
+            'is_authenticated': True,
+            'is_authorized': is_authorized,
+            'has_valid_token': is_authorized,
+            'forms_count': forms_count
         })
-        
+
     except Exception as e:
         logger.error(f"Error checking service status: {e}")
         return jsonify({
             'success': False,
             'status': 'error',
-            'message': 'Error checking service status'
+            'message': 'Error checking service status',
+            'service_enabled': False,
+            'is_authenticated': False,
+            'is_authorized': False,
+            'has_valid_token': False
         }), 500
 
 @google_forms_bp.route('/forms', methods=['GET'])
+@firebase_auth_required
 def get_user_forms():
     """Get list of Google Forms accessible to the current user"""
     try:
@@ -81,8 +146,17 @@ def get_user_forms():
                 'error': 'Google Forms service is not configured',
                 'requires_config': True
             }), 503
-        
+
         user_id = get_current_user_id()
+
+        # Require authentication - no fallback
+        if not user_id:
+            return jsonify({
+                'success': False,
+                'error': 'Authentication required. Please log in first.',
+                'requires_auth': True
+            }), 401
+
         page_size = request.args.get('page_size', 10, type=int)
         
         # Get user's Google Forms
@@ -102,7 +176,8 @@ def get_user_forms():
             'requires_auth': True
         }), 500
 
-@google_forms_bp.route('/forms/<form_id>/info', methods=['GET'])
+@google_forms_bp.route('/forms/<form_id>/info', methods=['GET', 'OPTIONS'])
+@firebase_auth_required
 def get_form_info(form_id: str):
     """Get detailed information about a specific Google Form"""
     try:
@@ -137,7 +212,8 @@ def get_form_info(form_id: str):
             'error': 'Internal server error'
         }), 500
 
-@google_forms_bp.route('/forms/<form_id>/responses', methods=['GET'])
+@google_forms_bp.route('/forms/<form_id>/responses', methods=['GET', 'OPTIONS'])
+@firebase_auth_required
 def get_form_responses(form_id: str):
     """Get responses for a specific Google Form"""
     try:
@@ -186,7 +262,8 @@ def get_form_responses(form_id: str):
             'error': 'Internal server error'
         }), 500
 
-@google_forms_bp.route('/forms/<form_id>/generate-report', methods=['POST'])
+@google_forms_bp.route('/forms/<form_id>/generate-report', methods=['POST', 'OPTIONS'])
+@firebase_auth_required
 def generate_automated_report(form_id: str):
     """Generate automated report from Google Form responses"""
     try:
@@ -236,11 +313,20 @@ def generate_automated_report(form_id: str):
         }), 500
 
 @google_forms_bp.route('/oauth/authorize', methods=['POST'])
+@firebase_auth_required
 def authorize_google():
     """Initiate Google OAuth authorization for Google Forms access"""
     try:
         user_id = get_current_user_id()
-        
+
+        # This should always have a user_id due to decorator, but check anyway
+        if not user_id:
+            return jsonify({
+                'success': False,
+                'error': 'Authentication required. Please log in first.',
+                'requires_auth': True
+            }), 401
+
         # Get authorization URL
         auth_url = google_forms_service.get_authorization_url(str(user_id))
         
@@ -281,19 +367,23 @@ def oauth_callback():
         if not user_id:
             try:
                 user_id = get_current_user_id()
-            except:
+            except (AttributeError, RuntimeError) as e:
+                logger.error(f"Authentication error: {str(e)}")
                 return jsonify({
                     'success': False,
                     'error': 'Authentication required'
                 }), 401
 
-        # Exchange code for tokens using existing method
-        success = google_forms_service.handle_oauth_callback(authorization_code, str(user_id), state=str(user_id))
+        # Exchange code for tokens using existing method (correct parameter order: user_id, code, state)
+        result = google_forms_service.handle_oauth_callback(str(user_id), authorization_code, str(user_id))
 
-        if not success:
+        if result.get('status') != 'success':
+            error_msg = result.get('message', 'Failed to exchange authorization code')
+            if request.method == 'GET':
+                return f'<html><body><p>Error: {error_msg}</p></body></html>', 400
             return jsonify({
                 'success': False,
-                'error': 'Failed to exchange authorization code'
+                'error': error_msg
             }), 400
 
         # For GET requests (browser redirects), return HTML that closes the popup
@@ -325,59 +415,8 @@ def oauth_callback():
             'error': 'Internal server error'
         }), 500
 
-@google_forms_bp.route('/status', methods=['GET'])
-def get_integration_status():
-    """Get Google Forms integration status for current user"""
-    try:
-        # Check if user is authenticated
-        try:
-            
-            verify_jwt_in_request(optional=True)
-            user_id = get_current_user_id()
-        except:
-            user_id = None
-        
-        # If not authenticated, return basic status
-        if not user_id:
-            return jsonify({
-                'success': True,
-                'is_authenticated': False,
-                'is_authorized': False,
-                'has_valid_token': False,
-                'requires_auth': True,
-                'message': 'Authentication required to check Google Forms integration status'
-            })
-        
-        # Check if user has Google Forms access by trying to get credentials
-        credentials = google_forms_service._get_user_credentials(str(user_id))
-        is_authorized = credentials is not None
-        
-        # Try to get forms to check token validity
-        forms_count = 0
-        if is_authorized:
-            try:
-                forms = google_forms_service.get_user_forms(str(user_id), page_size=1)
-                forms_count = len(forms) if forms else 0
-            except:
-                is_authorized = False
-        
-        return jsonify({
-            'success': True,
-            'is_authenticated': True,
-            'is_authorized': is_authorized,
-            'has_valid_token': is_authorized,
-            'last_sync': None,  # Could be implemented later
-            'forms_count': forms_count
-        })
-        
-    except Exception as e:
-        logger.error(f"Error checking integration status: {e}")
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error'
-        }), 500
-
-@google_forms_bp.route('/forms/<form_id>/export-excel', methods=['POST'])
+@google_forms_bp.route('/forms/<form_id>/export-excel', methods=['POST', 'OPTIONS'])
+@firebase_auth_required
 def export_google_form_to_excel(form_id: str):
     """Export Google Form responses to Excel"""
     try:
@@ -445,7 +484,8 @@ def export_google_form_to_excel(form_id: str):
             'error': 'Internal server error'
         }), 500
 
-@google_forms_bp.route('/forms/<form_id>/preview-report', methods=['POST'])
+@google_forms_bp.route('/forms/<form_id>/preview-report', methods=['POST', 'OPTIONS'])
+@firebase_auth_required
 def preview_report_data(form_id: str):
     """Preview report data before generation"""
     try:
@@ -485,7 +525,8 @@ def preview_report_data(form_id: str):
             'error': 'Internal server error'
         }), 500
 
-@google_forms_bp.route('/forms/<form_id>/download-excel/<filename>', methods=['GET'])
+@google_forms_bp.route('/forms/<form_id>/download-excel/<filename>', methods=['GET', 'OPTIONS'])
+@firebase_auth_required
 def download_google_forms_excel(form_id: str, filename: str):
     """Download Google Forms Excel export file"""
     try:

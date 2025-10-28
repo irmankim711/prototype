@@ -38,9 +38,16 @@ class User(db.Model):
     
     # Status fields
     is_active = Column(Boolean, default=True)
-    # Role using application enum
-    role = Column(Enum(UserRole), default=UserRole.USER, nullable=False)
-    
+    # Role using application enum - use .value to store the string value in DB
+    role = Column(Enum(UserRole, values_callable=lambda x: [e.value for e in x]), default=UserRole.USER, nullable=False)
+
+    # Preferences
+    timezone = Column(String(50), default='UTC')
+    language = Column(String(10), default='en')
+    theme = Column(String(20), default='light')
+    email_notifications = Column(Boolean, default=True)
+    push_notifications = Column(Boolean, default=False)
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -94,11 +101,16 @@ class User(db.Model):
             'firebase_uid': self.firebase_uid,
             'is_active': self.is_active,
             'role': self.role.value if self.role else None,
+            'timezone': self.timezone,
+            'language': self.language,
+            'theme': self.theme,
+            'email_notifications': self.email_notifications,
+            'push_notifications': self.push_notifications,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None
         }
-        
+
         return data
 
     def __repr__(self):

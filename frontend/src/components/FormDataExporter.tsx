@@ -103,7 +103,6 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [previewData, setPreviewData] = useState<any>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
-  const [activeTab, setActiveTab] = useState<number>(formType === 'google' ? 1 : 0);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'excel' | 'csv' | 'googlesheets'>('excel');
 
@@ -309,8 +308,8 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
   };
 
   const getFieldCount = () => {
-    if (isGoogleForm) return previewData?.form_info?.questions?.length || 4;
-    return form.fields?.length || 4;
+    if (isGoogleForm) return previewData?.form_info?.questions?.length || form.schema?.fields?.length || 0;
+    return form.schema?.fields?.length || 0;
   };
 
   return (
@@ -337,63 +336,36 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
 
       {/* Main Content */}
       <Box sx={{ maxWidth: 1200, mx: 'auto', px: 3 }}>
-        {/* Tabs */}
+        {/* Export Content */}
         <Paper sx={{
           borderRadius: '16px',
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
           overflow: 'hidden',
           mb: 3
         }}>
-          <Tabs
-            value={activeTab}
-            onChange={(e, v) => setActiveTab(v)}
-            sx={{
-              borderBottom: 1,
-              borderColor: 'divider',
-              '& .MuiTab-root': {
-                textTransform: 'none',
-                fontSize: '1rem',
-                fontWeight: 600,
-                py: 2
-              }
-            }}
-          >
-            <Tab
-              icon={<Box sx={{ fontSize: '1.25rem' }}>📄</Box>}
-              iconPosition="start"
-              label="Local Form Export"
-            />
-            <Tab
-              icon={<Box sx={{ fontSize: '1.25rem' }}>🟢</Box>}
-              iconPosition="start"
-              label="Google Forms Export"
-            />
-          </Tabs>
-
-          {/* Tab Content */}
           <Box sx={{ p: 4 }}>
             {/* Form Header Info */}
             <Box sx={{ mb: 4 }}>
               <Typography variant="h5" sx={{ fontWeight: 600, color: '#1E293B', mb: 1 }}>
-                {activeTab === 0 ? 'Employee Performance Survey' : 'Customer Feedback Survey'}
+                {form.title}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                 <Chip
-                  label={activeTab === 0 ? 'Active' : 'Google Forms'}
+                  label={isGoogleForm ? 'Google Forms' : 'Active'}
                   size="small"
                   sx={{
-                    bgcolor: activeTab === 0 ? '#E0E7FF' : '#DCFCE7',
-                    color: activeTab === 0 ? '#4F46E5' : '#16A34A',
+                    bgcolor: isGoogleForm ? '#DCFCE7' : '#E0E7FF',
+                    color: isGoogleForm ? '#16A34A' : '#4F46E5',
                     fontWeight: 600
                   }}
                 />
                 <Chip
-                  label={`${activeTab === 0 ? '45' : '128'} ${activeTab === 0 ? 'submissions' : 'responses'}`}
+                  label={`${form.submission_count || 0} ${isGoogleForm ? 'responses' : 'submissions'}`}
                   size="small"
                   sx={{ bgcolor: '#F3E8FF', color: '#9333EA', fontWeight: 600 }}
                 />
                 <Chip
-                  label={`${getFieldCount()} ${activeTab === 0 ? 'fields' : 'questions'}`}
+                  label={`${getFieldCount()} ${isGoogleForm ? 'questions' : 'fields'}`}
                   size="small"
                   sx={{ bgcolor: '#DBEAFE', color: '#2563EB', fontWeight: 600 }}
                 />
@@ -436,7 +408,7 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
                     }}
                   />
                 </Grid>
-                {activeTab === 0 && (
+                {!isGoogleForm && (
                   <>
                     <Grid item xs={12} md={6}>
                       <FormControl fullWidth>

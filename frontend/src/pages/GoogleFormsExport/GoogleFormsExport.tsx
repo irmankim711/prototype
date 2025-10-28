@@ -340,19 +340,21 @@ const GoogleFormsExport: React.FC = () => {
                         <ListItemText
                           primary={form.title}
                           secondary={
-                            <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
-                              <Chip
-                                label={`${form.response_count || 0} responses`}
-                                size="small"
-                                color="primary"
-                                variant="outlined"
-                              />
-                              <Chip
-                                label={`${form.question_count || 0} questions`}
-                                size="small"
-                                variant="outlined"
-                              />
-                            </Box>
+                            <React.Fragment>
+                              <Box component="span" sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
+                                <Chip
+                                  label={`${form.response_count || 0} responses`}
+                                  size="small"
+                                  color="primary"
+                                  variant="outlined"
+                                />
+                                <Chip
+                                  label={`${form.question_count || 0} questions`}
+                                  size="small"
+                                  variant="outlined"
+                                />
+                              </Box>
+                            </React.Fragment>
                           }
                         />
                       </ListItemButton>

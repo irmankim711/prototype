@@ -310,22 +310,68 @@ class GoogleFormsService:
         credentials = self.get_credentials(user_id)
         if not credentials:
             raise Exception("User not authenticated")
-        
+
         try:
             forms_service = build('forms', 'v1', credentials=credentials)
-            
+
+            # DIAGNOSTIC: Check OAuth scopes
+            logger.info(f"🔍 Fetching form {form_id} for user {user_id}")
+            logger.info(f"🔍 OAuth scopes: {credentials.scopes if hasattr(credentials, 'scopes') else 'unknown'}")
+
             # Get form structure
-            form = forms_service.forms().get(formId=form_id).execute()
-            
+            try:
+                form = forms_service.forms().get(formId=form_id).execute()
+                logger.info(f"✅ Successfully fetched form structure")
+                logger.info(f"   Form title: {form.get('info', {}).get('title', 'No title')}")
+                logger.info(f"   Form owner: {form.get('info', {}).get('title', 'unknown')}")
+                logger.info(f"   Form items (questions): {len(form.get('items', []))}")
+            except HttpError as e:
+                logger.error(f"❌ Failed to get form structure: {e}")
+                if e.resp.status == 403:
+                    logger.error("   Permission denied - user doesn't have access to this form")
+                raise
+
             # Get responses
+            logger.info(f"🔍 Attempting to fetch responses for form {form_id}...")
             responses = forms_service.forms().responses().list(formId=form_id).execute()
+
+            # DIAGNOSTIC: Log response details
+            response_count = len(responses.get('responses', []))
+            logger.info(f"📊 API returned {response_count} responses")
+
+            if response_count == 0:
+                logger.warning("⚠️ EMPTY RESPONSES - Possible causes:")
+                logger.warning("   1. Form genuinely has no responses")
+                logger.warning("   2. User doesn't own the form (OAuth user mismatch)")
+                logger.warning("   3. OAuth scopes missing 'forms.responses.readonly'")
+                logger.warning("   4. Form settings prevent API access")
+                logger.warning(f"   5. Form ID might be incorrect: {form_id}")
+
+                # Additional diagnostic: Check form responder URI
+                responder_uri = form.get('responderUri', 'Not available')
+                logger.info(f"   Form responder URL: {responder_uri}")
+                logger.info(f"   Form linked sheet ID: {form.get('linkedSheetId', 'None')}")
+
+                # Check if form accepts responses
+                settings = form.get('settings', {})
+                quiz_settings = settings.get('quizSettings', {})
+                logger.info(f"   Form accepts responses: {not settings.get('quizSettings', {}).get('isQuiz', False) or True}")
+            else:
+                logger.info(f"✅ Successfully fetched {response_count} responses")
             
             # Process responses
             processed_responses = []
             form_items = {item['itemId']: item for item in form.get('items', [])}
-            
+
             logger.info(f"Processing {len(responses.get('responses', []))} real responses for form {form_id}")
-            
+            logger.info(f"Form has {len(form_items)} items/questions")
+
+            # CRITICAL: Check if form structure was fetched successfully
+            if not form_items:
+                logger.error(f"❌ CRITICAL: No form items found! Form structure may be empty or API call failed.")
+                logger.error(f"Form object keys: {list(form.keys())}")
+                logger.error(f"Form items: {form.get('items', 'KEY NOT FOUND')}")
+
             for response in responses.get('responses', []):
                 processed_response = {
                     'response_id': response['responseId'],
@@ -333,17 +379,36 @@ class GoogleFormsService:
                     'last_submitted_time': response['lastSubmittedTime'],
                     'answers': {}
                 }
-                
-                for answer_id, answer in response.get('answers', {}).items():
+
+                raw_answers = response.get('answers', {})
+                answers_processed = 0
+                answers_skipped = 0
+
+                for answer_id, answer in raw_answers.items():
                     if answer_id in form_items:
                         question_item = form_items[answer_id]
                         question_title = question_item.get('title', f'Question {answer_id}')
-                        
+
                         # Extract answer based on type
                         answer_value = self._extract_answer_value(answer)
                         processed_response['answers'][question_title] = answer_value
-                
+                        answers_processed += 1
+                    else:
+                        # CRITICAL: Log when answers are being skipped
+                        logger.warning(f"⚠️ Answer ID '{answer_id}' not found in form items! This answer will be SKIPPED.")
+
+                        # FALLBACK: Still include the answer with the raw ID as the key
+                        # This prevents data loss even if form structure is incomplete
+                        answer_value = self._extract_answer_value(answer)
+                        processed_response['answers'][f'Unknown Question ({answer_id})'] = answer_value
+                        answers_skipped += 1
+
                 processed_responses.append(processed_response)
+
+                # Log for first response to help debugging
+                if len(processed_responses) == 1:
+                    logger.info(f"First response processed: {answers_processed} answers extracted, {answers_skipped} from unknown questions")
+                    logger.info(f"Sample processed answers keys: {list(processed_response['answers'].keys())[:5]}")
             
             return {
                 'form_title': form.get('info', {}).get('title', 'Untitled Form'),
@@ -360,22 +425,45 @@ class GoogleFormsService:
 
     def _extract_answer_value(self, answer: Dict) -> Any:
         """Extract answer value based on answer type - NO MOCK DATA"""
-        if 'textAnswers' in answer:
-            return answer['textAnswers']['answers'][0]['value']
-        elif 'choiceAnswers' in answer:
-            return [choice['value'] for choice in answer['choiceAnswers']['answers']]
-        elif 'scaleAnswer' in answer:
-            return answer['scaleAnswer']['value']
-        elif 'dateAnswer' in answer:
-            date_obj = answer['dateAnswer']
-            return f"{date_obj['year']}-{date_obj['month']:02d}-{date_obj['day']:02d}"
-        elif 'timeAnswer' in answer:
-            time_obj = answer['timeAnswer']
-            return f"{time_obj.get('hours', 0):02d}:{time_obj.get('minutes', 0):02d}"
-        elif 'fileUploadAnswers' in answer:
-            return [file_answer['fileId'] for file_answer in answer['fileUploadAnswers']['answers']]
-        else:
-            return str(answer)
+        try:
+            if 'textAnswers' in answer:
+                text_answers = answer['textAnswers'].get('answers', [])
+                if text_answers and len(text_answers) > 0:
+                    return text_answers[0].get('value', '')
+                return ''
+
+            elif 'choiceAnswers' in answer:
+                choice_answers = answer['choiceAnswers'].get('answers', [])
+                return [choice.get('value', '') for choice in choice_answers if choice.get('value')]
+
+            elif 'scaleAnswer' in answer:
+                return answer['scaleAnswer'].get('value', '')
+
+            elif 'dateAnswer' in answer:
+                date_obj = answer['dateAnswer']
+                year = date_obj.get('year', 0)
+                month = date_obj.get('month', 1)
+                day = date_obj.get('day', 1)
+                return f"{year:04d}-{month:02d}-{day:02d}"
+
+            elif 'timeAnswer' in answer:
+                time_obj = answer['timeAnswer']
+                hours = time_obj.get('hours', 0)
+                minutes = time_obj.get('minutes', 0)
+                return f"{hours:02d}:{minutes:02d}"
+
+            elif 'fileUploadAnswers' in answer:
+                file_answers = answer['fileUploadAnswers'].get('answers', [])
+                return [file_answer.get('fileId', file_answer.get('fileName', '')) for file_answer in file_answers]
+
+            else:
+                # Unknown answer type - return string representation
+                import json
+                return json.dumps(answer, ensure_ascii=False)
+
+        except Exception as e:
+            logger.error(f"Error extracting answer value from {answer}: {str(e)}")
+            return str(answer)  # Fallback to string representation
 
     def sync_form_to_database(self, user_id: str, form_id: str, program_id: int) -> Dict[str, Any]:
         """Sync real Google Form responses to database - NO MOCK DATA"""

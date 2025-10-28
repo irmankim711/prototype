@@ -66,8 +66,8 @@ def upload_excel():
         try:
             os.remove(file_path)
             os.rmdir(temp_dir)
-        except:
-            pass
+        except (OSError, FileNotFoundError) as e:
+            logger.warning(f"Failed to cleanup temporary files: {str(e)}")
         
         if not parse_result['success']:
             return jsonify({

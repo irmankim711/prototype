@@ -32,20 +32,35 @@ def register_blueprints(app):
         from app.routes.firebase_auth_routes import firebase_auth_bp as firebase_auth_api_bp
 
         # Create a new blueprint with /api/auth prefix
-        from flask import Blueprint
+        from flask import Blueprint, request, jsonify
         api_auth_bp = Blueprint('api_auth', __name__, url_prefix='/api/auth')
 
         # Copy the routes from firebase_auth_routes_bp to api_auth_bp
-        @api_auth_bp.route('/firebase-sync', methods=['POST'])
-        @api_auth_bp.route('/firebase-login', methods=['POST'])
+        @api_auth_bp.route('/firebase-sync', methods=['POST', 'OPTIONS'])
+        @api_auth_bp.route('/firebase-login', methods=['POST', 'OPTIONS'])
+        @api_auth_bp.route('/register', methods=['POST', 'OPTIONS'])  # Alias for registration
         def api_firebase_sync():
+            # Handle OPTIONS request for CORS preflight
+            if request.method == 'OPTIONS':
+                return jsonify({'status': 'ok'}), 200
             from app.routes.firebase_auth_routes import firebase_sync
             return firebase_sync()
 
-        @api_auth_bp.route('/verify-token', methods=['POST'])
+        @api_auth_bp.route('/verify-token', methods=['POST', 'OPTIONS'])
         def api_verify_token():
+            # Handle OPTIONS request for CORS preflight
+            if request.method == 'OPTIONS':
+                return jsonify({'status': 'ok'}), 200
             from app.routes.firebase_auth_routes import verify_token
             return verify_token()
+
+        @api_auth_bp.route('/logout', methods=['POST', 'OPTIONS'])
+        def api_logout():
+            # Handle OPTIONS request for CORS preflight
+            if request.method == 'OPTIONS':
+                return jsonify({'status': 'ok'}), 200
+            from app.routes.firebase_auth_routes import logout
+            return logout()
 
         app.register_blueprint(api_auth_bp)
         app.logger.info("✅ API auth routes registered under /api/auth")
@@ -59,21 +74,24 @@ def register_blueprints(app):
     except Exception as e:
         app.logger.warning(f"Could not import quick_auth: {e}")
 
-    # Basic API routes (working ones only)
-    try:
-        from app.routes.users import users_bp
-        app.register_blueprint(users_bp, url_prefix='/api/users')
-        app.logger.info("✅ Users routes registered")
-    except Exception as e:
-        app.logger.warning(f"Could not import users: {e}")
-
-    # Enhanced user profile routes
+    # Enhanced user profile routes (with proper auth)
     try:
         from app.routes.enhanced_user_routes import enhanced_user_bp
         app.register_blueprint(enhanced_user_bp)  # Already has prefix /api/users
         app.logger.info("✅ Enhanced user routes registered")
     except Exception as e:
         app.logger.warning(f"Could not import enhanced_user_routes: {e}")
+
+    # Basic API routes (admin/manager routes only - profile routes handled by enhanced_user_routes)
+    try:
+        from app.routes.users import users_bp
+        # Note: Only register admin routes, not profile routes (those are in enhanced_user_routes)
+        # Register without url_prefix to avoid conflicts with enhanced routes
+        # app.register_blueprint(users_bp, url_prefix='/api/users')
+        # app.logger.info("✅ Users routes registered")
+        app.logger.info("ℹ️ Basic users routes skipped (using enhanced_user_routes instead)")
+    except Exception as e:
+        app.logger.warning(f"Could not import users: {e}")
 
     try:
         from app.routes.forms import forms_bp
@@ -119,6 +137,14 @@ def register_blueprints(app):
         app.logger.info("✅ Analytics routes registered")
     except Exception as e:
         app.logger.warning(f"Could not import analytics: {e}")
+
+    # Dashboard routes
+    try:
+        from app.routes.dashboard import dashboard_bp
+        app.register_blueprint(dashboard_bp)  # Already has prefix /api/dashboard
+        app.logger.info("✅ Dashboard routes registered")
+    except Exception as e:
+        app.logger.warning(f"Could not import dashboard: {e}")
 
     # Health check routes (simple)
     try:
@@ -213,5 +239,29 @@ def register_blueprints(app):
         app.logger.info("✅ Google Forms routes registered")
     except Exception as e:
         app.logger.warning(f"Could not import google_forms_routes: {e}")
+
+    # Form data export routes (Excel, CSV, Google Sheets export)
+    try:
+        from app.routes.form_data_export_routes import register_export_blueprints
+        register_export_blueprints(app)
+        app.logger.info("✅ Form data export routes registered")
+    except Exception as e:
+        app.logger.warning(f"Could not import form_data_export_routes: {e}")
+
+    # Settings API routes
+    try:
+        from app.routes.settings_api import settings_api
+        app.register_blueprint(settings_api)  # Already has prefix /api/settings
+        app.logger.info("✅ Settings API routes registered")
+    except Exception as e:
+        app.logger.warning(f"Could not import settings_api: {e}")
+
+    # Firebase Reports API routes (NEW - Firebase Storage + Firestore integration)
+    try:
+        from app.routes.firebase_reports_api import firebase_reports_bp
+        app.register_blueprint(firebase_reports_bp)  # Already has prefix /api/firebase-reports
+        app.logger.info("✅ Firebase Reports API routes registered")
+    except Exception as e:
+        app.logger.warning(f"Could not import firebase_reports_api: {e}")
 
     app.logger.info("🎯 Blueprint registration completed - added missing API routes")

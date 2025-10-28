@@ -18,7 +18,7 @@ from flask_limiter.util import get_remote_address
 from sqlalchemy.exc import IntegrityError
 
 from ..decorators import get_current_user_id, require_auth
-from ..models.simple_user import SimpleUser
+from ..models.production.user_models import User
 from ..core.exceptions import ValidationError
 from .. import db
 
@@ -111,8 +111,10 @@ def validate_profile_data(data: Dict[str, Any]) -> Dict[str, str]:
 def get_user_profile():
     """Get current user's profile"""
     try:
-        user_id = get_current_user_id()
-        user = SimpleUser.query.get(user_id)
+        from flask import g
+
+        # Get user from g.current_user (set by @require_auth decorator)
+        user = getattr(g, 'current_user', None)
 
         if not user:
             return jsonify({
@@ -120,13 +122,36 @@ def get_user_profile():
                 'error': 'User not found'
             }), 404
 
+        # Handle both Firestore dict and SQLAlchemy User object
+        if isinstance(user, dict):
+            user_dict = {
+                'id': user.get('id'),
+                'email': user.get('email'),
+                'username': user.get('profile', {}).get('displayName', '').split('@')[0] if user.get('profile', {}).get('displayName') else user.get('email', '').split('@')[0],
+                'first_name': user.get('profile', {}).get('firstName', ''),
+                'last_name': user.get('profile', {}).get('lastName', ''),
+                'firebase_uid': user.get('firebaseUid'),
+                'role': user.get('role', 'user'),
+                'is_active': user.get('isActive', True),
+                'is_verified': user.get('isVerified', False),
+                'avatar_url': user.get('profile', {}).get('photoURL', ''),
+                'phone': user.get('profile', {}).get('phoneNumber', ''),
+                'bio': user.get('profile', {}).get('bio', ''),
+                'company': user.get('profile', {}).get('company', ''),
+                'job_title': user.get('profile', {}).get('jobTitle', ''),
+            }
+        else:
+            user_dict = user.to_dict()
+
         return jsonify({
             'success': True,
-            'user': user.to_dict()
+            'user': user_dict
         })
 
     except Exception as e:
         logger.error(f"Error fetching user profile: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({
             'success': False,
             'error': 'Failed to fetch profile'
@@ -138,17 +163,27 @@ def get_user_profile():
 def update_user_profile():
     """Update current user's profile"""
     try:
+        from flask import g
+        from firebase_admin import firestore
+
+        # Get user from g.current_user (set by @require_auth decorator)
+        user = getattr(g, 'current_user', None)
         user_id = get_current_user_id()
-        user = SimpleUser.query.get(user_id)
+
+        logger.info(f"Update profile request for user_id: {user_id}")
 
         if not user:
+            logger.warning(f"User not found: {user_id}")
             return jsonify({
                 'success': False,
                 'error': 'User not found'
             }), 404
 
         data = request.get_json()
+        logger.info(f"Received profile update data: {data}")
+
         if not data:
+            logger.warning("No data provided in request")
             return jsonify({
                 'success': False,
                 'error': 'No data provided'
@@ -156,6 +191,7 @@ def update_user_profile():
 
         # Validate the data
         validation_errors = validate_profile_data(data)
+        logger.info(f"Validation errors: {validation_errors}")
         if validation_errors:
             return jsonify({
                 'success': False,
@@ -163,55 +199,132 @@ def update_user_profile():
                 'validation_errors': validation_errors
             }), 400
 
-        # Check for username uniqueness if username is being changed
-        if 'username' in data and data['username'] and data['username'] != user.username:
-            existing_user = SimpleUser.query.filter_by(username=data['username']).first()
-            if existing_user:
+        # Handle both Firestore dict and SQLAlchemy User object
+        if isinstance(user, dict):
+            # Firestore user - update in Firestore
+            try:
+                from app.middleware.firebase_auth import firebase_auth_manager
+
+                if not firebase_auth_manager._firestore_db:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Firestore not available'
+                    }), 503
+
+                # Get Firestore reference
+                doc_ref = firebase_auth_manager._firestore_db.collection('users').document(user_id)
+
+                # Build update data with nested profile structure
+                update_data = {
+                    'profile.firstName': data.get('first_name', ''),
+                    'profile.lastName': data.get('last_name', ''),
+                    'profile.displayName': data.get('username', user.get('profile', {}).get('displayName', '')),
+                    'profile.phoneNumber': data.get('phone', ''),
+                    'profile.company': data.get('company', ''),
+                    'profile.jobTitle': data.get('job_title', ''),
+                    'profile.bio': data.get('bio', ''),
+                    'updatedAt': firestore.SERVER_TIMESTAMP
+                }
+
+                # Filter out fields that weren't provided
+                update_data = {k: v for k, v in update_data.items() if k.split('.')[-1] in ['firstName', 'lastName', 'displayName', 'phoneNumber', 'company', 'jobTitle', 'bio', 'updatedAt'] or k == 'updatedAt'}
+
+                # Update Firestore document
+                doc_ref.update(update_data)
+
+                # Get updated user data
+                updated_doc = doc_ref.get()
+                updated_user = updated_doc.to_dict()
+                updated_user['id'] = updated_doc.id
+
+                logger.info(f"✅ Updated Firestore user: {user.get('email')}")
+
+                # Return formatted response
+                user_dict = {
+                    'id': updated_user.get('id'),
+                    'email': updated_user.get('email'),
+                    'username': updated_user.get('profile', {}).get('displayName', '').split('@')[0],
+                    'first_name': updated_user.get('profile', {}).get('firstName', ''),
+                    'last_name': updated_user.get('profile', {}).get('lastName', ''),
+                    'firebase_uid': updated_user.get('firebaseUid'),
+                    'role': updated_user.get('role', 'user'),
+                    'is_active': updated_user.get('isActive', True),
+                    'is_verified': updated_user.get('isVerified', False),
+                    'avatar_url': updated_user.get('profile', {}).get('photoURL', ''),
+                    'phone': updated_user.get('profile', {}).get('phoneNumber', ''),
+                    'bio': updated_user.get('profile', {}).get('bio', ''),
+                    'company': updated_user.get('profile', {}).get('company', ''),
+                    'job_title': updated_user.get('profile', {}).get('jobTitle', ''),
+                }
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Profile updated successfully',
+                    'user': user_dict
+                })
+
+            except Exception as firestore_error:
+                logger.error(f"Firestore update error: {firestore_error}")
+                import traceback
+                logger.error(traceback.format_exc())
                 return jsonify({
                     'success': False,
-                    'error': 'Username already taken',
-                    'validation_errors': {'username': 'This username is already taken'}
+                    'error': 'Failed to update Firestore profile'
+                }), 500
+        else:
+            # SQLAlchemy user - update in database
+            # Check for username uniqueness if username is being changed
+            if 'username' in data and data['username'] and data['username'] != user.username:
+                existing_user = User.query.filter_by(username=data['username']).first()
+                if existing_user:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Username already taken',
+                        'validation_errors': {'username': 'This username is already taken'}
+                    }), 400
+
+            # Update user fields
+            updatable_fields = [
+                'first_name', 'last_name', 'username', 'phone', 'company',
+                'job_title', 'bio', 'timezone', 'language', 'theme',
+                'email_notifications', 'push_notifications'
+            ]
+
+            for field in updatable_fields:
+                if field in data:
+                    # Handle boolean fields
+                    if field in ['email_notifications', 'push_notifications']:
+                        setattr(user, field, bool(data[field]))
+                    else:
+                        # Trim string fields
+                        value = data[field].strip() if isinstance(data[field], str) else data[field]
+                        setattr(user, field, value)
+
+            user.updated_at = datetime.utcnow()
+
+            try:
+                db.session.commit()
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Profile updated successfully',
+                    'user': user.to_dict()
+                })
+
+            except IntegrityError as e:
+                db.session.rollback()
+                logger.error(f"Database integrity error: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Database constraint violation'
                 }), 400
-
-        # Update user fields
-        updatable_fields = [
-            'first_name', 'last_name', 'username', 'phone', 'company',
-            'job_title', 'bio', 'timezone', 'language', 'theme',
-            'email_notifications', 'push_notifications'
-        ]
-
-        for field in updatable_fields:
-            if field in data:
-                # Handle boolean fields
-                if field in ['email_notifications', 'push_notifications']:
-                    setattr(user, field, bool(data[field]))
-                else:
-                    # Trim string fields
-                    value = data[field].strip() if isinstance(data[field], str) else data[field]
-                    setattr(user, field, value)
-
-        user.updated_at = datetime.utcnow()
-
-        try:
-            db.session.commit()
-
-            return jsonify({
-                'success': True,
-                'message': 'Profile updated successfully',
-                'user': user.to_dict()
-            })
-
-        except IntegrityError as e:
-            db.session.rollback()
-            logger.error(f"Database integrity error: {e}")
-            return jsonify({
-                'success': False,
-                'error': 'Database constraint violation'
-            }), 400
 
     except Exception as e:
         logger.error(f"Error updating user profile: {e}")
-        db.session.rollback()
+        import traceback
+        logger.error(traceback.format_exc())
+        if 'db' in dir():
+            db.session.rollback()
         return jsonify({
             'success': False,
             'error': 'Failed to update profile'
@@ -224,7 +337,7 @@ def upload_avatar():
     """Upload user avatar image"""
     try:
         user_id = get_current_user_id()
-        user = SimpleUser.query.get(user_id)
+        user = User.query.get(user_id)
 
         if not user:
             return jsonify({
@@ -335,7 +448,7 @@ def change_password():
     """Change user password"""
     try:
         user_id = get_current_user_id()
-        user = SimpleUser.query.get(user_id)
+        user = User.query.get(user_id)
 
         if not user:
             return jsonify({
@@ -406,7 +519,7 @@ def delete_account():
     """Delete user account (soft delete)"""
     try:
         user_id = get_current_user_id()
-        user = SimpleUser.query.get(user_id)
+        user = User.query.get(user_id)
 
         if not user:
             return jsonify({

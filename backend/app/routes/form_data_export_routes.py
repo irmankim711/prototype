@@ -4,15 +4,21 @@ Handles export of form submissions to Excel, CSV, and Google Sheets
 """
 
 from flask import Blueprint, request, jsonify, send_file, current_app
-from flask_cors import cross_origin
 import os
 import logging
 from typing import Dict, Any
 
 from ..services.form_data_export_service import form_data_export_service
 from ..services.google_forms_service import google_forms_service
-from ..core.security import require_auth, get_current_user
+from ..decorators import (
+    firebase_auth_required as require_auth,
+    get_current_user_id as get_current_user,
+    require_form_access,
+    admin_required
+)
 from ..models import Form
+from ..core.rate_limiter import rate_limit, RateLimitStrategy, RateLimitScope
+from ..utils.export_cleanup import get_cleanup_service
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +26,10 @@ logger = logging.getLogger(__name__)
 form_export_bp = Blueprint('form_export', __name__, url_prefix='/api/forms')
 
 
-@form_export_bp.route('/<int:form_id>/export', methods=['POST'])
-@cross_origin()
+@form_export_bp.route('/<int:form_id>/export', methods=['POST', 'OPTIONS'])
 @require_auth
+@require_form_access
+@rate_limit('form_export', requests=10, window=3600, strategy=RateLimitStrategy.SLIDING_WINDOW, scope=RateLimitScope.USER)
 def export_form_data(form_id: int):
     """
     Export form submissions to Excel, CSV, or Google Sheets
@@ -63,6 +70,10 @@ def export_form_data(form_id: int):
     }
     """
     try:
+        # Handle OPTIONS preflight request
+        if request.method == 'OPTIONS':
+            return jsonify({'status': 'ok'}), 200
+
         # Verify form exists
         form = Form.query.get(form_id)
         if not form:
@@ -99,6 +110,12 @@ def export_form_data(form_id: int):
             options=options
         )
 
+        # Audit log the export
+        user_id = get_current_user()
+        logger.info(f"Export audit: user_id={user_id}, form_id={form_id}, format={export_format}, "
+                   f"success={result.get('success')}, submissions_count={result.get('submissions_count', 0)}, "
+                   f"file_size={result.get('file_size', 0)}")
+
         if result.get('success'):
             return jsonify(result), 200
         else:
@@ -112,9 +129,9 @@ def export_form_data(form_id: int):
         }), 500
 
 
-@form_export_bp.route('/google-forms/<string:google_form_id>/export', methods=['POST'])
-@cross_origin()
+@form_export_bp.route('/google-forms/<string:google_form_id>/export', methods=['POST', 'OPTIONS'])
 @require_auth
+@rate_limit('google_forms_export', requests=5, window=3600, strategy=RateLimitStrategy.SLIDING_WINDOW, scope=RateLimitScope.USER)
 def export_google_form_data(google_form_id: str):
     """
     Export Google Forms responses to Excel or CSV
@@ -143,6 +160,10 @@ def export_google_form_data(google_form_id: str):
     }
     """
     try:
+        # Handle OPTIONS preflight request
+        if request.method == 'OPTIONS':
+            return jsonify({'status': 'ok'}), 200
+
         # Get request data
         data = request.get_json() or {}
 
@@ -157,9 +178,14 @@ def export_google_form_data(google_form_id: str):
 
         # Fetch Google Forms data
         try:
+            # Get current user ID for Google Forms API
+            user_id = get_current_user()
+
             responses_data = google_forms_service.get_form_responses(
-                google_form_id,
-                options={'limit': data.get('max_records', 1000)}
+                user_id=str(user_id),
+                form_id=google_form_id,
+                limit=data.get('max_records', 1000),
+                include_analysis=data.get('include_analytics', True)
             )
 
             if not responses_data.get('success'):
@@ -187,6 +213,13 @@ def export_google_form_data(google_form_id: str):
             }
         )
 
+        # Audit log the Google Forms export
+        user_id = get_current_user()
+        logger.info(f"Google Forms export audit: user_id={user_id}, google_form_id={google_form_id}, "
+                   f"format={export_format}, success={result.get('success')}, "
+                   f"responses_count={result.get('responses_count', 0)}, "
+                   f"file_size={result.get('file_size', 0)}")
+
         if result.get('success'):
             return jsonify(result), 200
         else:
@@ -200,9 +233,9 @@ def export_google_form_data(google_form_id: str):
         }), 500
 
 
-@form_export_bp.route('/<int:form_id>/preview', methods=['POST'])
-@cross_origin()
+@form_export_bp.route('/<int:form_id>/preview', methods=['POST', 'OPTIONS'])
 @require_auth
+@require_form_access
 def preview_form_data(form_id: int):
     """
     Preview form data before export (returns sample of first 10 submissions)
@@ -305,7 +338,6 @@ def preview_form_data(form_id: int):
 
 
 @form_export_bp.route('/google-forms/<string:google_form_id>/preview', methods=['GET'])
-@cross_origin()
 @require_auth
 def preview_google_form_data(google_form_id: str):
     """
@@ -329,13 +361,15 @@ def preview_google_form_data(google_form_id: str):
         limit = request.args.get('limit', 10, type=int)
         include_analysis = request.args.get('include_analysis', 'true').lower() == 'true'
 
+        # Get current user ID for Google Forms API
+        user_id = get_current_user()
+
         # Fetch Google Forms data
         result = google_forms_service.get_form_responses(
-            google_form_id,
-            options={
-                'limit': limit,
-                'include_analysis': include_analysis
-            }
+            user_id=str(user_id),
+            form_id=google_form_id,
+            limit=limit,
+            include_analysis=include_analysis
         )
 
         return jsonify(result), 200 if result.get('success') else 400
@@ -353,7 +387,7 @@ exports_bp = Blueprint('exports', __name__, url_prefix='/api/exports')
 
 
 @exports_bp.route('/download/<filename>', methods=['GET'])
-@cross_origin()
+@rate_limit('export_download', requests=50, window=3600, strategy=RateLimitStrategy.SLIDING_WINDOW, scope=RateLimitScope.IP)
 def download_export_file(filename: str):
     """
     Download an exported file
@@ -405,9 +439,129 @@ def download_export_file(filename: str):
         }), 500
 
 
+# Cleanup management endpoints
+@exports_bp.route('/cleanup/stats', methods=['GET'])
+@require_auth
+@admin_required
+def get_cleanup_stats():
+    """
+    Get export cleanup statistics (admin only)
+
+    GET /api/exports/cleanup/stats
+
+    Response:
+    {
+        "last_cleanup": "2025-01-23T10:30:00",
+        "files_deleted": 45,
+        "bytes_freed": 125000000,
+        "disk_usage_percent": 45.2
+    }
+    """
+    try:
+        cleanup_service = get_cleanup_service(form_data_export_service.export_folder)
+        stats = cleanup_service.get_cleanup_stats()
+        return jsonify({
+            'success': True,
+            'stats': stats
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting cleanup stats: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@exports_bp.route('/cleanup/trigger', methods=['POST'])
+@require_auth
+@admin_required
+def trigger_cleanup():
+    """
+    Manually trigger export cleanup (admin only)
+
+    POST /api/exports/cleanup/trigger
+    {
+        "force": false
+    }
+
+    Response:
+    {
+        "success": true,
+        "files_deleted": 12,
+        "bytes_freed_mb": 45.3,
+        "elapsed_seconds": 0.15
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        force = data.get('force', False)
+
+        cleanup_service = get_cleanup_service(form_data_export_service.export_folder)
+        result = cleanup_service.cleanup_old_files(force=force)
+
+        return jsonify(result), 200 if result.get('success') else 500
+    except Exception as e:
+        logger.error(f"Error triggering cleanup: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@exports_bp.route('/cleanup/list', methods=['GET'])
+@require_auth
+@admin_required
+def list_old_files():
+    """
+    List export files that would be cleaned up (admin only)
+
+    GET /api/exports/cleanup/list
+
+    Response:
+    {
+        "success": true,
+        "old_files": [
+            {
+                "filename": "form_1_export_20250101_120000.xlsx",
+                "age_hours": 36.5,
+                "size_mb": 2.3
+            }
+        ],
+        "total_files": 5,
+        "total_size_mb": 12.8
+    }
+    """
+    try:
+        cleanup_service = get_cleanup_service(form_data_export_service.export_folder)
+        old_files = cleanup_service.list_old_files()
+
+        total_size_bytes = sum(f['size_bytes'] for f in old_files)
+
+        return jsonify({
+            'success': True,
+            'old_files': old_files,
+            'total_files': len(old_files),
+            'total_size_mb': round(total_size_bytes / (1024 * 1024), 2)
+        }), 200
+    except Exception as e:
+        logger.error(f"Error listing old files: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 # Register blueprints helper
 def register_export_blueprints(app):
     """Register export blueprints with the Flask app"""
     app.register_blueprint(form_export_bp)
     app.register_blueprint(exports_bp)
     logger.info("Form data export routes registered successfully")
+
+    # Initialize cleanup service and schedule periodic cleanups
+    try:
+        from ..utils.export_cleanup import schedule_periodic_cleanup
+        schedule_periodic_cleanup(interval_hours=6)  # Run cleanup every 6 hours
+        logger.info("Scheduled periodic export cleanup (every 6 hours)")
+    except Exception as e:
+        logger.warning(f"Could not schedule periodic cleanup: {str(e)}")

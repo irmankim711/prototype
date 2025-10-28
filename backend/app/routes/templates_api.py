@@ -56,7 +56,7 @@ def get_templates():
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except (AttributeError, RuntimeError):
             pass  # No authentication required for reading templates
 
         # Parse query parameters

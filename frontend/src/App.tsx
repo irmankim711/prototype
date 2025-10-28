@@ -27,9 +27,6 @@ import LandingPageEnhanced from "./pages/LandingPage/LandingPageEnhanced";
 import Dashboard from "./pages/Dashboard/Dashboard";
 import PublicForms from "./pages/PublicForms/PublicForms";
 import PublicFormBuilder from "./pages/PublicFormBuilder/PublicFormBuilder";
-
-import Submission from "./pages/Submission/Submission";
-
 import ReportHistory from "./pages/ReportHistory/ReportHistory";
 import ReportTemplates from "./pages/ReportTemplates/ReportTemplates";
 import RealtimeDashboard from "./pages/RealtimeDashboard";
@@ -77,7 +74,6 @@ function AppLayout() {
             path="/dashboard-enhanced"
             element={<FormBuilderDashboardEnhanced />}
           />
-          <Route path="/submission" element={<Submission />} />
 
           <Route
             path="/next-gen-report-builder"

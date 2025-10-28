@@ -445,12 +445,21 @@ export const formBuilderAPI = {
     max_records?: number;
   }): Promise<any> => {
     try {
-      const response = await axiosInstance.post(`/api/forms/google-forms/${googleFormId}/export`, {
-        format: options.format || 'excel',
-        date_range: options.date_range,
-        include_analytics: options.include_analytics !== false,
-        max_records: options.max_records || 1000
-      });
+      const response = await axiosInstance.post(
+        `/api/forms/google-forms/${googleFormId}/export`,
+        {
+          format: options.format || 'excel',
+          date_range: options.date_range,
+          include_analytics: options.include_analytics !== false,
+          max_records: options.max_records || 1000
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        }
+      );
       return response.data;
     } catch (error: any) {
       console.error('Error exporting Google Forms data:', error);
@@ -464,17 +473,85 @@ export const formBuilderAPI = {
   /**
    * Download exported file (Excel, CSV, etc.)
    * @param downloadUrl - The download URL from export response
+   * @param filename - Optional filename for the download
    * @returns Blob data for file download
    */
-  downloadExcelFile: async (downloadUrl: string): Promise<Blob> => {
+  downloadExcelFile: async (downloadUrl: string, filename?: string): Promise<Blob> => {
     try {
       const response = await axiosInstance.get(downloadUrl, {
         responseType: 'blob'
       });
-      return response.data;
+
+      // Automatically trigger browser download
+      const blob = response.data;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      // Extract filename from downloadUrl if not provided
+      if (!filename) {
+        const urlParts = downloadUrl.split('/');
+        filename = urlParts[urlParts.length - 1] || 'export.xlsx';
+      }
+
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return blob;
     } catch (error) {
       console.error('Error downloading file:', error);
       throw error;
+    }
+  },
+
+  /**
+   * Complete export and download flow with progress tracking
+   * @param formId - The form ID to export
+   * @param options - Export options
+   * @param onProgress - Optional progress callback
+   * @returns Export result
+   */
+  exportAndDownload: async (
+    formId: number,
+    options: Parameters<typeof formBuilderAPI.exportFormDataToExcel>[1],
+    onProgress?: (stage: string, progress: number) => void
+  ): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      // Stage 1: Initiate export
+      onProgress?.('Preparing export...', 10);
+
+      const exportResult = await formBuilderAPI.exportFormDataToExcel(formId, options);
+
+      if (!exportResult.success) {
+        return {
+          success: false,
+          error: exportResult.error || 'Export failed'
+        };
+      }
+
+      // Stage 2: Download file
+      onProgress?.('Downloading file...', 50);
+
+      await formBuilderAPI.downloadExcelFile(exportResult.download_url);
+
+      // Stage 3: Complete
+      onProgress?.('Complete', 100);
+
+      return {
+        success: true,
+        message: exportResult.message || 'Export completed successfully'
+      };
+    } catch (error: any) {
+      console.error('Error in export and download flow:', error);
+      return {
+        success: false,
+        error: error.message || 'An error occurred during export'
+      };
     }
   },
 
@@ -581,7 +658,11 @@ export const formBuilderAPI = {
 
   initiateGoogleAuth: async (): Promise<any> => {
     try {
-      const response = await axiosInstance.post('/api/google-forms/oauth/authorize');
+      const response = await axiosInstance.post('/api/google-forms/oauth/authorize', {}, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       return response.data;
     } catch (error) {
       console.error('Error initiating Google auth:', error);
@@ -981,7 +1062,7 @@ export const formBuilderUtils = {
 
   // User Profile Management
   getUserProfile: async () => {
-    const response = await api.get("/users/profile");
+    const response = await api.get("/api/users/profile");
     return response.data;
   },
 };

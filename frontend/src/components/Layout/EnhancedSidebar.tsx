@@ -330,7 +330,6 @@ const LogoutButton = styled(Button)(({ theme }) => ({
 // Updated navigation items (removed unused items)
 const navItems = [
   { label: "Dashboard", icon: <DashboardIcon />, path: "/dashboard" },
-  { label: "Submissions", icon: <ListAltIcon />, path: "/submission" },
   {
     label: "Reports",
     icon: <ReportsIcon />,
