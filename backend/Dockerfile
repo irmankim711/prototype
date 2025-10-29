@@ -49,14 +49,8 @@ EXPOSE ${PORT:-8080}
 
 # Health check - use PORT from environment
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8080}/api/health || exit 1
+    CMD sh -c "curl -f http://localhost:\${PORT:-8080}/api/health || exit 1"
 
 # Run with gunicorn for production
-CMD gunicorn wsgi:application \
-    --bind 0.0.0.0:${PORT:-8080} \
-    --workers 4 \
-    --threads 2 \
-    --timeout 120 \
-    --access-logfile - \
-    --error-logfile - \
-    --log-level info
+# Use shell form to properly expand PORT environment variable
+CMD sh -c "gunicorn wsgi:application --bind 0.0.0.0:\${PORT:-8080} --workers 4 --threads 2 --timeout 120 --access-logfile - --error-logfile - --log-level info"
