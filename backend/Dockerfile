@@ -4,8 +4,8 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV FLASK_APP=app
-ENV FLASK_ENV=development
+ENV FLASK_APP=wsgi:application
+ENV FLASK_ENV=production
 
 # Set work directory
 WORKDIR /app
@@ -21,7 +21,8 @@ RUN apt-get update \
 
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
 # Install additional dependencies for report generation
 RUN pip install --no-cache-dir \
@@ -39,18 +40,23 @@ RUN pip install --no-cache-dir \
 # Copy project
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p /app/static/charts /app/static/reports /app/uploads
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/static/charts /app/static/reports /app/static/exports /app/static/previews /app/uploads /app/templates \
+    && chmod -R 755 /app/static /app/uploads /app/templates
 
-# Set permissions
-RUN chmod +x /app/run.py
+# Expose port (Railway will set PORT env var)
+EXPOSE ${PORT:-8080}
 
-# Expose port
-EXPOSE 5000
+# Health check - use PORT from environment
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8080}/api/health || exit 1
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5000/health || exit 1
-
-# Run the application
-CMD ["python", "run.py"] 
+# Run with gunicorn for production
+CMD gunicorn wsgi:application \
+    --bind 0.0.0.0:${PORT:-8080} \
+    --workers 4 \
+    --threads 2 \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile - \
+    --log-level info
