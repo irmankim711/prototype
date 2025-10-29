@@ -151,6 +151,21 @@ def register_blueprints(app):
         from flask import Blueprint, jsonify
         simple_health_bp = Blueprint('simple_health', __name__)
 
+        @simple_health_bp.route('/', methods=['GET'])
+        def root():
+            return jsonify({
+                'status': 'ok',
+                'message': 'Automated Report Platform API',
+                'version': '1.0.0',
+                'endpoints': {
+                    'health': '/api/health',
+                    'docs': '/api/docs',
+                    'auth': '/api/auth',
+                    'forms': '/api/forms',
+                    'reports': '/api/reports'
+                }
+            })
+
         @simple_health_bp.route('/api/health', methods=['GET'])
         def simple_health():
             return jsonify({'status': 'ok', 'message': 'Server is running'})
