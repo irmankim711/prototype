@@ -15,7 +15,8 @@ sys.path.insert(0, str(backend_dir))
 from app import create_app
 
 # Create the application instance
-application = create_app(os.getenv('FLASK_ENV', 'production'))
+# create_app expects a config dict/object or None, not a string
+application = create_app()
 
 if __name__ == '__main__':
     # For development only - use gunicorn in production
