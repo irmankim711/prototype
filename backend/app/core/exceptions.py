@@ -320,11 +320,11 @@ class ReportGenerationError(BaseAPIException):
 class AIAnalysisError(BaseAPIException):
     """
     Exception raised when AI analysis operations fail.
-    
+
     This exception is used for errors during AI processing,
     model inference, or analysis operations.
     """
-    
+
     def __init__(
         self,
         message: str = "AI analysis failed",
@@ -342,6 +342,31 @@ class AIAnalysisError(BaseAPIException):
         self.model_name = model_name
         self.analysis_type = analysis_type
         self.input_data = input_data
+
+
+class ExportError(BaseAPIException):
+    """
+    Exception raised when data export operations fail.
+
+    This exception is used for errors during data export to various
+    formats like Excel, CSV, PDF, etc.
+    """
+
+    def __init__(
+        self,
+        message: str = "Export operation failed",
+        export_format: Optional[str] = None,
+        export_type: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(
+            message=message,
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            error_code="EXPORT_ERROR",
+            details=details or {}
+        )
+        self.export_format = export_format
+        self.export_type = export_type
 
 
 # Convenience functions for common error scenarios

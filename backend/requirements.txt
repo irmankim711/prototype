@@ -21,7 +21,7 @@ uvicorn>=0.22.0
 cryptography>=41.0.0
 
 # Validation and Serialization
-pydantic>=2.4.0
+pydantic[email]>=2.4.0
 marshmallow>=3.19.0
 bleach>=6.0.0
 
@@ -33,6 +33,7 @@ twilio>=8.0.0
 google-cloud-storage>=2.10.0
 google-api-python-client>=2.0.0
 google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
 firebase-admin>=6.5.0
 
 # Document Processing

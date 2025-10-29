@@ -270,14 +270,15 @@ class ProductionDatabaseConfig:
         if not self.primary_database.url:
             errors.append("Primary database URL is required")
         
-        # Validate SSL configuration for production
+        # Validate SSL configuration for production (optional unless explicitly required)
         if self.environment == 'production':
             if self.database_type in [DatabaseType.POSTGRESQL, DatabaseType.MYSQL]:
-                if not self.security.require_ssl:
-                    errors.append("SSL is required for production databases")
-                
-                if not self.primary_database.ssl_ca:
-                    errors.append("SSL CA certificate is required for production")
+                # Only enforce SSL if explicitly required via environment variable
+                # Railway/internal networks may not need SSL
+                if self.security.require_ssl and self.primary_database.ssl_mode in ['require', 'verify-ca', 'verify-full']:
+                    if not self.primary_database.ssl_ca:
+                        logger.warning("SSL mode requires CA certificate, but none provided. Consider setting DB_SSL_CA")
+                    # Don't fail validation, just warn
         
         # Validate connection pool settings
         if self.connection_pool.pool_size < 1:

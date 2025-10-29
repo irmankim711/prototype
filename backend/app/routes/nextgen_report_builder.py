@@ -295,8 +295,7 @@ def get_data_source_fields(data_source_id):
                     else:
                         fields = []
                         logger.error(
-    f"Failed to parse Excel file {excel_file}: {
-        excel_data.get('error')}")
+                            f"Failed to parse Excel file {excel_file}: {excel_data.get('error')}")
                 except Exception as e:
                     logger.error(f"Error parsing Excel file {excel_file}: {e}")
                     fields = []

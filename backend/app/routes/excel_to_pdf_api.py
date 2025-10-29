@@ -212,67 +212,6 @@ def preview_generated_report(report_id):
         return jsonify({'error': 'Failed to generate preview'}), 500
 
 
-@excel_to_pdf_bp.route('/preview-content/<int:report_id>', methods=['GET'])
-def get_preview_content(report_id):
-    """
-    Get preview content (HTML) for direct display
-    """
-    try:
-        from ..models import Report
-
-        # Get the report (temporarily without user filtering for testing)
-        report = Report.query.filter_by(id=report_id).first()
-        if not report:
-            return jsonify({'error': 'Report not found'}), 404
-
-        # Ensure file exists
-        if not report.file_path or not os.path.exists(report.file_path):
-            return Response('<html><body><h1>File not found</h1></body></html>', mimetype='text/html'), 404
-
-        file_extension = os.path.splitext(report.file_path)[1].lower()
-
-        # For TeX files - convert to HTML
-        if report.file_format == 'tex' or file_extension == '.tex':
-            try:
-                from ..services.latex_conversion_service import latex_conversion_service
-                html_content = latex_conversion_service.generate_html_preview(report.file_path)
-                return Response(html_content, mimetype='text/html')
-            except Exception as e:
-                logger.error(f"Failed to generate TeX preview content: {str(e)}")
-                return jsonify({'error': f'Failed to generate TeX preview: {str(e)}'}), 500
-
-        elif report.file_format == 'docx' or file_extension == '.docx':
-            if docx_preview_service:
-                try:
-                    _, html_content = docx_preview_service.convert_docx_to_html(report.file_path)
-                    return Response(html_content, mimetype='text/html')
-                except Exception as e:
-                    logger.warning(f"Failed to generate DOCX preview with docx_preview_service: {str(e)}")
-                    if convertapi_service:
-                        try:
-                            success, message, html_path = convertapi_service.convert_docx_to_html_preview(report.file_path)
-                            if success and html_path and os.path.exists(html_path):
-                                with open(html_path, 'r', encoding='utf-8') as f:
-                                    html_content = f.read()
-                                return Response(html_content, mimetype='text/html')
-                            else:
-                                return Response(f'<html><body><h1>Preview Failed</h1><p>{message}</p></body></html>', mimetype='text/html'), 500
-                        except Exception as fallback_error:
-                            logger.error(f"ConvertAPI preview fallback failed: {str(fallback_error)}")
-                            return Response(f'<html><body><h1>Preview Error</h1><p>{str(fallback_error)}</p></body></html>', mimetype='text/html'), 500
-                    else:
-                        return Response('<html><body><h1>Preview Not Available</h1><p>Preview service not configured</p></body></html>', mimetype='text/html'), 503
-            else:
-                return Response('<html><body><h1>Preview Not Available</h1><p>DOCX preview service not configured</p></body></html>', mimetype='text/html'), 503
-
-        else:
-            return Response('<html><body><h1>Unsupported Format</h1><p>Preview not available for this format</p></body></html>', mimetype='text/html'), 400
-
-    except Exception as e:
-        logger.error(f"Error getting preview content for report {report_id}: {str(e)}")
-        return Response(f'<html><body><h1>Error</h1><p>{str(e)}</p></body></html>', mimetype='text/html'), 500
-
-
 @excel_to_pdf_bp.route('/status', methods=['GET'])
 def get_conversion_status():
     """
