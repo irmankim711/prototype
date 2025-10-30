@@ -56,11 +56,84 @@ def register_blueprints(app):
 
         @api_auth_bp.route('/logout', methods=['POST', 'OPTIONS'])
         def api_logout():
+            """Logout endpoint - Always succeeds to ensure users can logout"""
+            from datetime import datetime
+            from app import db
+            from app.middleware.firebase_auth import firebase_auth_manager
+            import logging
+            import traceback
+
+            logger = logging.getLogger(__name__)
+
             # Handle OPTIONS request for CORS preflight
             if request.method == 'OPTIONS':
                 return jsonify({'status': 'ok'}), 200
-            from app.routes.firebase_auth_routes import logout
-            return logout()
+
+            try:
+                logger.info("🔄 Logout endpoint called")
+
+                # Try to get user info if token is valid (optional)
+                auth_header = request.headers.get('Authorization')
+                if auth_header and auth_header.startswith('Bearer '):
+                    try:
+                        token = auth_header.replace('Bearer ', '')
+                        if firebase_auth_manager._initialized:
+                            decoded_token = firebase_auth_manager.verify_token(token)
+                            if decoded_token:
+                                email = decoded_token.get('email')
+                                firebase_uid = decoded_token.get('uid')
+
+                                # Try to update user logout time (optional, non-critical)
+                                try:
+                                    from app.models.production.user_models import User
+                                    user = User.query.filter_by(firebase_uid=firebase_uid).first()
+                                    if user:
+                                        user.updated_at = datetime.utcnow()
+                                        db.session.commit()
+                                        logger.info(f"✅ User {user.id} ({email}) logged out")
+                                except Exception as db_error:
+                                    # Don't fail logout if DB update fails
+                                    logger.warning(f"⚠️ Could not update user logout time: {str(db_error)}")
+                                    try:
+                                        db.session.rollback()
+                                    except:
+                                        pass
+                    except Exception as token_error:
+                        # Token might be expired or invalid - that's OK for logout
+                        logger.info(f"ℹ️ Logout with invalid/expired token: {str(token_error)}")
+                        pass
+
+                # Always return success for logout (even with expired/invalid tokens)
+                from flask import make_response
+                response = make_response(jsonify({
+                    'success': True,
+                    'message': 'Logout successful'
+                }))
+
+                # Clear any cookies that might exist
+                response.set_cookie('session', '', expires=0, path='/')
+                response.set_cookie('remember_token', '', expires=0, path='/')
+
+                logger.info("✅ Logout completed successfully")
+                return response, 200
+
+            except Exception as e:
+                # Even if there's an error, return success for logout
+                # We don't want to prevent users from logging out
+                logger.error(f"⚠️ Logout error (returning success anyway): {str(e)}")
+                logger.error(f"📋 Stack trace: {traceback.format_exc()}")
+
+                from flask import make_response
+                response = make_response(jsonify({
+                    'success': True,
+                    'message': 'Logout successful'
+                }))
+
+                # Still try to clear cookies even on error
+                response.set_cookie('session', '', expires=0, path='/')
+                response.set_cookie('remember_token', '', expires=0, path='/')
+
+                return response, 200
 
         app.register_blueprint(api_auth_bp)
         app.logger.info("✅ API auth routes registered under /api/auth")

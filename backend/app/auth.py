@@ -310,7 +310,7 @@ def verify_token():
 
 @auth_bp.route('/logout', methods=['POST', 'OPTIONS'])
 def logout():
-    """Firebase logout endpoint"""
+    """Firebase logout endpoint - Always succeeds to ensure users can logout"""
 
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
@@ -321,6 +321,8 @@ def logout():
         return response
 
     try:
+        current_app.logger.info("🔄 Logout endpoint called")
+
         # With Firebase, logout is handled on the client side
         # We can optionally log the logout event if we have user info
         auth_header = request.headers.get('Authorization')
@@ -333,21 +335,56 @@ def logout():
                     decoded_token = firebase_auth_manager.verify_token(firebase_token)
                     if decoded_token:
                         email = decoded_token.get('email')
-                        current_app.logger.info(f"User {email} logged out successfully")
-                except Exception:
-                    pass  # Token might be expired, that's ok for logout
+                        firebase_uid = decoded_token.get('uid')
+                        current_app.logger.info(f"✅ User {email} logged out successfully")
 
-        return jsonify({
+                        # Try to update user logout time (optional, non-critical)
+                        try:
+                            user = User.query.filter_by(firebase_uid=firebase_uid).first()
+                            if user:
+                                user.updated_at = datetime.utcnow()
+                                db.session.commit()
+                        except Exception as db_error:
+                            current_app.logger.warning(f"⚠️ Could not update user logout time: {str(db_error)}")
+                            try:
+                                db.session.rollback()
+                            except:
+                                pass
+                except Exception as token_error:
+                    # Token might be expired or invalid - that's OK for logout
+                    current_app.logger.info(f"ℹ️ Logout with invalid/expired token: {str(token_error)}")
+                    pass
+
+        # Create response with cookie clearing
+        response = make_response(jsonify({
             'success': True,
             'message': 'Logout successful'
-        }), 200
+        }))
+
+        # Clear any cookies that might exist
+        response.set_cookie('session', '', expires=0, path='/')
+        response.set_cookie('remember_token', '', expires=0, path='/')
+
+        current_app.logger.info("✅ Logout completed successfully")
+        return response, 200
 
     except Exception as e:
-        current_app.logger.error(f"Logout error: {str(e)}")
-        return jsonify({
-            'error': 'Logout failed',
-            'code': 'LOGOUT_ERROR'
-        }), 500
+        # Even if there's an error, return success for logout
+        # We don't want to prevent users from logging out
+        current_app.logger.error(f"⚠️ Logout error (returning success anyway): {str(e)}")
+        import traceback
+        current_app.logger.error(f"📋 Stack trace: {traceback.format_exc()}")
+
+        response = make_response(jsonify({
+            'success': True,
+            'message': 'Logout successful'
+        }))
+
+        # Still try to clear cookies even on error
+        response.set_cookie('session', '', expires=0, path='/')
+        response.set_cookie('remember_token', '', expires=0, path='/')
+
+        return response, 200
 
 @auth_bp.route('/profile', methods=['GET', 'OPTIONS'])
 def get_profile():

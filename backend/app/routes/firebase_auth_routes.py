@@ -310,23 +310,71 @@ def verify_token():
         logger.error(f"Token verification error: {str(e)}")
         return jsonify({'valid': False, 'error': 'Verification failed'}), 500
 
-@firebase_auth_bp.route('/logout', methods=['POST'])
-@require_firebase_auth
+@firebase_auth_bp.route('/logout', methods=['POST', 'OPTIONS'])
 def logout():
-    """Logout user (Firebase authenticated)"""
+    """Logout user (Firebase authenticated) - Works even with expired tokens"""
+    # Handle OPTIONS request for CORS preflight
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
     try:
-        user = get_current_firebase_user()
-        if user:
-            # Update last logout time (if you want to track this)
-            user.updated_at = datetime.utcnow()
-            db.session.commit()
-            logger.info(f"User {user.id} logged out")
-        
-        return jsonify({'message': 'Logout successful'}), 200
-        
+        logger.info("🔄 Logout endpoint called")
+
+        # Try to get user info if token is valid (optional)
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            try:
+                token = auth_header.replace('Bearer ', '')
+                if firebase_auth_manager._initialized:
+                    decoded_token = firebase_auth_manager.verify_token(token)
+                    if decoded_token:
+                        email = decoded_token.get('email')
+                        firebase_uid = decoded_token.get('uid')
+
+                        # Try to update user logout time (optional, non-critical)
+                        try:
+                            from ..models.production.user_models import User
+                            user = User.query.filter_by(firebase_uid=firebase_uid).first()
+                            if user:
+                                user.updated_at = datetime.utcnow()
+                                db.session.commit()
+                                logger.info(f"✅ User {user.id} ({email}) logged out")
+                        except Exception as db_error:
+                            # Don't fail logout if DB update fails
+                            logger.warning(f"⚠️ Could not update user logout time: {str(db_error)}")
+                            try:
+                                db.session.rollback()
+                            except:
+                                pass
+            except Exception as token_error:
+                # Token might be expired or invalid - that's OK for logout
+                logger.info(f"ℹ️ Logout with invalid/expired token: {str(token_error)}")
+                pass
+
+        # Always return success for logout (even with expired/invalid tokens)
+        response = jsonify({
+            'success': True,
+            'message': 'Logout successful'
+        })
+
+        # Clear any cookies that might exist
+        response.set_cookie('session', '', expires=0, path='/')
+        response.set_cookie('remember_token', '', expires=0, path='/')
+
+        logger.info("✅ Logout completed successfully")
+        return response, 200
+
     except Exception as e:
-        logger.error(f"Logout error: {str(e)}")
-        return jsonify({'error': 'Logout failed'}), 500
+        # Even if there's an error, return success for logout
+        # We don't want to prevent users from logging out
+        logger.error(f"⚠️ Logout error (returning success anyway): {str(e)}")
+        import traceback
+        logger.error(f"📋 Stack trace: {traceback.format_exc()}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Logout successful'
+        }), 200
 
 # Health check for Firebase connection
 @firebase_auth_bp.route('/firebase-health', methods=['GET'])
