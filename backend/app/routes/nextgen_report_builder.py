@@ -5,7 +5,7 @@ template management, Excel automation, and report generation
 """
 
 from flask import Blueprint, request, jsonify, send_file, current_app
-from ..decorators import get_current_user_id
+from ..decorators import get_current_user_id, firebase_auth_required
 
 from flask_cors import cross_origin
 from datetime import datetime, timedelta
@@ -745,6 +745,7 @@ def _extract_template_placeholders(content: str) -> List[str]:
 # ================ EXCEL AUTOMATION ================
 
 @nextgen_bp.route('/excel/upload', methods=['POST'])
+@firebase_auth_required
 def upload_excel_file():
     """Upload and process Excel file for report automation"""
     try:
@@ -981,6 +982,7 @@ def _convert_excel_columns_to_fields(columns: List[Dict]) -> List[Dict]:
     return fields
 
 @nextgen_bp.route('/excel/generate-report', methods=['POST'])
+@firebase_auth_required
 def generate_report_from_excel():
     """
     Generate automated report from Excel data with proper data extraction
