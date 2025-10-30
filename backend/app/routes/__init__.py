@@ -279,4 +279,12 @@ def register_blueprints(app):
     except Exception as e:
         app.logger.warning(f"Could not import firebase_reports_api: {e}")
 
+    # AI-Enhanced Excel Generation routes
+    try:
+        from app.routes.ai_excel_api import ai_excel_bp
+        app.register_blueprint(ai_excel_bp)  # Already has prefix /api/ai-excel
+        app.logger.info("✅ AI-Enhanced Excel routes registered")
+    except Exception as e:
+        app.logger.warning(f"Could not import ai_excel_api: {e}")
+
     app.logger.info("🎯 Blueprint registration completed - added missing API routes")
