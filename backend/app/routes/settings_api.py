@@ -1,23 +1,34 @@
 """
 Settings API routes for user preferences and profile settings
+✅ SECURITY PATCHED: Updated to use new Firebase auth with UserAdapter
 """
 from flask import Blueprint, request, jsonify
 from app import db
 from app.models.simple_user import SimpleUser
-from app.middleware.firebase_auth import require_firebase_auth
+from app.middleware.firebase_auth import require_firebase_auth, get_current_firebase_user
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 settings_api = Blueprint('settings_api', __name__, url_prefix='/api/settings')
 
 @settings_api.route('', methods=['GET'])
 @require_firebase_auth
-def get_settings(current_user):
-    """Get user settings"""
+def get_settings():
+    """Get user settings - ✅ PATCHED"""
     try:
-        user = SimpleUser.query.filter_by(id=current_user['uid']).first()
+        # ✅ SECURITY FIX: Use new UserAdapter pattern
+        user_adapter = get_current_firebase_user()
+        if not user_adapter:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Look up SimpleUser by firebase_uid (not by ID)
+        user = SimpleUser.query.filter_by(firebase_uid=user_adapter.firebase_uid).first()
 
         if not user:
-            return jsonify({'error': 'User not found'}), 404
+            logger.warning(f"SimpleUser not found for firebase_uid: {user_adapter.firebase_uid}")
+            return jsonify({'error': 'User settings not found'}), 404
 
         settings_data = {
             'general': {
@@ -49,18 +60,26 @@ def get_settings(current_user):
         return jsonify(settings_data), 200
 
     except Exception as e:
+        logger.error(f"Get settings error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @settings_api.route('', methods=['POST'])
 @require_firebase_auth
-def update_settings(current_user):
-    """Update user settings"""
+def update_settings():
+    """Update user settings - ✅ PATCHED"""
     try:
+        # ✅ SECURITY FIX: Use new UserAdapter pattern
+        user_adapter = get_current_firebase_user()
+        if not user_adapter:
+            return jsonify({'error': 'User not found'}), 404
+
         data = request.get_json()
 
-        user = SimpleUser.query.filter_by(id=current_user['uid']).first()
+        # Look up SimpleUser by firebase_uid
+        user = SimpleUser.query.filter_by(firebase_uid=user_adapter.firebase_uid).first()
 
         if not user:
+            logger.warning(f"SimpleUser not found for firebase_uid: {user_adapter.firebase_uid}")
             return jsonify({'error': 'User not found'}), 404
 
         # Update general settings
@@ -107,6 +126,8 @@ def update_settings(current_user):
         user.updated_at = datetime.utcnow()
         db.session.commit()
 
+        logger.info(f"Settings updated for user {user_adapter.id} ({user_adapter.email})")
+
         return jsonify({
             'message': 'Settings updated successfully',
             'settings': {
@@ -125,34 +146,50 @@ def update_settings(current_user):
         }), 200
 
     except Exception as e:
+        logger.error(f"Update settings error: {str(e)}")
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 @settings_api.route('/profile', methods=['GET'])
 @require_firebase_auth
-def get_profile(current_user):
-    """Get user profile"""
+def get_profile():
+    """Get user profile - ✅ PATCHED"""
     try:
-        user = SimpleUser.query.filter_by(id=current_user['uid']).first()
+        # ✅ SECURITY FIX: Use new UserAdapter pattern
+        user_adapter = get_current_firebase_user()
+        if not user_adapter:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Look up SimpleUser by firebase_uid
+        user = SimpleUser.query.filter_by(firebase_uid=user_adapter.firebase_uid).first()
 
         if not user:
+            logger.warning(f"SimpleUser not found for firebase_uid: {user_adapter.firebase_uid}")
             return jsonify({'error': 'User not found'}), 404
 
         return jsonify(user.to_dict()), 200
 
     except Exception as e:
+        logger.error(f"Get profile error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @settings_api.route('/profile', methods=['PUT'])
 @require_firebase_auth
-def update_profile(current_user):
-    """Update user profile"""
+def update_profile():
+    """Update user profile - ✅ PATCHED"""
     try:
+        # ✅ SECURITY FIX: Use new UserAdapter pattern
+        user_adapter = get_current_firebase_user()
+        if not user_adapter:
+            return jsonify({'error': 'User not found'}), 404
+
         data = request.get_json()
 
-        user = SimpleUser.query.filter_by(id=current_user['uid']).first()
+        # Look up SimpleUser by firebase_uid
+        user = SimpleUser.query.filter_by(firebase_uid=user_adapter.firebase_uid).first()
 
         if not user:
+            logger.warning(f"SimpleUser not found for firebase_uid: {user_adapter.firebase_uid}")
             return jsonify({'error': 'User not found'}), 404
 
         # Update allowed profile fields
@@ -169,25 +206,35 @@ def update_profile(current_user):
         user.updated_at = datetime.utcnow()
         db.session.commit()
 
+        logger.info(f"Profile updated for user {user_adapter.id} ({user_adapter.email})")
+
         return jsonify({
             'message': 'Profile updated successfully',
             'user': user.to_dict()
         }), 200
 
     except Exception as e:
+        logger.error(f"Update profile error: {str(e)}")
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 @settings_api.route('/notifications', methods=['PUT'])
 @require_firebase_auth
-def update_notifications(current_user):
-    """Update notification preferences"""
+def update_notifications():
+    """Update notification preferences - ✅ PATCHED"""
     try:
+        # ✅ SECURITY FIX: Use new UserAdapter pattern
+        user_adapter = get_current_firebase_user()
+        if not user_adapter:
+            return jsonify({'error': 'User not found'}), 404
+
         data = request.get_json()
 
-        user = SimpleUser.query.filter_by(id=current_user['uid']).first()
+        # Look up SimpleUser by firebase_uid
+        user = SimpleUser.query.filter_by(firebase_uid=user_adapter.firebase_uid).first()
 
         if not user:
+            logger.warning(f"SimpleUser not found for firebase_uid: {user_adapter.firebase_uid}")
             return jsonify({'error': 'User not found'}), 404
 
         if 'email_notifications' in data:
@@ -198,6 +245,8 @@ def update_notifications(current_user):
         user.updated_at = datetime.utcnow()
         db.session.commit()
 
+        logger.info(f"Notification preferences updated for user {user_adapter.id} ({user_adapter.email})")
+
         return jsonify({
             'message': 'Notification preferences updated successfully',
             'email_notifications': user.email_notifications,
@@ -205,5 +254,6 @@ def update_notifications(current_user):
         }), 200
 
     except Exception as e:
+        logger.error(f"Update notifications error: {str(e)}")
         db.session.rollback()
         return jsonify({'error': str(e)}), 500

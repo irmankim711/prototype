@@ -114,28 +114,14 @@ def firebase_sync():
                     'suggestion': 'Please try again or contact support if the issue persists'
                 }), 500
 
-            # Log successful user sync
-            # Handle both User object and dict from Firestore
-            user_email = user.get('email') if isinstance(user, dict) else user.email
-            user_id = user.get('id') if isinstance(user, dict) else user.id
-            logger.info(f"✅ [{request_id}] User synchronized successfully: {user_email} (ID: {user_id})")
-            
-            # Prepare response data
-            # Handle both User object and dict from Firestore
-            if isinstance(user, dict):
-                user_dict = {
-                    'id': user.get('id'),
-                    'email': user.get('email'),
-                    'username': user.get('profile', {}).get('displayName', '').split('@')[0] if user.get('profile', {}).get('displayName') else user.get('email', '').split('@')[0],
-                    'first_name': user.get('profile', {}).get('firstName', ''),
-                    'last_name': user.get('profile', {}).get('lastName', ''),
-                    'firebase_uid': user.get('firebaseUid'),
-                    'role': user.get('role', 'user'),
-                    'is_active': user.get('isActive', True),
-                    'is_verified': user.get('isVerified', False)
-                }
-            else:
-                user_dict = user.to_dict()
+            # ✅ SECURITY FIX: Normalize user with UserAdapter for consistent interface
+            from ..middleware.firebase_auth import UserAdapter
+            normalized_user = UserAdapter(user)
+
+            logger.info(f"✅ [{request_id}] User synchronized successfully: {normalized_user.email} (ID: {normalized_user.id})")
+
+            # Prepare response data using normalized user
+            user_dict = normalized_user.to_dict()
 
             response_data = {
                 'success': True,
@@ -210,40 +196,55 @@ def get_profile():
 def update_profile():
     """Update current user profile (Firebase authenticated)"""
     try:
-        user = get_current_firebase_user()
-        if not user:
+        user_adapter = get_current_firebase_user()
+        if not user_adapter:
             return jsonify({'error': 'User not found'}), 404
-        
+
         data = request.get_json()
         if not data:
             return jsonify({'error': 'No data provided'}), 400
-        
+
+        # ✅ SECURITY FIX: Access raw SQLAlchemy User for updates
+        # UserAdapter is read-only, so we need the underlying User object
+        if user_adapter.get_source_type() == 'firestore':
+            return jsonify({
+                'error': 'Profile updates not supported for Firestore users yet',
+                'suggestion': 'Please use SQLAlchemy backend for profile updates'
+            }), 501
+
+        # Get the raw SQLAlchemy User object
+        raw_user = user_adapter.get_raw_data()
+
         # Update allowed fields
         allowed_fields = [
-            'first_name', 'last_name', 'username', 'phone', 
+            'first_name', 'last_name', 'username', 'phone',
             'company', 'job_title', 'bio', 'avatar_url'
         ]
-        
+
         updated_fields = []
         for field in allowed_fields:
             if field in data:
-                setattr(user, field, data[field])
+                setattr(raw_user, field, data[field])
                 updated_fields.append(field)
-        
+
         if updated_fields:
-            user.updated_at = datetime.utcnow()
+            raw_user.updated_at = datetime.utcnow()
             db.session.commit()
-            
-            logger.info(f"Profile updated for user {user.id}: {updated_fields}")
-            
+
+            logger.info(f"Profile updated for user {user_adapter.id}: {updated_fields}")
+
+            # Return updated user data via UserAdapter
+            from ..middleware.firebase_auth import UserAdapter
+            updated_adapter = UserAdapter(raw_user)
+
             return jsonify({
                 'message': 'Profile updated successfully',
                 'updated_fields': updated_fields,
-                'user': user.to_dict()
+                'user': updated_adapter.to_dict()
             }), 200
         else:
             return jsonify({'message': 'No fields to update'}), 200
-        
+
     except Exception as e:
         logger.error(f"Profile update error: {str(e)}")
         db.session.rollback()
@@ -315,15 +316,18 @@ def verify_token():
 def logout():
     """Logout user (Firebase authenticated)"""
     try:
-        user = get_current_firebase_user()
-        if user:
-            # Update last logout time (if you want to track this)
-            user.updated_at = datetime.utcnow()
-            db.session.commit()
-            logger.info(f"User {user.id} logged out")
-        
+        user_adapter = get_current_firebase_user()
+        if user_adapter:
+            logger.info(f"User {user_adapter.id} ({user_adapter.email}) logged out")
+
+            # ✅ SECURITY FIX: Only update logout time for SQLAlchemy users
+            if user_adapter.get_source_type() == 'sqlalchemy':
+                raw_user = user_adapter.get_raw_data()
+                raw_user.updated_at = datetime.utcnow()
+                db.session.commit()
+
         return jsonify({'message': 'Logout successful'}), 200
-        
+
     except Exception as e:
         logger.error(f"Logout error: {str(e)}")
         return jsonify({'error': 'Logout failed'}), 500

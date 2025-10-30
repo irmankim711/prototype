@@ -57,6 +57,20 @@ def create_app(config=None):
     # Initialize extensions
     init_extensions(app)
 
+    # ============================================================================
+    # 🔥 CRITICAL SECURITY FIX: Clear request context to prevent data leakage
+    # ============================================================================
+    @app.before_request
+    def clear_auth_context():
+        """
+        Clear authentication context before each request to prevent user data leakage.
+
+        SECURITY: This prevents Flask's g object from leaking between requests
+        in multi-threaded or async environments, ensuring User A cannot see User B's data.
+        """
+        from app.middleware.firebase_auth import clear_request_context
+        clear_request_context()
+
     # Add global OPTIONS handler for preflight requests
     @app.before_request
     def handle_preflight():
