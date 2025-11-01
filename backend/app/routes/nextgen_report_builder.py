@@ -56,6 +56,31 @@ def cors_test():
         'method': request.method
     })
 
+@nextgen_bp.route('/routes-debug', methods=['GET', 'OPTIONS'])
+@cross_origin(supports_credentials=True)
+def routes_debug():
+    """Debug endpoint to verify nextgen routes are registered"""
+    if request.method == 'OPTIONS':
+        response = jsonify({'message': 'CORS preflight successful'})
+        return response
+
+    from flask import current_app
+    nextgen_routes = []
+    for rule in current_app.url_map.iter_rules():
+        if 'nextgen' in str(rule):
+            nextgen_routes.append({
+                'path': str(rule),
+                'methods': sorted(list(rule.methods)),
+                'endpoint': rule.endpoint
+            })
+
+    return jsonify({
+        'message': 'NextGen routes registered successfully',
+        'total_routes': len(nextgen_routes),
+        'routes': nextgen_routes,
+        'timestamp': datetime.utcnow().isoformat()
+    })
+
 # ================ DATA SOURCES ================
 
 @nextgen_bp.route('/data-sources', methods=['GET'])
@@ -744,7 +769,8 @@ def _extract_template_placeholders(content: str) -> List[str]:
 
 # ================ EXCEL AUTOMATION ================
 
-@nextgen_bp.route('/excel/upload', methods=['POST'])
+@nextgen_bp.route('/excel/upload', methods=['POST', 'OPTIONS'])
+@cross_origin(supports_credentials=True)
 @firebase_auth_required
 def upload_excel_file():
     """Upload and process Excel file for report automation"""

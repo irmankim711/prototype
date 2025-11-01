@@ -293,8 +293,18 @@ def register_blueprints(app):
         from app.routes.nextgen_report_builder import nextgen_bp
         app.register_blueprint(nextgen_bp, url_prefix='/api/v1/nextgen')
         app.logger.info("✅ NextGen report builder routes registered")
+
+        # Log all nextgen routes for debugging
+        import sys
+        nextgen_routes = [str(rule) for rule in app.url_map.iter_rules() if 'nextgen' in str(rule)]
+        app.logger.info(f"📋 NextGen routes available: {len(nextgen_routes)} routes")
+        if app.config.get('DEBUG') or 'RAILWAY' in sys.modules:
+            for route in nextgen_routes[:5]:  # Log first 5 routes
+                app.logger.info(f"  - {route}")
     except Exception as e:
-        app.logger.warning(f"Could not import nextgen_report_builder: {e}")
+        import traceback
+        app.logger.error(f"❌ Could not import nextgen_report_builder: {e}")
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
 
     # Integration API routes (placeholder)
     try:
