@@ -524,31 +524,26 @@ def edit_report(report_id):
             report.title = data['title']
         if 'description' in data:
             report.description = data['description']
-        if 'generated_data' in data:
-            report.generated_data = data['generated_data']
-        if 'report_config' in data:
-            report.report_config = data['report_config']
-        
+        if 'data_source' in data:
+            report.data_source = data['data_source']
+        if 'generation_config' in data:
+            report.generation_config = data['generation_config']
+
         # Reset status for regeneration
         report.status = 'pending'
-        report.generation_progress = 0
-        report.generation_started_at = None
         report.generated_at = None
-        report.generation_duration = None
+        report.generation_time_seconds = None
         report.error_message = None
-        
-        # Clear old file references
-        report.pdf_file_path = None
-        report.docx_file_path = None
-        report.excel_file_path = None
-        report.pdf_file_size = None
-        report.docx_file_size = None
-        report.excel_file_size = None
+
+        # Clear old file references (use actual database fields)
+        report.file_path = None
+        report.file_size = None
+        report.file_format = None
         
         db.session.commit()
         
         # Start regeneration
-        generate_comprehensive_report_task.delay(report.id, report.generated_data, report.report_config)
+        generate_comprehensive_report_task.delay(report.id, report.data_source, report.generation_config)
         
         logger.info(f"Report {report_id} edited and regeneration started")
         
@@ -594,39 +589,37 @@ def convert_latex_report(report_id):
             return jsonify({'error': 'LaTeX file not found'}), 404
         
         # Update report status
-        report.update_status('generating', progress=10)
+        report.update_status('generating')
         db.session.commit()
-        
+
         try:
             # Convert LaTeX to PDF
             pdf_filename = f"{os.path.splitext(os.path.basename(latex_file_path))[0]}.pdf"
             pdf_path, pdf_size = latex_conversion_service.convert_latex_to_pdf(
                 latex_file_path, pdf_filename
             )
-            
+
             # Convert LaTeX to DOCX
             docx_filename = f"{os.path.splitext(os.path.basename(latex_file_path))[0]}.docx"
             docx_path, docx_size = latex_conversion_service.convert_latex_to_docx(
                 latex_file_path, docx_filename
             )
-            
-            # Update report with new files
-            report.pdf_file_path = pdf_path
-            report.docx_file_path = docx_path
-            report.pdf_file_size = pdf_size
-            report.docx_file_size = docx_size
-            
+
+            # Update report with new files (store primary format in file_path)
+            report.file_path = pdf_path  # Store PDF as primary
+            report.file_size = pdf_size
+            report.file_format = 'pdf'
+
             # Generate download URLs
             base_url = data.get('base_url', 'http://localhost:5000')
-            report.pdf_download_url = f"{base_url}/api/reports/{report_id}/download/pdf"
-            report.docx_download_url = f"{base_url}/api/reports/{report_id}/download/docx"
-            
+            report.download_url = f"{base_url}/api/reports/{report_id}/download/pdf"
+
             # Mark as completed
-            report.update_status('completed', progress=100)
+            report.update_status('completed')
             db.session.commit()
-            
+
             logger.info(f"LaTeX conversion completed for report {report_id}")
-            
+
             return jsonify({
                 'success': True,
                 'message': 'LaTeX conversion completed successfully',
@@ -638,8 +631,8 @@ def convert_latex_report(report_id):
                     'docx': docx_size
                 },
                 'download_urls': {
-                    'pdf': report.pdf_download_url,
-                    'docx': report.docx_download_url
+                    'pdf': f"{base_url}/api/reports/{report_id}/download/pdf",
+                    'docx': f"{base_url}/api/reports/{report_id}/download/docx"
                 }
             }), 200
             
@@ -660,19 +653,23 @@ def download_report(report_id, file_type):
     """
     Download generated report file
     GET /api/reports/{report_id}/download/{file_type}
+
+    Uses the generic file_path field and constructs format-specific paths
+    based on the requested file_type since the Report model uses a single
+    file_path field rather than format-specific fields.
     """
     try:
         user_id = get_current_user_id()
-        
+
         # Get report
         report = Report.query.get(report_id)
         if not report:
             return jsonify({'error': 'Report not found'}), 404
-        
+
         # Check access
         if report.user_id != user_id:
             return jsonify({'error': 'Access denied'}), 403
-        
+
         # Check if report is ready
         if report.status != 'completed':
             return jsonify({
@@ -680,26 +677,66 @@ def download_report(report_id, file_type):
                 'error': 'Report not ready for download',
                 'status': report.status
             }), 400
-        
-        # Get file path based on type
+
+        # Validate file type
+        valid_types = ['pdf', 'docx', 'excel']
+        if file_type not in valid_types:
+            return jsonify({'error': f'Invalid file type. Must be one of: {", ".join(valid_types)}'}), 400
+
+        # Construct file path based on type
+        # The service stores files with different extensions but in the same directory
         file_path = None
         filename = None
-        
-        if file_type == 'pdf':
-            file_path = report.pdf_file_path
-            filename = f"{report.title.replace(' ', '_')}.pdf"
-        elif file_type == 'docx':
-            file_path = report.docx_file_path
-            filename = f"{report.title.replace(' ', '_')}.docx"
-        elif file_type == 'excel':
-            file_path = report.excel_file_path
-            filename = f"{report.title.replace(' ', '_')}.xlsx"
-        else:
-            return jsonify({'error': 'Invalid file type'}), 400
-        
+
+        if report.file_path:
+            # Get the base path and directory
+            base_path_without_ext = os.path.splitext(report.file_path)[0]
+            report_dir = os.path.dirname(report.file_path)
+
+            # Map file type to extension
+            extension_map = {
+                'pdf': 'pdf',
+                'docx': 'docx',
+                'excel': 'xlsx'
+            }
+
+            # Try to find the file with the requested extension
+            extension = extension_map[file_type]
+            file_path = f"{base_path_without_ext}.{extension}"
+            filename = f"{report.title.replace(' ', '_')}.{extension}"
+
+            # If the constructed path doesn't exist, try looking in the same directory
+            if not os.path.exists(file_path):
+                # Try alternative naming pattern (report might have been saved with different naming)
+                import glob
+                pattern = os.path.join(report_dir, f"*{report.id}*.{extension}")
+                matches = glob.glob(pattern)
+                if matches:
+                    file_path = matches[0]
+                else:
+                    # Try another pattern based on report title
+                    safe_title = report.title.replace(' ', '_')
+                    pattern = os.path.join(report_dir, f"*{safe_title}*.{extension}")
+                    matches = glob.glob(pattern)
+                    if matches:
+                        file_path = matches[0]
+
         if not file_path or not os.path.exists(file_path):
-            return jsonify({'error': 'File not found'}), 404
-        
+            logger.error(f"File not found for report {report_id} type {file_type}. Checked path: {file_path}")
+            return jsonify({
+                'error': 'File not found',
+                'details': f'The {file_type} file for this report is not available. It may not have been generated yet.',
+                'report_status': report.status,
+                'file_format': report.file_format
+            }), 404
+
+        # Update download tracking
+        report.download_count = (report.download_count or 0) + 1
+        report.last_downloaded = datetime.utcnow()
+        db.session.commit()
+
+        logger.info(f"Serving file {file_path} for report {report_id} type {file_type}")
+
         # Send file
         return send_file(
             file_path,
@@ -707,9 +744,11 @@ def download_report(report_id, file_type):
             download_name=filename,
             mimetype='application/octet-stream'
         )
-        
+
     except Exception as e:
         logger.error(f"Error downloading report {report_id} {file_type}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({
             'success': False,
             'error': f'Failed to download report: {str(e)}'
@@ -733,20 +772,19 @@ def get_report(report_id):
         if report.user_id != user_id:
             return jsonify({'error': 'Access denied'}), 403
 
-        # Convert to dictionary
+        # Convert to dictionary using the model's to_dict method or fallback
         report_data = report.to_dict() if hasattr(report, 'to_dict') else {
             'id': report.id,
             'title': report.title,
             'description': report.description,
             'status': report.status,
             'created_at': report.created_at.isoformat() if report.created_at else None,
-            'updated_at': report.updated_at.isoformat() if report.updated_at else None,
             'user_id': report.user_id,
-            'form_id': report.form_id,
-            'pdf_file_path': report.pdf_file_path,
-            'docx_file_path': report.docx_file_path,
-            'excel_file_path': report.excel_file_path,
-            'template_id': report.template_id
+            'file_path': report.file_path,
+            'file_format': report.file_format,
+            'file_size': report.file_size,
+            'template_id': report.template_id,
+            'download_url': report.download_url
         }
 
         logger.info(f"Report {report_id} retrieved successfully")
@@ -779,14 +817,35 @@ def delete_report(report_id):
         # Check access
         if report.user_id != user_id:
             return jsonify({'error': 'Access denied'}), 403
-        
-        # Remove files
-        for file_path in [report.pdf_file_path, report.docx_file_path, report.excel_file_path]:
-            if file_path and os.path.exists(file_path):
-                try:
-                    os.remove(file_path)
-                except Exception as e:
-                    logger.warning(f"Failed to remove file {file_path}: {str(e)}")
+
+        # Remove files - try all possible formats based on the base file_path
+        if report.file_path:
+            base_path_without_ext = os.path.splitext(report.file_path)[0]
+            report_dir = os.path.dirname(report.file_path)
+
+            # Try to delete all format variants
+            for ext in ['pdf', 'docx', 'xlsx']:
+                file_path = f"{base_path_without_ext}.{ext}"
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"Deleted file: {file_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to remove file {file_path}: {str(e)}")
+
+            # Also try to find files using glob patterns
+            import glob
+            patterns = [
+                os.path.join(report_dir, f"*{report.id}*"),
+                os.path.join(report_dir, f"*{report.title.replace(' ', '_')}*")
+            ]
+            for pattern in patterns:
+                for file_path in glob.glob(pattern):
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"Deleted file: {file_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to remove file {file_path}: {str(e)}")
         
         # Delete from database
         db.session.delete(report)
