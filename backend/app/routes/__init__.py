@@ -243,6 +243,22 @@ def register_blueprints(app):
         def simple_health():
             return jsonify({'status': 'ok', 'message': 'Server is running'})
 
+        @simple_health_bp.route('/api/debug/routes', methods=['GET'])
+        def debug_routes():
+            """Debug endpoint to show all registered routes"""
+            routes = []
+            for rule in app.url_map.iter_rules():
+                routes.append({
+                    'endpoint': rule.endpoint,
+                    'methods': list(rule.methods),
+                    'path': str(rule)
+                })
+            return jsonify({
+                'total_routes': len(routes),
+                'routes': sorted(routes, key=lambda x: x['path']),
+                'nextgen_routes': [r for r in routes if 'nextgen' in r['path'].lower()]
+            })
+
         app.register_blueprint(simple_health_bp)
         app.logger.info("✅ Simple health routes registered")
     except Exception as e:
