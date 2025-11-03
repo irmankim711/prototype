@@ -408,29 +408,25 @@ class ReportGenerationService:
                 except Exception as e:
                     logger.warning(f"Excel generation failed for report {report_id}: {str(e)}")
             
-            report.update_status('generating', progress=90)
+            report.update_status('generating')
             db.session.commit()
-            
-            # Update report with file information
-            report.pdf_file_path = pdf_path
-            report.docx_file_path = docx_path
-            report.excel_file_path = excel_path
-            report.pdf_file_size = pdf_size
-            report.docx_file_size = docx_size
-            report.excel_file_size = excel_size
-            
+
+            # Update report with file information (using actual database fields)
+            report.file_path = pdf_path
+            report.file_size = pdf_size
+            report.file_format = 'pdf'
+
             # Generate download URLs
             base_url = config.get('base_url', 'http://localhost:5000')
-            report.pdf_download_url = f"{base_url}/api/reports/{report_id}/download/pdf"
-            report.docx_download_url = f"{base_url}/api/reports/{report_id}/download/docx"
-            if excel_path:
-                report.excel_download_url = f"{base_url}/api/reports/{report_id}/download/excel"
-            
+            report.download_url = f"{base_url}/api/reports/{report_id}/download/pdf"
+
             # Mark as completed
-            report.update_status('completed', progress=100)
-            report.generated_data = config.get('data', {})
-            report.report_config = config
+            report.update_status('completed')
+            report.data_source = config.get('data', {})
+            report.generation_config = config
             db.session.commit()
+
+            logger.info(f"✅ LaTeX report files saved: PDF={pdf_path}, DOCX={docx_path}, Excel={excel_path}")
             
             logger.info(f"LaTeX-based report {report_id} generated successfully")
             
@@ -612,25 +608,23 @@ class ReportGenerationService:
             report.update_status('generating', progress=90)
             db.session.commit()
 
-            # Update report with file information
-            report.pdf_file_path = pdf_path
-            report.docx_file_path = docx_path
-            report.excel_file_path = excel_path
-            report.pdf_file_size = pdf_size
-            report.docx_file_size = docx_size
-            report.excel_file_size = excel_size
+            # Update report with file information (using actual database fields)
+            # Store the primary file path (PDF) and file format
+            report.file_path = pdf_path
+            report.file_size = pdf_size
+            report.file_format = 'pdf'
 
             # Generate download URLs
             base_url = config.get('base_url', 'http://localhost:5000')
-            report.pdf_download_url = f"{base_url}/api/reports/{report_id}/download/pdf"
-            report.docx_download_url = f"{base_url}/api/reports/{report_id}/download/docx"
-            report.excel_download_url = f"{base_url}/api/reports/{report_id}/download/excel"
+            report.download_url = f"{base_url}/api/reports/{report_id}/download/pdf"
 
             # Mark as completed
-            report.update_status('completed', progress=100)
-            report.generated_data = data
-            report.report_config = config
+            report.update_status('completed')
+            report.data_source = data
+            report.generation_config = config
             db.session.commit()
+
+            logger.info(f"✅ Report files saved: PDF={pdf_path}, DOCX={docx_path}, Excel={excel_path}")
 
             logger.info(f"=== ✓ Comprehensive report {report_id} generated successfully ===")
             logger.info(f"Total files: PDF ({pdf_size}), DOCX ({docx_size}), Excel ({excel_size})")
@@ -834,32 +828,34 @@ class ReportGenerationService:
                 Report.created_at < cutoff_date,
                 Report.status.in_(['completed', 'failed'])
             ).all()
-            
+
             for report in old_reports:
-                # Remove PDF file
-                if report.pdf_file_path and os.path.exists(report.pdf_file_path):
-                    os.remove(report.pdf_file_path)
-                    report.pdf_file_path = None
-                    report.pdf_file_size = None
-                
-                # Remove DOCX file
-                if report.docx_file_path and os.path.exists(report.docx_file_path):
-                    os.remove(report.docx_file_path)
-                    report.docx_file_path = None
-                    report.docx_file_size = None
-                
-                # Remove Excel file
-                if report.excel_file_path and os.path.exists(report.excel_file_path):
-                    os.remove(report.excel_file_path)
-                    report.excel_file_path = None
-                    report.excel_file_size = None
-                
+                # Remove all file format variants based on base file_path
+                if report.file_path:
+                    base_path_without_ext = os.path.splitext(report.file_path)[0]
+                    report_dir = os.path.dirname(report.file_path)
+
+                    # Try to delete all format variants
+                    for ext in ['pdf', 'docx', 'xlsx']:
+                        file_path = f"{base_path_without_ext}.{ext}"
+                        if os.path.exists(file_path):
+                            try:
+                                os.remove(file_path)
+                                logger.info(f"Deleted old file: {file_path}")
+                            except Exception as e:
+                                logger.warning(f"Failed to remove file {file_path}: {str(e)}")
+
+                    # Clear file references
+                    report.file_path = None
+                    report.file_size = None
+                    report.file_format = None
+
                 # Update report
                 report.status = 'archived'
                 db.session.commit()
-            
+
             logger.info(f"Cleaned up {len(old_reports)} old report files")
-            
+
         except Exception as e:
             logger.error(f"Error cleaning up old files: {str(e)}")
 
@@ -974,25 +970,60 @@ class ReportGenerationService:
                 pass
 
             if has_placeholders:
-                # Try to use docxtpl for basic placeholders
+                # Try to use docxtpl for ALL placeholders including loops
                 try:
                     from docxtpl import DocxTemplate
                     doc_tpl = DocxTemplate(template_path)
-                    # Only render simple placeholders, not loops
-                    simple_data = {k: v for k, v in data.items() if not isinstance(v, list)}
-                    logger.info(f"Rendering simple placeholders: {list(simple_data.keys())}")
-                    doc_tpl.render(simple_data)
+
+                    # Render ALL data including lists for loop support
+                    logger.info(f"Rendering template with all data keys: {list(data.keys())}")
+                    if 'peserta_list' in data:
+                        logger.info(f"  - peserta_list contains {len(data['peserta_list'])} items")
+
+                    # Log sample of data for debugging
+                    for key, value in data.items():
+                        if isinstance(value, list) and value:
+                            logger.info(f"  - {key}: list with {len(value)} items")
+                            if value:
+                                logger.info(f"    First item keys: {list(value[0].keys()) if isinstance(value[0], dict) else 'not a dict'}")
+                        elif not isinstance(value, (dict, list)):
+                            logger.info(f"  - {key}: {value}")
+
+                    # Render the template with ALL data
+                    doc_tpl.render(data)
                     doc_tpl.save(output_path)
+                    logger.info(f"✅ Template rendered successfully with docxtpl")
                 except Exception as e:
-                    logger.warning(f"docxtpl render failed: {e}, copying template")
+                    logger.error(f"❌ docxtpl render failed: {e}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    logger.warning(f"Falling back to copying template without data insertion")
                     shutil.copy2(template_path, output_path)
             else:
                 # No placeholders, just copy
+                logger.info("No placeholders found in template, copying as-is")
                 shutil.copy2(template_path, output_path)
 
-            # Now add participant table if data exists
+            # Only add participant table as fallback if template rendering failed
+            # Check if the template was successfully rendered by looking for filled placeholders
+            should_add_fallback_table = False
             if 'peserta_list' in data and isinstance(data['peserta_list'], list) and len(data['peserta_list']) > 0:
-                logger.info(f"Adding participant table with {len(data['peserta_list'])} rows")
+                try:
+                    # Check if template has loop syntax that should have been rendered
+                    with open(output_path, 'rb') as f:
+                        content = f.read()
+                        # If we still see loop syntax, it means rendering failed
+                        if b'{%' in content or b'{{peserta_list}}' in content:
+                            should_add_fallback_table = True
+                            logger.warning("⚠️ Template loops not rendered, adding fallback participant table")
+                        else:
+                            logger.info("✅ Template loops appear to be rendered correctly, skipping fallback table")
+                except:
+                    # If we can't check, add the table to be safe
+                    should_add_fallback_table = True
+
+            if should_add_fallback_table:
+                logger.info(f"Adding fallback participant table with {len(data['peserta_list'])} rows")
 
                 # Open the output document
                 doc = Document(output_path)
