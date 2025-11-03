@@ -374,8 +374,7 @@ def get_report_templates():
             db_templates = ReportTemplate.query.filter_by(is_active=True).all()
 
             logger.info(
-    f"🔍 [DEBUG] Found {
-        len(db_templates)} templates in database")
+                f"🔍 [DEBUG] Found {len(db_templates)} templates in database")
 
             for db_template in db_templates:
                 placeholder_schema = db_template.placeholder_schema or {}
@@ -400,8 +399,7 @@ def get_report_templates():
 
                 templates.append(template_info)
                 logger.info(
-    f"   Added DB template: {
-        db_template.name} (ID: {template_identifier})")
+    f"   Added DB template: {db_template.name} (ID: {template_identifier})")
 
         except Exception as db_error:
             import traceback
@@ -663,8 +661,7 @@ def get_template_metadata(template_id):
 
     except Exception as e:
         logger.error(
-    f"Error fetching template metadata for {template_id}: {
-        str(e)}")
+    f"Error fetching template metadata for {template_id}: {str(e)}")
         return jsonify({'error': 'Failed to fetch template metadata'}), 500
 
 def _get_template_usage_instructions(template_id: str) -> str:
@@ -836,8 +833,7 @@ def upload_excel_file():
         list(
             processing_result.keys())}")
         logger.info(
-    f"Processing result success: {
-        processing_result.get('success')}")
+    f"Processing result success: {processing_result.get('success')}")
         logger.info(
     f"Processing result tables: {
         processing_result.get(
@@ -884,8 +880,7 @@ def upload_excel_file():
         }
 
         logger.info(
-    f"Excel file uploaded successfully: {filename}, {
-        data_source['recordCount']} records")
+    f"Excel file uploaded successfully: {filename}, {data_source['recordCount']} records")
 
         return jsonify({
             'success': True,
@@ -1214,8 +1209,7 @@ def generate_report_from_excel():
 
         except Exception as db_error:
             logger.warning(
-    f"🔍 [DEBUG] Database template lookup failed: {
-        str(db_error)}")
+    f"🔍 [DEBUG] Database template lookup failed: {str(db_error)}")
 
         # Fallback to filesystem lookup if not found in database
         if not template_file:
@@ -1236,8 +1230,7 @@ def generate_report_from_excel():
                 for ext in ['.jinja', '.docx', '.tex', '.html']:
                     potential_file = templates_dir / f'{template_id}{ext}'
                     logger.info(
-    f"🔍 [DEBUG] Checking template with extension: {potential_file} (exists: {
-        potential_file.exists()})")
+    f"🔍 [DEBUG] Checking template with extension: {potential_file} (exists: {potential_file.exists()})")
                     if potential_file.exists():
                         template_file = potential_file
                         break
@@ -1461,8 +1454,7 @@ def generate_report_from_excel():
             }
         except AttributeError as ae:
             logger.error(
-    f"🔍 [DEBUG] AttributeError in form automation: {
-        str(ae)}")
+    f"🔍 [DEBUG] AttributeError in form automation: {str(ae)}")
             logger.error(
     f"🔍 [DEBUG] This usually means a missing field or method")
             return jsonify({
@@ -1481,16 +1473,14 @@ def generate_report_from_excel():
             }), 500
         except FileNotFoundError as fnfe:
             logger.error(
-    f"🔍 [DEBUG] FileNotFoundError in form automation: {
-        str(fnfe)}")
+    f"🔍 [DEBUG] FileNotFoundError in form automation: {str(fnfe)}")
             return jsonify({
                 'error': 'File not found during report generation',
                 'details': str(fnfe)
             }), 500
         except ImportError as ie:
             logger.error(
-    f"🔍 [DEBUG] ImportError in form automation: {
-        str(ie)}")
+    f"🔍 [DEBUG] ImportError in form automation: {str(ie)}")
             logger.error(
     f"🔍 [DEBUG] This usually means a missing Python library")
             return jsonify({
@@ -1500,16 +1490,14 @@ def generate_report_from_excel():
             }), 500
         except ModuleNotFoundError as mnfe:
             logger.error(
-    f"🔍 [DEBUG] ModuleNotFoundError in form automation: {
-        str(mnfe)}")
+    f"🔍 [DEBUG] ModuleNotFoundError in form automation: {str(mnfe)}")
             return jsonify({
                 'error': 'Missing Python module',
                 'details': str(mnfe)
             }), 500
         except Exception as e:
             logger.error(
-    f"🔍 [DEBUG] Unexpected error in form automation: {
-        str(e)}")
+    f"🔍 [DEBUG] Unexpected error in form automation: {str(e)}")
             logger.error(f"🔍 [DEBUG] Error type: {type(e).__name__}")
             import traceback
             logger.error(f"🔍 [DEBUG] Full traceback: {traceback.format_exc()}")
@@ -1534,8 +1522,7 @@ def generate_report_from_excel():
              'Unknown fallback error')}")
             except Exception as fallback_error:
                 logger.error(
-    f"🔍 [DEBUG] Fallback also failed: {
-        str(fallback_error)}")
+    f"🔍 [DEBUG] Fallback also failed: {str(fallback_error)}")
                 return jsonify({
                     'error': 'Both primary and fallback report generation failed',
                     'primary_error': str(e),
@@ -1921,8 +1908,7 @@ def generate_report_from_excel():
             logger.error(f"Error during rollback: {rollback_error}")
 
         logger.error(
-    f"🚨 CRITICAL ERROR in generate_report_from_excel: {
-        str(e)}")
+    f"🚨 CRITICAL ERROR in generate_report_from_excel: {str(e)}")
         logger.error(f"🚨 Error type: {type(e).__name__}")
         logger.error(f"🚨 Full traceback: {traceback.format_exc()}")
         logger.error(f"🚨 Request data: {request.get_data()}")
@@ -1931,8 +1917,7 @@ def generate_report_from_excel():
         logger.error(f"🚨 Request URL: {request.url}")
         logger.error(f"🚨 Request headers: {dict(request.headers)}")
         logger.error(
-    f"🚨 User ID: {
-        get_current_user_id() if 'user_id' not in locals() else user_id}")
+    f"🚨 User ID: {get_current_user_id() if 'user_id' not in locals() else user_id}")
 
         # Return detailed error for debugging with more specific error
         # categories
@@ -2007,8 +1992,7 @@ def generate_chart_data():
                     else:
                         chart_data = _generate_fallback_chart_data(chart_type)
                         logger.error(
-    f"Failed to parse Excel file: {
-        excel_data.get('error')}")
+    f"Failed to parse Excel file: {excel_data.get('error')}")
                 except Exception as e:
                     logger.error(
     f"Error generating chart data from Excel: {e}")
@@ -2464,8 +2448,7 @@ def _get_data_source_info(data_source_id: str, user_id: str) -> Dict[str, Any]:
                     }
                 else:
                     logger.error(
-    f"Failed to parse Excel file {excel_file}: {
-        excel_data.get('error')}")
+    f"Failed to parse Excel file {excel_file}: {excel_data.get('error')}")
             except Exception as e:
                 logger.error(f"Error parsing Excel file {excel_file}: {e}")
 
