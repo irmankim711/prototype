@@ -305,6 +305,7 @@ def register_blueprints(app):
         app.logger.warning(f"Could not import excel_to_pdf_api: {e}")
 
     # NextGen report builder
+    nextgen_import_error = None
     try:
         from app.routes.nextgen_report_builder import nextgen_bp
         app.register_blueprint(nextgen_bp, url_prefix='/api/v1/nextgen')
@@ -319,8 +320,24 @@ def register_blueprints(app):
                 app.logger.info(f"  - {route}")
     except Exception as e:
         import traceback
+        nextgen_import_error = {
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }
         app.logger.error(f"❌ Could not import nextgen_report_builder: {e}")
         app.logger.error(f"Traceback: {traceback.format_exc()}")
+
+    # Add error endpoint for debugging
+    if nextgen_import_error:
+        from flask import Blueprint, jsonify
+        error_bp = Blueprint('nextgen_error', __name__)
+
+        @error_bp.route('/api/debug/nextgen-error', methods=['GET'])
+        def get_nextgen_error():
+            return jsonify(nextgen_import_error)
+
+        app.register_blueprint(error_bp)
+        app.logger.info("✅ NextGen error debug endpoint registered")
 
     # Integration API routes (placeholder)
     try:
