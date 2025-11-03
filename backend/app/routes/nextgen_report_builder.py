@@ -1173,21 +1173,83 @@ def generate_report_from_excel():
                 'suggestion': 'Check backend logs for detailed error information'
             }), 500
 
-        # Look up template in database first, then fall back to filesystem
+        # Look up template in Firestore first, then SQL database, then filesystem
         template_file = None
         template_db_record = None
 
         logger.info(
-    f"🔍 [DEBUG] Looking up template in database: {template_id}")
+    f"🔍 [DEBUG] Looking up template: {template_id}")
 
+        # Try Firestore first
         try:
-            # Import the correct Template model with file_path support
-            from app.models.template_models import Template as TemplateModel
+            from app.middleware.firebase_auth import firebase_auth_manager
 
-            template_db_record = None
-            logger.info(f"✅ Looking up template: {template_id} (type: {type(template_id).__name__})")
+            if firebase_auth_manager._initialized and firebase_auth_manager._firestore_db:
+                firestore_db = firebase_auth_manager._firestore_db
+                templates_collection = firestore_db.collection('templates')
 
+                # Try to find template by name
+                template_name = str(template_id)
+                # Remove extension if present
+                for ext in ['.docx', '.jinja', '.tex', '.html']:
+                    if template_name.endswith(ext):
+                        template_name = template_name[:-len(ext)]
+                        break
+
+                # Search Firestore by name
+                logger.info(f"🔍 Searching Firestore for template: {template_name}")
+                firestore_templates = templates_collection.where('name', '==', template_name).where('is_active', '==', True).limit(1).stream()
+
+                for firestore_template in firestore_templates:
+                    template_data = firestore_template.to_dict()
+                    template_file_path = template_data.get('absolute_path') or template_data.get('file_path')
+
+                    if template_file_path:
+                        # For Railway deployment, construct path relative to backend
+                        if not Path(template_file_path).exists():
+                            # Try relative path from backend directory
+                            backend_dir = Path(__file__).parent.parent.parent
+                            potential_path = backend_dir / template_data.get('file_path', '')
+                            if potential_path.exists():
+                                template_file_path = str(potential_path)
+
+                        template_path = Path(template_file_path)
+                        if template_path.exists():
+                            template_file = template_path
+                            logger.info(f"✅ Found template in Firestore: {template_name}")
+                            logger.info(f"   Path: {template_file}")
+                            # Create a mock DB record for compatibility
+                            template_db_record = type('TemplateRecord', (), {
+                                'id': firestore_template.id,
+                                'name': template_data.get('name'),
+                                'file_path': str(template_file)
+                            })()
+                            break
+                        else:
+                            logger.warning(f"⚠️ Firestore template path does not exist: {template_file_path}")
+                    else:
+                        logger.warning(f"⚠️ Firestore template has no file_path")
+
+                if template_file:
+                    logger.info("✅ Using template from Firestore")
+                else:
+                    logger.info("ℹ️ Template not found in Firestore, trying SQL database")
+            else:
+                logger.info("ℹ️ Firestore not available, using SQL database")
+
+        except Exception as firestore_error:
+            logger.warning(f"⚠️ Firestore template lookup failed: {str(firestore_error)}")
+            logger.info("ℹ️ Falling back to SQL database lookup")
+
+        # If not found in Firestore, try SQL database
+        if not template_file:
             try:
+                # Import the correct Template model with file_path support
+                from app.models.template_models import Template as TemplateModel
+
+                template_db_record = None
+                logger.info(f"✅ Looking up template in SQL DB: {template_id} (type: {type(template_id).__name__})")
+
                 # Try integer lookup first (if template_id is numeric)
                 try:
                     template_id_int = int(template_id)
@@ -1233,27 +1295,26 @@ def generate_report_from_excel():
                         else:
                             logger.info(f"ℹ️ No template found in database with name/path: {template_id}")
 
-            except Exception as query_error:
-                logger.warning(f"⚠️ Template query failed: {query_error}")
-                template_db_record = None
+                except Exception as query_error:
+                    logger.warning(f"⚠️ Template query failed: {query_error}")
+                    template_db_record = None
 
-            if template_db_record:
-                # Get file path from database
-                file_path = getattr(template_db_record, 'file_path', None)
+                if template_db_record:
+                    # Get file path from database
+                    file_path = getattr(template_db_record, 'file_path', None)
 
-                if file_path:
-                    template_path = Path(file_path)
-                    if template_path.exists():
-                        template_file = template_path
-                        logger.info(f"✅ Template file found: {template_file}")
+                    if file_path:
+                        template_path = Path(file_path)
+                        if template_path.exists():
+                            template_file = template_path
+                            logger.info(f"✅ Template file found: {template_file}")
+                        else:
+                            logger.warning(f"⚠️ Template file not found: {file_path}")
                     else:
-                        logger.warning(f"⚠️ Template file not found: {file_path}")
-                else:
-                    logger.warning(f"⚠️ Template has no file_path")
+                        logger.warning(f"⚠️ Template has no file_path")
 
-        except Exception as db_error:
-            logger.warning(
-    f"🔍 [DEBUG] Database template lookup failed: {str(db_error)}")
+            except Exception as db_error:
+                logger.warning(f"🔍 [DEBUG] Database template lookup failed: {str(db_error)}")
 
         # Fallback to filesystem lookup if not found in database
         if not template_file:
