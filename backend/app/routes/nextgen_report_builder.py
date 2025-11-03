@@ -828,20 +828,10 @@ def upload_excel_file():
             }), 400
 
         # Debug logging to see what processing_result contains
-        logger.info(
-    f"Processing result keys: {
-        list(
-            processing_result.keys())}")
-        logger.info(
-    f"Processing result success: {processing_result.get('success')}")
-        logger.info(
-    f"Processing result tables: {
-        processing_result.get(
-            'tables', [])}")
-        logger.info(
-    f"Processing result total_rows: {
-        processing_result.get(
-            'total_rows', 0)}")
+        logger.info(f"Processing result keys: {list(processing_result.keys())}")
+        logger.info(f"Processing result success: {processing_result.get('success')}")
+        logger.info(f"Processing result tables: {processing_result.get('tables', [])}")
+        logger.info(f"Processing result total_rows: {processing_result.get('total_rows', 0)}")
 
         # Extract columns from the parsed tables
         columns = _extract_columns_from_tables(
