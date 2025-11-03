@@ -1499,10 +1499,7 @@ def generate_report_from_excel():
                     generation_result = fallback_result
                 else:
                     raise Exception(
-    f"Fallback also failed: {
-        fallback_result.get(
-            'error',
-             'Unknown fallback error')}")
+    f"Fallback also failed: {fallback_result.get('error', 'Unknown fallback error')}")
             except Exception as fallback_error:
                 logger.error(
     f"🔍 [DEBUG] Fallback also failed: {str(fallback_error)}")
