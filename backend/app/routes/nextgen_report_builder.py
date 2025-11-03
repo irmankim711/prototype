@@ -339,8 +339,7 @@ def get_data_source_fields(data_source_id):
 
     except Exception as e:
         logger.error(
-    f"Error fetching fields for data source {data_source_id}: {
-        str(e)}")
+            f"Error fetching fields for data source {data_source_id}: {str(e)}")
         return jsonify({'error': 'Failed to fetch data source fields'}), 500
 
 def _get_sample_values(form_id: int, field_id: str) -> List[str]:
