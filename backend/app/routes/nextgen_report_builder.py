@@ -1956,9 +1956,9 @@ def generate_report_from_excel():
             result = db.session.execute(insert_sql, safe_report_data)
             report_id = result.lastrowid
             db.session.commit()
-            
+
             logger.info(f"✅ Report created successfully with ID: {report_id}")
-            
+
             # IMPORTANT: Never use MockReport or any non-SQLAlchemy models with db.session.add()
             # The report was already inserted via direct SQL above - just return response data
             report_response = {
@@ -1970,6 +1970,59 @@ def generate_report_from_excel():
                 'created_by': safe_report_data['created_by'],
                 'created_at': safe_report_data['created_at'].isoformat()
             }
+
+            # Also save report to Firestore for history and cross-platform access
+            try:
+                from app.services.firestore_report_service import firestore_report_service
+
+                logger.info(f"🔥 Saving report to Firestore...")
+
+                firestore_report_id = firestore_report_service.create_report(
+                    user_id=str(user_id),
+                    title=safe_report_data['title'],
+                    description=safe_report_data['description'],
+                    report_type=safe_report_data['report_type'],
+                    template_id=firestore_template_id or str(template_id),
+                    program_id=str(default_program_id) if default_program_id else None,
+                    data_source=json.loads(safe_report_data.get('data_source', '{}')),
+                    generation_config=json.loads(safe_report_data.get('generation_config', '{}'))
+                )
+
+                if firestore_report_id:
+                    logger.info(f"✅ Report saved to Firestore with ID: {firestore_report_id}")
+
+                    # Upload the generated file to Firebase Storage
+                    if report_path and os.path.exists(report_path):
+                        logger.info(f"📤 Uploading report file to Firebase Storage...")
+                        file_format = report_file_extension.replace('.', '')
+                        download_url = firestore_report_service.save_report_file(
+                            report_id=firestore_report_id,
+                            file_path=report_path,
+                            file_format=file_format
+                        )
+
+                        if download_url:
+                            logger.info(f"✅ File uploaded to Firebase Storage: {download_url}")
+                            # Add Firestore info to response
+                            report_response['firestore_id'] = firestore_report_id
+                            report_response['firebase_download_url'] = download_url
+                        else:
+                            logger.warning("⚠️ Failed to upload file to Firebase Storage")
+                    else:
+                        # Even without file, update status to completed
+                        firestore_report_service.update_report_status(
+                            report_id=firestore_report_id,
+                            status='completed'
+                        )
+                        report_response['firestore_id'] = firestore_report_id
+                else:
+                    logger.warning("⚠️ Failed to save report to Firestore")
+
+            except Exception as firestore_error:
+                logger.error(f"❌ Error saving to Firestore: {firestore_error}")
+                import traceback
+                logger.error(traceback.format_exc())
+                # Continue anyway - SQL report was created successfully
 
             # Generate AI suggestions for the report
             ai_suggestions = None
@@ -3449,14 +3502,17 @@ def get_report(report_id):
 @nextgen_bp.route('/reports', methods=['GET'])
 @cross_origin(supports_credentials=True)
 def get_user_reports():
-    """Get all reports for the current user"""
+    """Get all reports for the current user from both SQL and Firestore"""
     try:
         user_id = get_current_user_id()
-        
-        reports = Report.query.filter_by(created_by=user_id).order_by(Report.created_at.desc()).all()
-        
+
+        # Get reports from SQL database
+        sql_reports = Report.query.filter_by(created_by=str(user_id)).order_by(Report.created_at.desc()).all()
+
         reports_data = []
-        for report in reports:
+
+        # Add SQL reports
+        for report in sql_reports:
             reports_data.append({
                 'id': report.id,
                 'title': report.title,
@@ -3466,16 +3522,65 @@ def get_user_reports():
                 'elements': report.data_source.get('elements', []) if report.data_source else [],
                 'layout': report.data_source.get('layout', {}) if report.data_source else {},
                 'file_path': report.file_path,
-                'download_url': report.download_url
+                'download_url': report.download_url,
+                'source': 'sql'  # Mark source for debugging
             })
-        
+
+        # Also get reports from Firestore
+        try:
+            from app.services.firestore_report_service import firestore_report_service
+
+            firestore_reports = firestore_report_service.get_user_reports(
+                user_id=str(user_id),
+                limit=100
+            )
+
+            # Add Firestore reports
+            for firestore_report in firestore_reports:
+                # Convert Firestore timestamps to ISO format
+                created_at = firestore_report.get('createdAt')
+                if created_at:
+                    # Handle Firestore timestamp
+                    if hasattr(created_at, 'isoformat'):
+                        created_at_iso = created_at.isoformat()
+                    else:
+                        created_at_iso = created_at
+                else:
+                    created_at_iso = None
+
+                reports_data.append({
+                    'id': firestore_report.get('id'),
+                    'title': firestore_report.get('title'),
+                    'description': firestore_report.get('description', ''),
+                    'status': firestore_report.get('generationStatus', 'completed'),
+                    'createdAt': created_at_iso,
+                    'elements': firestore_report.get('dataSource', {}).get('elements', []),
+                    'layout': firestore_report.get('dataSource', {}).get('layout', {}),
+                    'file_path': firestore_report.get('storagePath'),
+                    'download_url': firestore_report.get('downloadUrl'),
+                    'source': 'firestore',  # Mark source
+                    'firestore_id': firestore_report.get('id')
+                })
+
+            logger.info(f"✅ Fetched {len(sql_reports)} SQL reports and {len(firestore_reports)} Firestore reports")
+
+        except Exception as firestore_error:
+            logger.warning(f"⚠️ Could not fetch Firestore reports: {firestore_error}")
+            # Continue with SQL reports only
+
+        # Sort all reports by creation date (newest first)
+        reports_data.sort(key=lambda x: x.get('createdAt') or '', reverse=True)
+
         return jsonify({
             'success': True,
-            'reports': reports_data
+            'reports': reports_data,
+            'total': len(reports_data)
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error fetching user reports: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': 'Failed to fetch reports'}), 500
 
 @nextgen_bp.route('/reports/<int:report_id>', methods=['DELETE'])
