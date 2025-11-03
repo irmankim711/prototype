@@ -87,15 +87,16 @@ def sync_templates_to_database():
     if not templates_dir.exists():
         print(f"❌ Templates directory not found: {templates_dir}")
         return
-    
+
     print(f"📁 Templates directory: {templates_dir}")
-    
-    # Find all template files
+
+    # Find all template files - scan recursively to include subdirectories
     template_extensions = ['.docx', '.jinja', '.tex', '.html']
     template_files = []
-    
+
     for ext in template_extensions:
-        template_files.extend(templates_dir.glob(f'*{ext}'))
+        # Use rglob for recursive scanning
+        template_files.extend(templates_dir.rglob(f'*{ext}'))
     
     print(f"📄 Found {len(template_files)} template files")
     
@@ -103,10 +104,15 @@ def sync_templates_to_database():
     updated_count = 0
     
     for template_path in template_files:
+        # Skip temporary files and previews directory
+        if template_path.name.startswith('~') or 'preview' in str(template_path).lower():
+            print(f"⏭️  Skipping: {template_path.name}")
+            continue
+
         try:
             template_info = get_template_info(template_path)
             template_identifier = template_info['template_identifier']
-            
+
             print(f"📝 Processing: {template_path.name}")
             
             # Check if template already exists in database

@@ -11,7 +11,7 @@ from pathlib import Path
 from sqlalchemy import and_, or_
 from flask import current_app
 
-from ..models import TemplateModel as Template
+from ..models import ReportTemplate as Template
 from ..models.template_models import ReportStatus
 from .. import db
 
