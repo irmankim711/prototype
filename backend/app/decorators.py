@@ -95,11 +95,33 @@ def firebase_auth_required(f):
             return f(*args, **kwargs)
 
         except Exception as e:
-            current_app.logger.error(f"Authentication error: {str(e)}")
+            import traceback
+            from datetime import datetime
+
+            tb = traceback.format_exc()
+
+            # Log comprehensive error details for production debugging
+            current_app.logger.error("=" * 80)
+            current_app.logger.error("AUTHENTICATION ERROR DETAILS")
+            current_app.logger.error("=" * 80)
+            current_app.logger.error(f"Error Type: {type(e).__name__}")
+            current_app.logger.error(f"Error Message: {str(e)}")
+            current_app.logger.error(f"Request URL: {request.url}")
+            current_app.logger.error(f"Request Method: {request.method}")
+            current_app.logger.error(f"Request Path: {request.path}")
+            current_app.logger.error(f"Request Headers: {dict(request.headers)}")
+            current_app.logger.error(f"Has Authorization Header: {bool(request.headers.get('Authorization'))}")
+            current_app.logger.error(f"Firebase Initialized: {firebase_auth_manager._initialized}")
+            current_app.logger.error(f"Timestamp: {datetime.now().isoformat()}")
+            current_app.logger.error(f"Full Traceback:\n{tb}")
+            current_app.logger.error("=" * 80)
+
             return jsonify({
                 'error': 'Authentication failed',
-                'code': 'AUTH_ERROR'
-            }), 500
+                'code': 'AUTH_ERROR',
+                'error_type': type(e).__name__,
+                'timestamp': datetime.now().isoformat()
+            }), 401  # Changed from 500 to 401 - auth errors should be 401, not 500
 
     return decorated_function
 

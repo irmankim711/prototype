@@ -1185,25 +1185,56 @@ def generate_report_from_excel():
             from app.models.template_models import Template as TemplateModel
 
             template_db_record = None
-            logger.info(f"✅ Looking up template ID: {template_id}")
+            logger.info(f"✅ Looking up template: {template_id} (type: {type(template_id).__name__})")
 
             try:
-                # Convert to integer and query
-                template_id_int = int(template_id)
-                template_db_record = TemplateModel.query.filter_by(
-                    id=template_id_int, is_active=True
-                ).first()
+                # Try integer lookup first (if template_id is numeric)
+                try:
+                    template_id_int = int(template_id)
+                    logger.info(f"🔍 Attempting integer ID lookup: {template_id_int}")
+                    template_db_record = TemplateModel.query.filter_by(
+                        id=template_id_int, is_active=True
+                    ).first()
 
-                if template_db_record:
-                    logger.info(f"✅ Found template in database: {template_db_record.name}")
-                else:
-                    logger.warning(f"⚠️ Template ID {template_id_int} not found in database")
+                    if template_db_record:
+                        logger.info(f"✅ Found template by ID in database: {template_db_record.name}")
+                    else:
+                        logger.info(f"ℹ️ No template found with ID {template_id_int}")
 
-            except (ValueError, TypeError) as e:
-                logger.error(f"❌ Invalid template ID format: {template_id} - {e}")
-                template_db_record = None
+                except (ValueError, TypeError):
+                    # Not a valid integer, template_id is a string name
+                    logger.info(f"🔍 Template ID is not numeric, trying name-based lookup: {template_id}")
+
+                    # Try to find by name or file_path
+                    # Strip common file extensions from template_id for matching
+                    template_name = str(template_id)
+                    for ext in ['.docx', '.jinja', '.tex', '.html']:
+                        if template_name.endswith(ext):
+                            template_name = template_name[:-len(ext)]
+                            break
+
+                    # Search by name (exact match)
+                    template_db_record = TemplateModel.query.filter_by(
+                        name=template_name, is_active=True
+                    ).first()
+
+                    if template_db_record:
+                        logger.info(f"✅ Found template by name in database: {template_db_record.name}")
+                    else:
+                        # Try partial match on file_path
+                        logger.info(f"🔍 Trying file_path partial match for: {template_id}")
+                        template_db_record = TemplateModel.query.filter(
+                            TemplateModel.file_path.like(f"%{template_id}%"),
+                            TemplateModel.is_active == True
+                        ).first()
+
+                        if template_db_record:
+                            logger.info(f"✅ Found template by file_path match: {template_db_record.name}")
+                        else:
+                            logger.info(f"ℹ️ No template found in database with name/path: {template_id}")
+
             except Exception as query_error:
-                logger.error(f"❌ Template query failed: {query_error}")
+                logger.warning(f"⚠️ Template query failed: {query_error}")
                 template_db_record = None
 
             if template_db_record:
@@ -1616,10 +1647,17 @@ def generate_report_from_excel():
             try:
                 from sqlalchemy.exc import SQLAlchemyError
 
+                # Clean up template name for database (remove file extension if present)
+                clean_template_name = str(template_id)
+                for ext in ['.docx', '.jinja', '.tex', '.html']:
+                    if clean_template_name.endswith(ext):
+                        clean_template_name = clean_template_name[:-len(ext)]
+                        break
+
                 # Create template with only fields that exist in the database
                 template_data = {
-                    'name': template_id,
-                    'description': f"Template for {template_id}",
+                    'name': clean_template_name,  # Use cleaned name without extension
+                    'description': f"Auto-generated template record for {clean_template_name}",
                     'template_type': "docx",
                 }
 
@@ -1799,9 +1837,21 @@ def generate_report_from_excel():
                 'data_source': json.dumps(report_data.get('data_source', {})),
                 'generation_config': json.dumps(report_data.get('generation_config', {})),
                 'created_at': datetime.utcnow(),
-                'program_id': default_program_id or 1,  # Use fallback program_id
-                'template_id': template_db_id or 1  # Use fallback template_id
             }
+
+            # Only add program_id if we have a valid one (avoid FK constraint errors)
+            if default_program_id:
+                safe_report_data['program_id'] = default_program_id
+                logger.info(f"✅ Using program_id: {default_program_id}")
+            else:
+                logger.warning("⚠️ No valid program_id available - report will be created without program association")
+
+            # Only add template_id if we have a valid one (avoid FK constraint errors)
+            if template_db_id:
+                safe_report_data['template_id'] = template_db_id
+                logger.info(f"✅ Using template_id: {template_db_id}")
+            else:
+                logger.warning("⚠️ No valid template_id available - report will be created without template association")
             
             logger.info(f"🔧 Creating report with safe data: {list(safe_report_data.keys())}")
             
@@ -1816,11 +1866,18 @@ def generate_report_from_excel():
                 safe_report_data['download_url'] = f"/static/generated/{os.path.basename(report_path)}"
                 safe_report_data['generated_at'] = datetime.utcnow()
 
-            insert_sql = text("""
-                INSERT INTO reports (title, description, report_type, created_by, generation_status, data_source, generation_config, created_at, program_id, template_id, file_path, file_size, file_format, download_url, generated_at)
-                VALUES (:title, :description, :report_type, :created_by, :generation_status, :data_source, :generation_config, :created_at, :program_id, :template_id, :file_path, :file_size, :file_format, :download_url, :generated_at)
+            # Build dynamic SQL query based on available fields
+            columns = list(safe_report_data.keys())
+            placeholders = [f":{col}" for col in columns]
+
+            insert_sql = text(f"""
+                INSERT INTO reports ({', '.join(columns)})
+                VALUES ({', '.join(placeholders)})
             """)
-            
+
+            logger.info(f"🔧 SQL Insert columns: {columns}")
+            logger.info(f"🔧 SQL Insert values: {list(safe_report_data.keys())}")
+
             result = db.session.execute(insert_sql, safe_report_data)
             report_id = result.lastrowid
             db.session.commit()
