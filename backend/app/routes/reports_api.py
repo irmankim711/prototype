@@ -20,6 +20,7 @@ from ..services.report_generation_service import report_generation_service
 from ..services.excel_export_service import excel_export_service
 from ..services.latex_conversion_service import latex_conversion_service
 from ..services.report_lifecycle_service import report_lifecycle_service
+from ..services.firestore_template_service import firestore_template_service
 from ..tasks.enhanced_report_tasks import (
     generate_comprehensive_report_task,
     export_form_to_excel_task,
@@ -188,21 +189,40 @@ def generate_report():
         template_id = resolve_template_id(data['config'])
 
         # Get template file path and add to config
-        template_record = ReportTemplate.query.get(template_id)
-        if template_record and template_record.file_path and os.path.exists(template_record.file_path):
-            data['config']['docx_template_path'] = template_record.file_path
-            logger.info(f"Using template file: {template_record.file_path}")
-        else:
-            # Use the ONE official template from report_templates folder
+        # Priority 1: Try to get latest template from Firestore
+        firestore_template = firestore_template_service.get_latest_puncak_alam_template()
+        if firestore_template:
+            template_file_path = firestore_template_service.get_template_file_path(firestore_template['id'])
+            if template_file_path and os.path.exists(template_file_path):
+                data['config']['docx_template_path'] = template_file_path
+                data['config']['firestore_template_id'] = firestore_template['id']
+                logger.info(f"✅ Using latest Firestore template: {firestore_template.get('name')} (v{firestore_template.get('version')})")
+                logger.info(f"   File path: {template_file_path}")
+
+                # Increment usage count
+                firestore_template_service.increment_usage_count(firestore_template['id'])
+            else:
+                logger.warning(f"⚠️ Firestore template file not found, falling back to database")
+
+        # Priority 2: Check database (SQL/Supabase)
+        if 'docx_template_path' not in data['config']:
+            template_record = ReportTemplate.query.get(template_id)
+            if template_record and template_record.file_path and os.path.exists(template_record.file_path):
+                data['config']['docx_template_path'] = template_record.file_path
+                logger.info(f"Using database template file: {template_record.file_path}")
+
+        # Priority 3: Fallback to filesystem
+        if 'docx_template_path' not in data['config']:
             templates_dir = os.path.join(current_app.root_path, '..', 'templates', 'report_templates')
             template_files = [
-                '04- LAPORAN FU _ PUNCAK ALAM (1).docx'  # THE ONLY TEMPLATE
+                '04- LAPORAN FU _ PUNCAK ALAM (1).docx',  # Primary template
+                '04- LAPORAN FU _ PUNCAK ALAM_final.docx'  # Fallback
             ]
             for template_file in template_files:
                 template_path = os.path.join(templates_dir, template_file)
                 if os.path.exists(template_path):
                     data['config']['docx_template_path'] = template_path
-                    logger.info(f"Using default template file: {template_path}")
+                    logger.info(f"Using filesystem template: {template_path}")
                     break
 
         # Prepare data for template placeholders

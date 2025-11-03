@@ -33,12 +33,20 @@ class ProductionGoogleFormsService:
             'https://www.googleapis.com/auth/forms.responses.readonly',
             'https://www.googleapis.com/auth/drive.readonly'
         ]
-        
+
         # Get configuration from environment
         self.client_id = os.getenv('GOOGLE_CLIENT_ID')
         self.client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
         self.project_id = os.getenv('GOOGLE_PROJECT_ID', 'default-project')
-        self.redirect_uri = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:5000/api/google-forms/callback')
+
+        # Determine redirect URI based on environment
+        flask_env = os.getenv('FLASK_ENV', 'development').lower()
+        if flask_env == 'production':
+            self.redirect_uri = os.getenv('GOOGLE_PRODUCTION_REDIRECT_URI',
+                                         'https://stratosys-irmankim711s-projects.vercel.app/api/google-forms/oauth/callback')
+        else:
+            self.redirect_uri = os.getenv('GOOGLE_REDIRECT_URI',
+                                         'http://localhost:5000/api/google-forms/oauth/callback')
         
         # Credentials can be from file or environment
         self.credentials_json = os.getenv('GOOGLE_CREDENTIALS')
