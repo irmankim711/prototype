@@ -424,12 +424,24 @@ def get_report_templates():
 
         if templates_dir.exists():
             # Focus on .docx files first as they are the main templates
-            docx_files = list(templates_dir.glob('*.docx'))
+            # Scan both root directory and subdirectories for templates (recursive)
+            docx_files = list(templates_dir.rglob('*.docx'))
 
-            for template_file in docx_files:
+            # Remove duplicates by converting to set of absolute paths
+            seen_files = set()
+            unique_docx_files = []
+            for f in docx_files:
+                abs_path = f.resolve()
+                if abs_path not in seen_files:
+                    seen_files.add(abs_path)
+                    unique_docx_files.append(f)
+
+            logger.info(f"Found {len(unique_docx_files)} unique .docx template files in filesystem")
+
+            for template_file in unique_docx_files:
                 # Create user-friendly names for templates
                 template_name = template_file.stem
-                
+
                 # Skip if this template ID already exists from database
                 if template_name in existing_template_ids:
                     logger.info(f"Skipping duplicate template from filesystem: {template_name}")
@@ -546,14 +558,23 @@ def _get_template_display_name(template_stem: str) -> str:
         'temp1_jinja2_excelheaders': 'Enhanced Business Report',
         'testtemplate': 'Test Report Template',
         'temp2': 'Academic/Scientific Report',
-        'default_report': 'Default Report Template'
+        'default_report': 'Default Report Template',
+        'report_template_copy': 'Report Template (Copy)',
+        '04- LAPORAN FU _ PUNCAK ALAM_final': 'Laporan FU Puncak Alam (Final)',
+        '04- LAPORAN FU _ PUNCAK ALAM (1)': 'Laporan FU Puncak Alam'
     }
 
+    # If not in mappings, clean up the name
+    if template_stem.lower() not in [k.lower() for k in name_mappings.keys()]:
+        # Handle LAPORAN templates
+        if 'LAPORAN' in template_stem.upper():
+            return template_stem.replace('_', ' ').replace('  ', ' ').strip()
+        # Handle other templates
+        return template_stem.replace('_', ' ').title()
+
     return name_mappings.get(
-    template_stem.lower(),
-    template_stem.replace(
-        '_',
-         ' ').title())
+        template_stem.lower(),
+        template_stem.replace('_', ' ').title())
 
 def _get_template_description(template_stem: str) -> str:
     """Get detailed description for template"""
@@ -563,12 +584,19 @@ def _get_template_description(template_stem: str) -> str:
         'temp1_jinja2_excelheaders': 'Enhanced business report template optimized for Excel data with automatic header mapping.',
         'testtemplate': 'Template for testing report generation functionality with sample data structures.',
         'temp2': 'Academic or scientific report template with LaTeX-style formatting for research and technical documents.',
-        'default_report': 'Basic report template with minimal formatting, good for simple data presentation.'
+        'default_report': 'Basic report template with minimal formatting, good for simple data presentation.',
+        'report_template_copy': 'Copy of main report template with standard formatting and layout.',
+        '04- LAPORAN FU _ PUNCAK ALAM_final': 'Final version of Laporan FU Puncak Alam report template.',
+        '04- LAPORAN FU _ PUNCAK ALAM (1)': 'Laporan FU Puncak Alam report template.'
     }
 
+    # Check for LAPORAN templates
+    if 'LAPORAN' in template_stem.upper() and template_stem.lower() not in [k.lower() for k in descriptions.keys()]:
+        return f'Malaysian report template: {template_stem}'
+
     return descriptions.get(
-    template_stem.lower(),
-     f'Report template: {template_stem}')
+        template_stem.lower(),
+        f'Report template: {template_stem}')
 
 @nextgen_bp.route('/templates', methods=['POST'])
 @cross_origin(supports_credentials=True)
