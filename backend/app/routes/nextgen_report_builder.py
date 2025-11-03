@@ -839,15 +839,8 @@ def upload_excel_file():
         logger.info(f"Extracted columns: {len(columns)} columns")
         for i, col in enumerate(columns):
             logger.info(
-    f"Column {
-        i +
-        1}: {
-            col.get(
-                'name',
-                'Unknown')} - {
-                    col.get(
-                        'data_type',
-                         'unknown')}")
+                f"Column {i + 1}: {col.get('name', 'Unknown')} - {col.get('data_type', 'unknown')}"
+            )
 
         # Create data source from Excel file with proper structure
         data_source = {
