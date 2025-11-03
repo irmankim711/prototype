@@ -189,9 +189,41 @@ const GoogleFormsExporter: React.FC = () => {
     try {
       const authResponse = await formBuilderAPI.initiateGoogleAuth();
       if (authResponse.success && authResponse.authorization_url) {
-        // Open authorization URL in a new window
-        window.open(authResponse.authorization_url, '_blank');
+        // Listen for OAuth success message from popup
+        const handleAuthMessage = (event: MessageEvent) => {
+          if (event.data.type === 'google-auth-success') {
+            console.log('✅ Google OAuth successful, reloading status...');
+            // Remove listener
+            window.removeEventListener('message', handleAuthMessage);
+            // Recheck status to load forms
+            checkGoogleFormsStatus();
+            setShowAuthDialog(false);
+          }
+        };
+
+        window.addEventListener('message', handleAuthMessage);
+
+        // Open authorization URL in a popup window
+        const authWindow = window.open(
+          authResponse.authorization_url,
+          'Google OAuth',
+          'width=600,height=700'
+        );
         setShowAuthDialog(true);
+
+        // Fallback: Poll for authentication completion if message not received
+        const pollInterval = setInterval(() => {
+          if (authWindow?.closed) {
+            clearInterval(pollInterval);
+            // Clean up listener
+            window.removeEventListener('message', handleAuthMessage);
+            // Recheck status after auth window closes
+            setTimeout(() => {
+              checkGoogleFormsStatus();
+              setShowAuthDialog(false);
+            }, 1000);
+          }
+        }, 500);
       }
     } catch (error) {
       console.error('Error initiating Google auth:', error);
