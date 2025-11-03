@@ -1219,8 +1219,11 @@ def generate_report_from_excel():
                             logger.info(f"✅ Found template in Firestore: {template_name}")
                             logger.info(f"   Path: {template_file}")
                             # Create a mock DB record for compatibility
+                            # Note: id is set to None because Firestore IDs are strings
+                            # and can't be used as foreign keys in the Report model (which expects integers)
                             template_db_record = type('TemplateRecord', (), {
-                                'id': firestore_template.id,
+                                'id': None,  # Firestore ID is a string, can't be used as FK
+                                'firestore_id': firestore_template.id,  # Keep original Firestore ID for reference
                                 'name': template_data.get('name'),
                                 'file_path': str(template_file)
                             })()
@@ -1699,10 +1702,13 @@ def generate_report_from_excel():
             default_program_id = 1  # Emergency fallback
 
         # Try to get template ID
+        firestore_template_id = None  # Initialize Firestore ID
         if template_db_record:
             template_db_id = template_db_record.id
+            # Get Firestore ID if available
+            firestore_template_id = getattr(template_db_record, 'firestore_id', None)
             logger.info(
-    f"🔍 [DEBUG] Using existing template ID: {template_db_id}")
+    f"🔍 [DEBUG] Using existing template ID: {template_db_id}, Firestore ID: {firestore_template_id}")
         else:
             # Try to create a simple template record
             try:
@@ -1866,16 +1872,20 @@ def generate_report_from_excel():
             'data_source': {  # JSON field
                 'excel_source': excel_file_path,
                 'template_used': template_id,  # Keep original template name for reference
-                # Add actual UUID
-                'template_uuid': str(template_db_id) if template_db_id else None,
+                # Add integer DB ID if available
+                'template_db_id': template_db_id if template_db_id and isinstance(template_db_id, int) else None,
+                # Add Firestore ID if available
+                'template_firestore_id': firestore_template_id,
                 'file_type': 'excel',
                 'automation_type': 'excel'
             },
             'generation_config': {  # JSON field
                 'template_id': template_id,  # Keep original template name for reference
                 'template_used': template_id,  # Use same value for template_used field
-                # Add actual UUID
-                'template_uuid': str(template_db_id) if template_db_id else None,
+                # Add integer DB ID if available
+                'template_db_id': template_db_id if template_db_id and isinstance(template_db_id, int) else None,
+                # Add Firestore ID if available
+                'template_firestore_id': firestore_template_id,
                 'template_file': str(template_file),
                 'excel_file': excel_file_path,
                 'automation_method': 'form_automation_service'
@@ -1907,12 +1917,16 @@ def generate_report_from_excel():
             else:
                 logger.warning("⚠️ No valid program_id available - report will be created without program association")
 
-            # Only add template_id if we have a valid one (avoid FK constraint errors)
-            if template_db_id:
+            # Only add template_id if we have a valid INTEGER one (avoid FK constraint errors)
+            # Firestore templates have string IDs and can't be used as foreign keys
+            if template_db_id and isinstance(template_db_id, int):
                 safe_report_data['template_id'] = template_db_id
                 logger.info(f"✅ Using template_id: {template_db_id}")
             else:
-                logger.warning("⚠️ No valid template_id available - report will be created without template association")
+                if firestore_template_id:
+                    logger.info(f"ℹ️ Using Firestore template (ID: {firestore_template_id}) - not setting template_id FK")
+                else:
+                    logger.warning("⚠️ No valid template_id available - report will be created without template association")
             
             logger.info(f"🔧 Creating report with safe data: {list(safe_report_data.keys())}")
             
