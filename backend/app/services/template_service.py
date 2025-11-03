@@ -35,25 +35,25 @@ class TemplateService:
     def get_templates(self, user_id: int = None, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """
         Get all active templates with optional filtering
-        
+
         Args:
             user_id: User ID for permission filtering
             filters: Dictionary of filters (category, template_type, search)
-            
+
         Returns:
             List of template dictionaries
         """
         try:
             query = Template.query.filter_by(is_active=True)
-            
+
             # Apply filters
             if filters:
                 if filters.get('category'):
                     query = query.filter(Template.category == filters['category'])
-                
+
                 if filters.get('template_type'):
                     query = query.filter(Template.template_type == filters['template_type'])
-                
+
                 if filters.get('search'):
                     search_term = f"%{filters['search']}%"
                     query = query.filter(
@@ -62,33 +62,38 @@ class TemplateService:
                             Template.description.ilike(search_term)
                         )
                     )
-                
+
                 if filters.get('supports_excel') is not None:
                     query = query.filter(Template.supports_excel == filters['supports_excel'])
-            
+
             # Order by name
             templates = query.order_by(Template.name).all()
-            
+
             # Convert to dictionaries and add metadata
             result = []
             for template in templates:
                 template_dict = template.to_dict()
-                
+
                 # Add usage statistics
                 template_dict['usage_count'] = self._get_template_usage_count(template.id)
                 template_dict['last_used'] = self._get_template_last_used(template.id)
-                
+
                 # Add file information if file-based
                 if template.file_path and os.path.exists(template.file_path):
                     file_stat = os.stat(template.file_path)
                     template_dict['file_size'] = file_stat.st_size
                     template_dict['file_modified'] = datetime.fromtimestamp(file_stat.st_mtime).isoformat()
-                
+
                 result.append(template_dict)
-            
+
+            # If no templates in database, scan file system
+            if not result:
+                logger.info("No templates in database, scanning file system")
+                result = self._scan_file_based_templates()
+
             logger.info(f"Retrieved {len(result)} templates with filters: {filters}")
             return result
-            
+
         except Exception as e:
             logger.error(f"Error retrieving templates: {e}")
             return []
@@ -498,8 +503,116 @@ class TemplateService:
             'author': 'Sample Author',
             'company': 'Sample Company'
         })
-        
+
         return sample_data
+
+    def _scan_file_based_templates(self) -> List[Dict[str, Any]]:
+        """
+        Scan the templates directory for file-based templates
+        Returns a list of template dictionaries
+        """
+        templates = []
+
+        try:
+            # Check both main templates directory and report_templates subdirectory
+            template_dirs = [
+                self.templates_path,
+                self.templates_path / 'report_templates'
+            ]
+
+            for templates_dir in template_dirs:
+                if not templates_dir.exists():
+                    continue
+
+                logger.info(f"Scanning template directory: {templates_dir}")
+
+                # Scan for .docx files
+                for template_file in templates_dir.rglob('*.docx'):
+                    # Skip temporary files
+                    if template_file.name.startswith('~'):
+                        continue
+
+                    try:
+                        template_info = {
+                            'id': template_file.stem,
+                            'name': template_file.stem.replace('_', ' ').title(),
+                            'description': f'Word document template: {template_file.name}',
+                            'template_type': 'docx',
+                            'category': 'general',
+                            'created_at': datetime.fromtimestamp(template_file.stat().st_ctime).isoformat(),
+                            'updated_at': datetime.fromtimestamp(template_file.stat().st_mtime).isoformat(),
+                            'file_path': str(template_file),
+                            'file_size': template_file.stat().st_size,
+                            'is_active': True,
+                            'supports_excel': True
+                        }
+                        templates.append(template_info)
+                        logger.info(f"Found template: {template_info['name']}")
+                    except Exception as e:
+                        logger.error(f"Error processing template file {template_file}: {e}")
+
+                # Scan for .tex files
+                for template_file in templates_dir.rglob('*.tex'):
+                    if template_file.name.startswith('~'):
+                        continue
+
+                    try:
+                        with open(template_file, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                    except (IOError, UnicodeDecodeError) as e:
+                        logger.warning(f"Could not read template file {template_file}: {str(e)}")
+                        content = ''
+
+                    template_info = {
+                        'id': template_file.stem,
+                        'name': template_file.stem.replace('_', ' ').title(),
+                        'description': f'LaTeX template: {template_file.name}',
+                        'template_type': 'latex',
+                        'category': 'general',
+                        'template_content': content,
+                        'created_at': datetime.fromtimestamp(template_file.stat().st_ctime).isoformat(),
+                        'updated_at': datetime.fromtimestamp(template_file.stat().st_mtime).isoformat(),
+                        'file_path': str(template_file),
+                        'file_size': template_file.stat().st_size,
+                        'is_active': True,
+                        'supports_excel': True
+                    }
+                    templates.append(template_info)
+
+                # Scan for .jinja files
+                for template_file in templates_dir.rglob('*.jinja*'):
+                    if template_file.name.startswith('~'):
+                        continue
+
+                    try:
+                        with open(template_file, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                    except (IOError, UnicodeDecodeError) as e:
+                        logger.warning(f"Could not read template file {template_file}: {str(e)}")
+                        content = ''
+
+                    template_info = {
+                        'id': template_file.stem,
+                        'name': template_file.stem.replace('_', ' ').title(),
+                        'description': f'Jinja2 template: {template_file.name}',
+                        'template_type': 'jinja2',
+                        'category': 'general',
+                        'template_content': content,
+                        'created_at': datetime.fromtimestamp(template_file.stat().st_ctime).isoformat(),
+                        'updated_at': datetime.fromtimestamp(template_file.stat().st_mtime).isoformat(),
+                        'file_path': str(template_file),
+                        'file_size': template_file.stat().st_size,
+                        'is_active': True,
+                        'supports_excel': True
+                    }
+                    templates.append(template_info)
+
+            logger.info(f"Found {len(templates)} file-based templates")
+            return templates
+
+        except Exception as e:
+            logger.error(f"Error scanning file-based templates: {e}")
+            return []
 
 # Global service instance
 template_service = TemplateService()
