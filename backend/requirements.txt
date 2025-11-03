@@ -60,6 +60,7 @@ xlsxwriter>=3.1.0
 
 # AI and Data Processing
 openai>=1.0.0
+anthropic>=0.39.0
 pandas>=2.0.0
 matplotlib>=3.7.0
 seaborn>=0.12.0

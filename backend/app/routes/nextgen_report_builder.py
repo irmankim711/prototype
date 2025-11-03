@@ -27,6 +27,7 @@ from app.services.form_automation import FormAutomationService
 from app.services.export_service import ExportService
 from app.services.excel_parser import ExcelParserService
 from app.services.template_optimizer import TemplateOptimizerService
+from app.services.ai_report_service import AIReportService
 import re
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ nextgen_bp = Blueprint('nextgen_report_builder', __name__)
 form_automation = FormAutomationService()
 excel_parser = ExcelParserService()
 template_optimizer = TemplateOptimizerService()
+ai_report_service = AIReportService()
 
 # ================ CORS TEST ENDPOINT ================
 
@@ -4134,5 +4136,219 @@ def _get_basic_suggestions(text: str) -> List[Dict[str, str]]:
             'suggestion': 'Some sentences are quite long - consider breaking them into shorter ones',
             'importance': 'medium'
         })
-    
+
     return suggestions
+
+
+# ================ CLAUDE AI ENHANCED REPORT ENDPOINTS ================
+
+@nextgen_bp.route('/ai/generate-report-content', methods=['POST'])
+@firebase_auth_required
+def generate_ai_report_content():
+    """
+    Generate AI-powered report content using Claude
+
+    Request body:
+    {
+        "data": [...],  # Data records for analysis
+        "reportTitle": "Report Title",
+        "reportType": "analysis|summary|detailed|executive",
+        "additionalContext": "Optional context"
+    }
+    """
+    try:
+        user_id = get_current_user_id()
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        report_data = data.get('data', [])
+        report_title = data.get('reportTitle', 'AI Generated Report')
+        report_type = data.get('reportType', 'analysis')
+        additional_context = data.get('additionalContext')
+
+        logger.info(f"Generating AI report content: {report_title} (type: {report_type})")
+
+        if not report_data:
+            return jsonify({'error': 'No data provided for report generation'}), 400
+
+        # Generate report using Claude AI
+        result = ai_report_service.generate_report_content(
+            data=report_data,
+            report_title=report_title,
+            report_type=report_type,
+            additional_context=additional_context
+        )
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        logger.error(f"Error generating AI report content: {str(e)}")
+        return jsonify({
+            'error': 'Failed to generate AI report content',
+            'details': str(e)
+        }), 500
+
+
+@nextgen_bp.route('/ai/executive-summary', methods=['POST'])
+@firebase_auth_required
+def generate_executive_summary():
+    """
+    Generate executive summary using Claude AI
+
+    Request body:
+    {
+        "data": [...],  # Data records for analysis
+        "analysis": {...}  # Optional pre-computed analysis
+    }
+    """
+    try:
+        user_id = get_current_user_id()
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        report_data = data.get('data', [])
+        analysis = data.get('analysis')
+
+        logger.info("Generating executive summary with Claude AI")
+
+        if not report_data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Generate executive summary
+        summary = ai_report_service.generate_executive_summary(
+            data=report_data,
+            analysis=analysis
+        )
+
+        return jsonify({
+            'success': True,
+            'summary': summary,
+            'ai_generated': ai_report_service.ai_enabled
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error generating executive summary: {str(e)}")
+        return jsonify({
+            'error': 'Failed to generate executive summary',
+            'details': str(e)
+        }), 500
+
+
+@nextgen_bp.route('/ai/analyze-insights', methods=['POST'])
+@firebase_auth_required
+def analyze_data_insights():
+    """
+    Analyze data and extract insights using Claude AI
+
+    Request body:
+    {
+        "data": [...]  # Data records for analysis
+    }
+    """
+    try:
+        user_id = get_current_user_id()
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        report_data = data.get('data', [])
+
+        logger.info("Analyzing data insights with Claude AI")
+
+        if not report_data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Analyze insights
+        insights = ai_report_service.analyze_data_insights(
+            data=report_data
+        )
+
+        return jsonify({
+            'success': True,
+            'insights': insights,
+            'ai_generated': ai_report_service.ai_enabled
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error analyzing insights: {str(e)}")
+        return jsonify({
+            'error': 'Failed to analyze insights',
+            'details': str(e)
+        }), 500
+
+
+@nextgen_bp.route('/ai/suggest-visualizations', methods=['POST'])
+@firebase_auth_required
+def suggest_visualizations():
+    """
+    Suggest appropriate visualizations using Claude AI
+
+    Request body:
+    {
+        "data": [...]  # Data records for analysis
+    }
+    """
+    try:
+        user_id = get_current_user_id()
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        report_data = data.get('data', [])
+
+        logger.info("Suggesting visualizations with Claude AI")
+
+        if not report_data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Get visualization suggestions
+        suggestions = ai_report_service.suggest_visualizations(
+            data=report_data
+        )
+
+        return jsonify({
+            'success': True,
+            'visualizations': suggestions,
+            'ai_generated': ai_report_service.ai_enabled
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error suggesting visualizations: {str(e)}")
+        return jsonify({
+            'error': 'Failed to suggest visualizations',
+            'details': str(e)
+        }), 500
+
+
+@nextgen_bp.route('/ai/status', methods=['GET'])
+@firebase_auth_required
+def get_ai_status():
+    """
+    Get Claude AI service status
+    """
+    try:
+        return jsonify({
+            'success': True,
+            'ai_enabled': ai_report_service.ai_enabled,
+            'service': 'Claude AI (Anthropic)',
+            'model': 'claude-sonnet-4' if ai_report_service.ai_enabled else None,
+            'features': {
+                'report_generation': ai_report_service.ai_enabled,
+                'executive_summary': ai_report_service.ai_enabled,
+                'data_insights': ai_report_service.ai_enabled,
+                'visualization_suggestions': ai_report_service.ai_enabled
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error checking AI status: {str(e)}")
+        return jsonify({
+            'error': 'Failed to check AI status',
+            'details': str(e)
+        }), 500
