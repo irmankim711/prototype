@@ -38,6 +38,8 @@ def create_app(config=None):
     CORS(app,
          origins=['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174',
                   'http://127.0.0.1:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174',
+                  'https://www.stratosys.com.my',
+                  'https://stratosys.com.my',
                   'https://stratosys-irmankim711s-projects.vercel.app',
                   'https://*.vercel.app'],  # Allow all Vercel preview deployments
          supports_credentials=True,

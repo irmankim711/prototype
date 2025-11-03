@@ -256,7 +256,9 @@ def register_blueprints(app):
             return jsonify({
                 'total_routes': len(routes),
                 'routes': sorted(routes, key=lambda x: x['path']),
-                'nextgen_routes': [r for r in routes if 'nextgen' in r['path'].lower()]
+                'nextgen_routes': [r for r in routes if 'nextgen' in r['path'].lower()],
+                'deployed_commit': 'f58d7582',  # Latest commit hash
+                'debug_endpoints_active': True
             })
 
         app.register_blueprint(simple_health_bp)
