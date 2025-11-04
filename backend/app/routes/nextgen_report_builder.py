@@ -1060,29 +1060,26 @@ def generate_report_from_excel():
             return jsonify(
                 {'error': 'Excel file path and template ID are required'}), 400
 
-        # Validate Excel file exists and is accessible
+        # ✅ FIX: Validate Excel file exists and is accessible (Railway-compatible)
         try:
-            excel_path = Path(excel_file_path)
-            if not excel_path.exists():
-                logger.error(
-    f"🔍 [DEBUG] Excel file does not exist: {excel_file_path}")
-                return jsonify(
-                    {'error': f'Excel file not found: {excel_file_path}'}), 400
+            from app.utils.railway_paths import validate_excel_path
+
+            excel_path = validate_excel_path(excel_file_path)
+            if not excel_path:
+                logger.error(f"🔍 [DEBUG] Excel file not found: {excel_file_path}")
+                return jsonify({'error': f'Excel file not found: {excel_file_path}'}), 400
 
             if not excel_path.is_file():
-                logger.error(
-    f"🔍 [DEBUG] Excel path is not a file: {excel_file_path}")
-                return jsonify(
-                    {'error': f'Excel path is not a file: {excel_file_path}'}), 400
+                logger.error(f"🔍 [DEBUG] Excel path is not a file: {excel_file_path}")
+                return jsonify({'error': f'Excel path is not a file: {excel_file_path}'}), 400
 
             # Check if file is readable
-            if not os.access(excel_file_path, os.R_OK):
-                logger.error(
-    f"🔍 [DEBUG] Excel file is not readable: {excel_file_path}")
-                return jsonify(
-                    {'error': f'Excel file is not readable: {excel_file_path}'}), 400
+            if not os.access(str(excel_path), os.R_OK):
+                logger.error(f"🔍 [DEBUG] Excel file is not readable: {excel_path}")
+                return jsonify({'error': f'Excel file is not readable: {excel_path}'}), 400
 
             file_size = excel_path.stat().st_size
+            excel_file_path = str(excel_path)  # Update to resolved path
             logger.info(f"🆔 [{request_id}] ✅ Excel file validated: {excel_file_path} (size: {file_size} bytes)")
 
         except Exception as e:
@@ -1321,10 +1318,12 @@ def generate_report_from_excel():
 
         # Fallback to filesystem lookup if not found in database
         if not template_file:
-            logger.info(
-    f"🔍 [DEBUG] Template not found in DB, falling back to filesystem lookup")
-            templates_dir = Path(__file__).parent.parent.parent / 'templates'
+            from app.utils.railway_paths import get_templates_dir
+
+            logger.info(f"🔍 [DEBUG] Template not found in DB, falling back to filesystem lookup")
+            templates_dir = get_templates_dir()
             logger.info(f"🔍 [DEBUG] Templates directory: {templates_dir}")
+            logger.info(f"🔍 [DEBUG] Templates directory exists: {templates_dir.exists()}")
             logger.info(f"🔍 [DEBUG] Looking for template_id: {repr(template_id)}")
 
             # First, try the template_id as-is (in case it already has an extension)
@@ -1427,11 +1426,11 @@ def generate_report_from_excel():
             import shutil
             from datetime import datetime
             from docxtpl import DocxTemplate
+            from app.utils.railway_paths import get_reports_dir
 
-            # Create output directory
-            upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
-            output_dir = Path(current_app.root_path).parent / upload_folder / 'reports'
-            output_dir.mkdir(parents=True, exist_ok=True)
+            # ✅ FIX: Use Railway-compatible output directory
+            output_dir = get_reports_dir()
+            logger.info(f"🆔 [{request_id}] Using output directory: {output_dir}")
 
             # Generate unique output filename
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')

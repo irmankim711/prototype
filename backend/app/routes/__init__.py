@@ -429,4 +429,12 @@ def register_blueprints(app):
     except Exception as e:
         app.logger.warning(f"Could not import firebase_reports_api: {e}")
 
+    # Railway diagnostics routes
+    try:
+        from app.routes.railway_diagnostics import railway_diag_bp
+        app.register_blueprint(railway_diag_bp, url_prefix='/api/railway')
+        app.logger.info("✅ Railway diagnostics routes registered")
+    except Exception as e:
+        app.logger.warning(f"Could not import railway_diagnostics: {e}")
+
     app.logger.info("🎯 Blueprint registration completed - added missing API routes")
