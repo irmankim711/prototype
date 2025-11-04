@@ -50,16 +50,29 @@ class ExcelTableDetector:
             raise
     
     def _detect_tables_openpyxl(self) -> List[Dict[str, Any]]:
-        """Detect tables using openpyxl for .xlsx files."""
+        """Detect tables using openpyxl for .xlsx files with memory optimization."""
         tables = []
-        self.workbook = load_workbook(self.file_path, data_only=True)
-        
-        for sheet_name in self.workbook.sheetnames:
-            sheet = self.workbook[sheet_name]
-            sheet_tables = self._find_tables_in_sheet_openpyxl(sheet, sheet_name)
-            tables.extend(sheet_tables)
-        
-        return tables
+        try:
+            # Use read_only mode for better memory efficiency
+            self.workbook = load_workbook(self.file_path, data_only=True, read_only=True)
+
+            for sheet_name in self.workbook.sheetnames:
+                try:
+                    sheet = self.workbook[sheet_name]
+                    sheet_tables = self._find_tables_in_sheet_openpyxl(sheet, sheet_name)
+                    tables.extend(sheet_tables)
+                except Exception as sheet_error:
+                    logger.warning(f"Error processing sheet {sheet_name}: {str(sheet_error)}")
+                    continue
+
+            return tables
+        finally:
+            # Ensure workbook is closed to free memory
+            if self.workbook:
+                try:
+                    self.workbook.close()
+                except:
+                    pass
     
     def _detect_tables_xlrd(self) -> List[Dict[str, Any]]:
         """Detect tables using xlrd for .xls files."""
@@ -75,13 +88,25 @@ class ExcelTableDetector:
         return tables
     
     def _find_tables_in_sheet_openpyxl(self, sheet, sheet_name: str) -> List[Dict[str, Any]]:
-        """Find all tables in a single sheet using openpyxl."""
+        """Find all tables in a single sheet using openpyxl with size limits."""
         tables = []
-        
+
         # Get sheet dimensions
         max_row = sheet.max_row
         max_col = sheet.max_column
-        
+
+        # Enforce size limits to prevent memory exhaustion
+        MAX_ROWS = 50000
+        MAX_COLS = 500
+
+        if max_row > MAX_ROWS:
+            logger.warning(f"Sheet {sheet_name} has {max_row} rows, limiting to {MAX_ROWS}")
+            max_row = MAX_ROWS
+
+        if max_col > MAX_COLS:
+            logger.warning(f"Sheet {sheet_name} has {max_col} columns, limiting to {MAX_COLS}")
+            max_col = MAX_COLS
+
         if max_row < 2 or max_col < 2:  # Need at least header + 1 data row
             return tables
         
@@ -426,23 +451,53 @@ class ExcelTableDetector:
 
 class ExcelParserService:
     """Main service for parsing Excel files and converting to structured data."""
-    
+
     def __init__(self):
         self.supported_extensions = ['.xlsx', '.xls']
         self.max_file_size = 50 * 1024 * 1024  # 50MB
-    
-    def parse_excel_file(self, file_path: Union[str, BytesIO], 
+        self.max_processing_time = 30  # 30 seconds timeout
+        self.max_rows = 50000  # Maximum rows to process
+        self.max_columns = 500  # Maximum columns to process
+
+    def parse_excel_file(self, file_path: Union[str, BytesIO],
                         filename: str = None) -> Dict[str, Any]:
         """
-        Parse an Excel file and return structured data.
-        
+        Parse an Excel file and return structured data with memory/timeout protections.
+
         Args:
             file_path: Path to file or BytesIO object
             filename: Original filename (for extension detection)
-        
+
         Returns:
             Dictionary containing parsed tables and metadata
         """
+        import time
+        import signal
+        from contextlib import contextmanager
+
+        start_time = time.time()
+
+        @contextmanager
+        def timeout_handler(seconds):
+            """Context manager for timeout protection."""
+            def timeout_signal_handler(signum, frame):
+                raise TimeoutError(f"Excel parsing exceeded {seconds} seconds timeout")
+
+            # Set timeout handler (Unix-like systems)
+            try:
+                old_handler = signal.signal(signal.SIGALRM, timeout_signal_handler)
+                signal.alarm(seconds)
+                yield
+            except AttributeError:
+                # Windows doesn't support SIGALRM, use basic timeout check
+                yield
+            finally:
+                try:
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, old_handler)
+                except:
+                    pass
+
         try:
             # Validate input
             if not file_path:
@@ -451,31 +506,70 @@ class ExcelParserService:
                     'error': 'No file path provided',
                     'filename': filename or 'unknown'
                 }
-            
+
+            # Check file size before processing
+            if isinstance(file_path, str):
+                import os
+                if os.path.exists(file_path):
+                    file_size = os.path.getsize(file_path)
+                    if file_size > self.max_file_size:
+                        return {
+                            'success': False,
+                            'error': f'File too large ({file_size / 1024 / 1024:.1f}MB). Maximum: 50MB',
+                            'filename': filename or 'unknown'
+                        }
+
             # Detect file extension
             file_extension = None
             if filename:
                 file_extension = self._get_file_extension(filename)
-            
+
             # Initialize detector with error handling
             try:
                 detector = ExcelTableDetector(file_path, file_extension)
             except Exception as detector_error:
-                logger.error(f"Failed to initialize Excel detector: {str(detector_error)}")
+                logger.error(f"Failed to initialize Excel detector: {str(detector_error)}", exc_info=True)
                 return {
                     'success': False,
                     'error': f'Failed to initialize Excel detector: {str(detector_error)}',
+                    'error_type': type(detector_error).__name__,
                     'filename': filename or 'unknown'
                 }
-            
-            # Detect all tables with error handling
+
+            # Detect all tables with error handling and timeout
             try:
-                tables = detector.detect_all_tables()
+                with timeout_handler(self.max_processing_time):
+                    tables = detector.detect_all_tables()
+
+                    # Check processing time periodically
+                    elapsed = time.time() - start_time
+                    if elapsed > self.max_processing_time:
+                        raise TimeoutError(f"Excel parsing exceeded {self.max_processing_time} seconds")
+
+            except TimeoutError as timeout_error:
+                logger.error(f"Timeout during table detection: {str(timeout_error)}")
+                return {
+                    'success': False,
+                    'error': f'Processing timeout: File too complex or too large',
+                    'error_type': 'TimeoutError',
+                    'filename': filename or 'unknown',
+                    'suggestion': 'Try reducing the file size or simplifying the spreadsheet structure'
+                }
+            except MemoryError as mem_error:
+                logger.error(f"Out of memory during table detection: {str(mem_error)}")
+                return {
+                    'success': False,
+                    'error': 'Out of memory: File too large to process',
+                    'error_type': 'MemoryError',
+                    'filename': filename or 'unknown',
+                    'suggestion': 'Please reduce the file size or split into smaller files'
+                }
             except Exception as detection_error:
-                logger.error(f"Failed to detect tables: {str(detection_error)}")
+                logger.error(f"Failed to detect tables: {str(detection_error)}", exc_info=True)
                 return {
                     'success': False,
                     'error': f'Failed to detect tables: {str(detection_error)}',
+                    'error_type': type(detection_error).__name__,
                     'filename': filename or 'unknown'
                 }
             

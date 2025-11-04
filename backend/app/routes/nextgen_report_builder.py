@@ -2092,6 +2092,8 @@ def generate_report_from_excel():
 
     except Exception as e:
         import traceback
+        import os
+        import sys
 
         # Critical: Always rollback on any exception to prevent tainted
         # sessions
@@ -2101,10 +2103,13 @@ def generate_report_from_excel():
         except Exception as rollback_error:
             logger.error(f"Error during rollback: {rollback_error}")
 
+        # Capture full traceback
+        full_traceback = traceback.format_exc()
+
         logger.error(
     f"🚨 CRITICAL ERROR in generate_report_from_excel: {str(e)}")
         logger.error(f"🚨 Error type: {type(e).__name__}")
-        logger.error(f"🚨 Full traceback: {traceback.format_exc()}")
+        logger.error(f"🚨 Full traceback: {full_traceback}")
         logger.error(f"🚨 Request data: {request.get_data()}")
         logger.error(f"🚨 Request JSON: {request.get_json()}")
         logger.error(f"🚨 Request method: {request.method}")
@@ -2112,6 +2117,17 @@ def generate_report_from_excel():
         logger.error(f"🚨 Request headers: {dict(request.headers)}")
         logger.error(
     f"🚨 User ID: {get_current_user_id() if 'user_id' not in locals() else user_id}")
+
+        # Log system information for debugging
+        logger.error(f"🚨 Python version: {sys.version}")
+        logger.error(f"🚨 Platform: {sys.platform}")
+        try:
+            import psutil
+            process = psutil.Process(os.getpid())
+            memory_info = process.memory_info()
+            logger.error(f"🚨 Memory usage: {memory_info.rss / 1024 / 1024:.2f} MB")
+        except:
+            pass
 
         # Return detailed error for debugging with more specific error
         # categories
@@ -2125,17 +2141,30 @@ def generate_report_from_excel():
             'suggestion': ''
         }
 
+        # Add traceback in non-production environments
+        is_development = os.environ.get('FLASK_ENV') == 'development' or os.environ.get('DEBUG') == 'True'
+        if is_development:
+            error_details['traceback'] = full_traceback
+            error_details['python_version'] = sys.version
+            error_details['platform'] = sys.platform
+
         # Add specific suggestions based on error type
         if 'TemplateOptimizerService' in str(e):
             error_details['suggestion'] = 'Template optimization failed. Check template file format and content.'
-        elif 'ExcelParserService' in str(e):
-            error_details['suggestion'] = 'Excel parsing failed. Check Excel file format and accessibility.'
+        elif 'ExcelParserService' in str(e) or 'ExcelTableDetector' in str(e):
+            error_details['suggestion'] = 'Excel parsing failed. Check Excel file format and accessibility. Try reducing file size.'
         elif 'FileNotFoundError' in error_type:
             error_details['suggestion'] = 'Required file not found. Check Excel and template file paths.'
         elif 'PermissionError' in error_type:
             error_details['suggestion'] = 'File permission error. Check write permissions to output directory.'
         elif 'ImportError' in error_type or 'ModuleNotFoundError' in error_type:
             error_details['suggestion'] = 'Missing Python dependency. Install required packages.'
+        elif 'MemoryError' in error_type:
+            error_details['suggestion'] = 'Out of memory. Try reducing Excel file size or splitting into smaller files.'
+        elif 'TimeoutError' in error_type or 'timeout' in str(e).lower():
+            error_details['suggestion'] = 'Processing timeout. Excel file too large or complex. Try simplifying the spreadsheet.'
+        elif 'openpyxl' in str(e).lower() or 'xlrd' in str(e).lower():
+            error_details['suggestion'] = 'Excel library error. Check if file is corrupted or in an unsupported format.'
         else:
             error_details['suggestion'] = 'Check backend logs for detailed error information.'
 
