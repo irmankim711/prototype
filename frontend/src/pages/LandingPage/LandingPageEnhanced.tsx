@@ -373,8 +373,8 @@ export default function LandingPageEnhanced() {
     try {
       // Use the AuthContext login method to properly update state
       await auth.login(email, password);
-      console.log("Login successful via AuthContext, navigating to dashboard...");
-      navigate("/dashboard");
+      console.log("Login successful via AuthContext, navigating to google-forms-export...");
+      navigate("/google-forms-export");
     } catch (err: any) {
       console.error("Login error:", err);
       setErrorMessage(err?.response?.data?.msg || err?.message || "Invalid email or password");
@@ -479,8 +479,8 @@ export default function LandingPageEnhanced() {
         const savedToken = localStorage.getItem("quickAccessToken");
         console.log("Token saved successfully:", !!savedToken);
 
-        console.log("Navigating to /forms/public");
-        navigate("/forms/public");
+        console.log("Navigating to /google-forms-export");
+        navigate("/google-forms-export");
       } else {
         console.error("OTP verification failed:", data);
         setQuickAccessError(data.error || data.msg || "Invalid OTP");
@@ -512,7 +512,7 @@ export default function LandingPageEnhanced() {
       const data = await apiResponse.json();
       if (apiResponse.ok) {
         localStorage.setItem("quickAccessToken", data.access_token);
-        navigate("/forms/public");
+        navigate("/google-forms-export");
       } else {
         setQuickAccessError(data.error || data.msg || "Google Sign-In failed");
       }
