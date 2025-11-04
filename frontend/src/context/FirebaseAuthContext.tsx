@@ -66,25 +66,46 @@ const [isDevelopmentBypass, setIsDevelopmentBypass] = useState(false);
   // Clear all authentication data
   const clearAllAuthData = useCallback(() => {
     setUser(null);
-    
+
 setFirebaseUser(null);
-    
+
 setUserProfile(null);
-    
+
 setIsDevelopmentBypass(false);
 
-    // Clear localStorage - INCLUDING firebaseToken!
+    // Clear all localStorage keys - INCLUDING Firebase SDK internal keys!
     localStorage.removeItem("accessToken");
-    localStorage.removeItem("firebaseToken");  // ← This was missing!
+    localStorage.removeItem("firebaseToken");
+    localStorage.removeItem("devBypassEnabled");
+    localStorage.removeItem("devUser");
 
-localStorage.removeItem("devBypassEnabled");
+    // CRITICAL FIX #1: Clear Firebase SDK's internal auth state
+    // Firebase stores auth state with pattern: firebase:authUser:[apiKey]:[authDomain]
+    // We need to iterate through all localStorage keys and remove Firebase-specific ones
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (
+        key.startsWith('firebase:authUser') ||
+        key.startsWith('firebase:host') ||
+        key.startsWith('firebase:') // Catch all other Firebase keys
+      )) {
+        keysToRemove.push(key);
+      }
+    }
 
-localStorage.removeItem("devUser");
+    // Remove Firebase keys (done separately to avoid iteration issues)
+    keysToRemove.forEach(key => {
+      localStorage.removeItem(key);
+      console.log(`🧹 Removed Firebase key: ${key}`);
+    });
 
     // Clear axios headers
     if (axiosInstance.defaults.headers.common) {
       delete axiosInstance.defaults.headers.common["Authorization"];
     }
+
+    console.log('🧹 All authentication data cleared (including Firebase SDK state)');
   }, []);
 
   // Refs to hold the firebase auth instance and Google provider loaded dynamically
@@ -508,13 +529,62 @@ const authInstance = await ensureFirebaseAuth();
 
 const { signInWithEmailAndPassword } = await import("firebase/auth");
 
-await signInWithEmailAndPassword(authInstance, email, password);
-      
+const userCredential = await signInWithEmailAndPassword(authInstance, email, password);
+
 console.log(`✅ [${loginId}] Firebase authentication successful`);
 
-      // Backend sync will be handled by onAuthStateChanged
+      // CRITICAL FIX #2: Immediately set Firebase user to update UI state
+      // This prevents the "appears unauthenticated until reload" bug
+      const authenticatedUser = userCredential.user;
+      setFirebaseUser(authenticatedUser);
+      console.log(`✅ [${loginId}] Firebase user state set immediately for: ${authenticatedUser.email}`);
+
+      // Get ID token and sync with backend immediately (don't wait for onAuthStateChanged)
+      try {
+        const idToken = await authenticatedUser.getIdToken(true);
+
+        // Store token immediately for instant API access
+        localStorage.setItem("firebaseToken", idToken);
+        axiosInstance.defaults.headers.common["Authorization"] = `Bearer ${idToken}`;
+
+        console.log(`✅ [${loginId}] Token stored and axios configured`);
+
+        // Trigger backend sync (non-blocking - runs in background)
+        syncUserWithBackend(authenticatedUser).then(backendUser => {
+          if (backendUser) {
+            setUser(backendUser);
+            console.log(`✅ [${loginId}] Backend user synced: ${backendUser.email}`);
+
+            // Fetch profile in background
+            fetchUserProfile().catch(err =>
+              console.warn(`⚠️ [${loginId}] Profile fetch failed (non-critical):`, err)
+            );
+          }
+        }).catch(err => {
+          console.warn(`⚠️ [${loginId}] Backend sync failed, using fallback:`, err);
+          // Create fallback user for offline operation
+          const fallbackUser = {
+            id: 0,
+            email: authenticatedUser.email || '',
+            username: authenticatedUser.email?.split('@')[0] || '',
+            role: 'user',
+            is_active: true,
+            first_name: authenticatedUser.displayName?.split(' ')[0] || '',
+            last_name: authenticatedUser.displayName?.split(' ').slice(1).join(' ') || '',
+            full_name: authenticatedUser.displayName || '',
+            firebase_uid: authenticatedUser.uid
+          };
+          setUser(fallbackUser);
+        });
+
+      } catch (tokenError) {
+        console.error(`❌ [${loginId}] Token retrieval failed:`, tokenError);
+        // Don't throw - onAuthStateChanged will handle the sync
+      }
+
+      // Note: onAuthStateChanged will also fire, but we've already set the user state
       console.log(
-        `✅ [${loginId}] Email login successful - backend sync will be handled automatically`
+        `✅ [${loginId}] Email login successful - user authenticated and UI updated`
       );
     } catch (err: any) {
       const error = normalizeError(err);
@@ -595,20 +665,68 @@ const result = await signInWithPopup(
         authInstance,
         googleProviderRef.current
       );
-      
-const _firebaseUser = result.user;
-      
+
+const authenticatedUser = result.user;
+
 console.log(
-        `✅ [${loginId}] Google authentication successful for: ${_firebaseUser.email}`
+        `✅ [${loginId}] Google authentication successful for: ${authenticatedUser.email}`
       );
 
-      // Backend sync will be handled by onAuthStateChanged
+      // CRITICAL FIX #2: Immediately set Firebase user to update UI state
+      // This prevents the "appears unauthenticated until reload" bug
+      setFirebaseUser(authenticatedUser);
+      console.log(`✅ [${loginId}] Firebase user state set immediately for: ${authenticatedUser.email}`);
+
+      // Get ID token and sync with backend immediately (don't wait for onAuthStateChanged)
+      try {
+        const idToken = await authenticatedUser.getIdToken(true);
+
+        // Store token immediately for instant API access
+        localStorage.setItem("firebaseToken", idToken);
+        axiosInstance.defaults.headers.common["Authorization"] = `Bearer ${idToken}`;
+
+        console.log(`✅ [${loginId}] Token stored and axios configured`);
+
+        // Trigger backend sync (non-blocking - runs in background)
+        syncUserWithBackend(authenticatedUser).then(backendUser => {
+          if (backendUser) {
+            setUser(backendUser);
+            console.log(`✅ [${loginId}] Backend user synced: ${backendUser.email}`);
+
+            // Fetch profile in background
+            fetchUserProfile().catch(err =>
+              console.warn(`⚠️ [${loginId}] Profile fetch failed (non-critical):`, err)
+            );
+          }
+        }).catch(err => {
+          console.warn(`⚠️ [${loginId}] Backend sync failed, using fallback:`, err);
+          // Create fallback user for offline operation
+          const fallbackUser = {
+            id: 0,
+            email: authenticatedUser.email || '',
+            username: authenticatedUser.email?.split('@')[0] || '',
+            role: 'user',
+            is_active: true,
+            first_name: authenticatedUser.displayName?.split(' ')[0] || '',
+            last_name: authenticatedUser.displayName?.split(' ').slice(1).join(' ') || '',
+            full_name: authenticatedUser.displayName || '',
+            firebase_uid: authenticatedUser.uid
+          };
+          setUser(fallbackUser);
+        });
+
+      } catch (tokenError) {
+        console.error(`❌ [${loginId}] Token retrieval failed:`, tokenError);
+        // Don't throw - onAuthStateChanged will handle the sync
+      }
+
+      // Note: onAuthStateChanged will also fire, but we've already set the user state
       console.log(
-        `✅ [${loginId}] Google login successful - backend sync will be handled automatically`
+        `✅ [${loginId}] Google login successful - user authenticated and UI updated`
       );
     } catch (err: any) {
       const error = normalizeError(err);
-      
+
 console.error(`❌ [${loginId}] Google login failed:`, error);
 
       // Provide user-friendly error messages

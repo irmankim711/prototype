@@ -1,10 +1,20 @@
 /**
  * Firebase Configuration
  * Initialize Firebase app with authentication
+ *
+ * IMPORTANT: This configuration uses LOCAL persistence (default) which stores
+ * auth state in localStorage. While this is convenient for users, it requires
+ * proper cleanup on logout to prevent security issues.
  */
 
 import { initializeApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator, GoogleAuthProvider } from 'firebase/auth';
+import {
+  getAuth,
+  connectAuthEmulator,
+  GoogleAuthProvider,
+  setPersistence,
+  browserLocalPersistence
+} from 'firebase/auth';
 import { initializeFirebaseAppCheck } from './firebaseAppCheck';
 
 const firebaseConfig = {
@@ -22,6 +32,25 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = getAuth(app);
+
+/**
+ * CRITICAL: Set persistence mode explicitly
+ *
+ * Options:
+ * - browserLocalPersistence: Persists auth state in localStorage (survives page reload & browser close)
+ * - browserSessionPersistence: Persists in sessionStorage only (cleared when tab closes)
+ * - inMemoryPersistence: No persistence (cleared on page reload)
+ *
+ * We use LOCAL persistence for better UX, but ensure proper cleanup in clearAllAuthData()
+ */
+setPersistence(auth, browserLocalPersistence)
+  .then(() => {
+    console.log('✅ Firebase Auth persistence set to LOCAL (localStorage)');
+    console.log('⚠️ Auth state will persist across sessions - ensure proper logout cleanup');
+  })
+  .catch((error) => {
+    console.error('❌ Failed to set Firebase Auth persistence:', error);
+  });
 
 // Configure Google Auth Provider
 export const googleProvider = new GoogleAuthProvider();

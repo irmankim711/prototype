@@ -279,8 +279,10 @@ return null;
 
 /**
  * Clear all authentication-related data from localStorage
+ * CRITICAL FIX: Also clears Firebase SDK's internal auth state keys
  */
 export const clearAllAuthData = (): void => {
+  // Standard auth keys
   const authKeys = [
     'accessToken',
     'refreshToken',
@@ -290,14 +292,34 @@ export const clearAllAuthData = (): void => {
     'devUser',
     'token',
     'quickAccessToken',
-    'firebaseToken'  // Add Firebase token to ensure it's cleared on logout
+    'firebaseToken'  // Custom Firebase token storage
   ];
 
-authKeys.forEach(key => {
+  authKeys.forEach(key => {
     localStorage.removeItem(key);
   });
 
-console.log('🧹 All authentication data cleared');
+  // CRITICAL: Clear Firebase SDK's internal auth state keys
+  // Firebase stores auth state with pattern: firebase:authUser:[apiKey]:[authDomain]
+  const firebaseKeysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (
+      key.startsWith('firebase:authUser') ||
+      key.startsWith('firebase:host') ||
+      key.startsWith('firebase:')
+    )) {
+      firebaseKeysToRemove.push(key);
+    }
+  }
+
+  // Remove Firebase keys (done separately to avoid iteration issues)
+  firebaseKeysToRemove.forEach(key => {
+    localStorage.removeItem(key);
+    console.log(`🧹 Removed Firebase SDK key: ${key}`);
+  });
+
+  console.log('🧹 All authentication data cleared (including Firebase SDK internal state)');
 };
 
 /**
