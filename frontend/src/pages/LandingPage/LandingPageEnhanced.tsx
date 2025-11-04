@@ -26,6 +26,7 @@ import { useNavigate } from "react-router-dom";
 import { login, register } from "../../services/api";
 import React from "react";
 import GoogleSignInButton from "../../components/GoogleSignInButton";
+import { useAuth } from "../../context/AuthContext";
 import {
   AutoAwesome,
   Security,
@@ -300,6 +301,7 @@ export default function LandingPageEnhanced() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const auth = useAuth();
   const [showLogin, setShowLogin] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
   const [showQuickAccess, setShowQuickAccess] = useState(false);
@@ -369,19 +371,13 @@ export default function LandingPageEnhanced() {
     setErrorMessage("");
     console.log("Login attempt started with:", { email, password });
     try {
-      const response = await login({ email, password });
-      console.log("Login response received:", response);
-      if (response.access_token) {
-        localStorage.setItem("accessToken", response.access_token);
-        console.log("Token saved to localStorage, navigating to dashboard...");
-        navigate("/dashboard");
-      } else {
-        console.log("No access token in response");
-        setErrorMessage("Login failed. No token received.");
-      }
+      // Use the AuthContext login method to properly update state
+      await auth.login(email, password);
+      console.log("Login successful via AuthContext, navigating to dashboard...");
+      navigate("/dashboard");
     } catch (err: any) {
       console.error("Login error:", err);
-      setErrorMessage(err?.response?.data?.msg || "Invalid email or password");
+      setErrorMessage(err?.response?.data?.msg || err?.message || "Invalid email or password");
     } finally {
       setLoading(false);
     }

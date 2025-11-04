@@ -255,8 +255,8 @@ return null;
 export const hasTokenClaim = (token: string, claim: string): boolean => {
   try {
     const decoded = decodeJWT(token);
-    
-return decoded && Object.prototype.hasOwnProperty.call(decoded, claim);
+
+return decoded ? Object.prototype.hasOwnProperty.call(decoded, claim) : false;
   } catch {
     return false;
   }
@@ -289,7 +289,8 @@ export const clearAllAuthData = (): void => {
     'devBypassEnabled',
     'devUser',
     'token',
-    'quickAccessToken'
+    'quickAccessToken',
+    'firebaseToken'  // Add Firebase token to ensure it's cleared on logout
   ];
 
 authKeys.forEach(key => {
@@ -311,7 +312,8 @@ export const getStoredAuthKeys = (): string[] => {
     'devBypassEnabled',
     'devUser',
     'token',
-    'quickAccessToken'
+    'quickAccessToken',
+    'firebaseToken'
   ];
 
 return authKeys.filter(key => localStorage.getItem(key) !== null);
