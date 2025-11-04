@@ -26,6 +26,8 @@ import {
   Refresh as RefreshIcon,
   Login as LoginIcon
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { formBuilderAPI } from '../../services/formBuilder';
 import FormDataExporter from '../../components/FormDataExporter';
 
@@ -53,6 +55,8 @@ interface GoogleFormsStatus {
 }
 
 const GoogleFormsExport: React.FC = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [status, setStatus] = useState<GoogleFormsStatus | null>(null);
   const [forms, setForms] = useState<GoogleForm[]>([]);
   const [selectedForm, setSelectedForm] = useState<GoogleForm | null>(null);
@@ -60,9 +64,19 @@ const GoogleFormsExport: React.FC = () => {
   const [isLoadingForms, setIsLoadingForms] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Check if user is authenticated to the application
   useEffect(() => {
-    checkStatus();
-  }, []);
+    if (!authLoading && !isAuthenticated) {
+      // Redirect to landing page if not logged in
+      navigate('/');
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (isAuthenticated && !authLoading) {
+      checkStatus();
+    }
+  }, [isAuthenticated, authLoading]);
 
   const checkStatus = async () => {
     setIsLoadingStatus(true);
@@ -164,15 +178,21 @@ const GoogleFormsExport: React.FC = () => {
     }
   };
 
-  if (isLoadingStatus) {
+  // Show loading while checking auth or status
+  if (authLoading || isLoadingStatus) {
     return (
       <Container maxWidth="lg" sx={{ py: 8, textAlign: 'center' }}>
         <CircularProgress size={60} />
         <Typography variant="h6" sx={{ mt: 3 }}>
-          Checking Google Forms connection...
+          {authLoading ? 'Loading...' : 'Checking Google Forms connection...'}
         </Typography>
       </Container>
     );
+  }
+
+  // If not authenticated, don't show anything (will redirect)
+  if (!isAuthenticated) {
+    return null;
   }
 
   // Not configured
