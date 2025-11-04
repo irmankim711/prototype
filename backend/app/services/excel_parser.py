@@ -472,31 +472,51 @@ class ExcelParserService:
             Dictionary containing parsed tables and metadata
         """
         import time
-        import signal
-        from contextlib import contextmanager
+        import threading
+        from queue import Queue, Empty
 
         start_time = time.time()
 
-        @contextmanager
-        def timeout_handler(seconds):
-            """Context manager for timeout protection."""
-            def timeout_signal_handler(signum, frame):
-                raise TimeoutError(f"Excel parsing exceeded {seconds} seconds timeout")
+        def run_with_timeout(func, timeout_seconds, *args, **kwargs):
+            """
+            Run a function with a timeout using threading (thread-safe).
 
-            # Set timeout handler (Unix-like systems)
-            try:
-                old_handler = signal.signal(signal.SIGALRM, timeout_signal_handler)
-                signal.alarm(seconds)
-                yield
-            except AttributeError:
-                # Windows doesn't support SIGALRM, use basic timeout check
-                yield
-            finally:
+            IMPORTANT: This uses threading instead of signal.SIGALRM because:
+            - signal.SIGALRM only works in the main thread
+            - Web frameworks (Flask/FastAPI/Gunicorn) run requests in worker threads
+            - Attempting to use signals in worker threads raises ValueError
+
+            This threading approach works in any thread context.
+            """
+            result_queue = Queue()
+            exception_queue = Queue()
+
+            def target():
                 try:
-                    signal.alarm(0)
-                    signal.signal(signal.SIGALRM, old_handler)
-                except:
-                    pass
+                    result = func(*args, **kwargs)
+                    result_queue.put(result)
+                except Exception as e:
+                    exception_queue.put(e)
+
+            thread = threading.Thread(target=target, daemon=True)
+            thread.start()
+            thread.join(timeout=timeout_seconds)
+
+            if thread.is_alive():
+                # Thread is still running - timeout occurred
+                logger.error(f"Timeout: Excel parsing exceeded {timeout_seconds} seconds")
+                raise TimeoutError(f"Excel parsing exceeded {timeout_seconds} seconds timeout")
+
+            # Check if an exception occurred
+            if not exception_queue.empty():
+                raise exception_queue.get()
+
+            # Check if we got a result
+            if not result_queue.empty():
+                return result_queue.get()
+
+            # Thread finished but no result (shouldn't happen)
+            raise RuntimeError("Thread completed without result or exception")
 
         try:
             # Validate input
@@ -538,13 +558,16 @@ class ExcelParserService:
 
             # Detect all tables with error handling and timeout
             try:
-                with timeout_handler(self.max_processing_time):
-                    tables = detector.detect_all_tables()
+                # Use thread-based timeout (works in web worker threads)
+                tables = run_with_timeout(
+                    detector.detect_all_tables,
+                    self.max_processing_time
+                )
 
-                    # Check processing time periodically
-                    elapsed = time.time() - start_time
-                    if elapsed > self.max_processing_time:
-                        raise TimeoutError(f"Excel parsing exceeded {self.max_processing_time} seconds")
+                # Double-check processing time
+                elapsed = time.time() - start_time
+                if elapsed > self.max_processing_time:
+                    logger.warning(f"Excel parsing took {elapsed:.2f}s (exceeded {self.max_processing_time}s)")
 
             except TimeoutError as timeout_error:
                 logger.error(f"Timeout during table detection: {str(timeout_error)}")
