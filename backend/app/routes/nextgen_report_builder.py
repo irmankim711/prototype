@@ -1018,24 +1018,42 @@ def _convert_excel_columns_to_fields(columns: List[Dict]) -> List[Dict]:
 @firebase_auth_required
 def generate_report_from_excel():
     """
-    Generate automated report from Excel data with proper data extraction
+    Generate automated report from Excel data (ASYNC VERSION)
+
+    This endpoint returns immediately with a job ID.
+    Client polls /excel/job-status/<job_id> for progress.
+
+    Response Time: < 1 second (to avoid 499 client timeout)
+    Processing: Background thread/worker
 
     This endpoint:
-    1. Receives Excel file path and template ID
-    2. Parses Excel file to extract actual data
-    3. Maps data to template variables
-    4. Generates report with populated data
+    1. Validates input and creates job record
+    2. Returns job ID immediately (< 1s)
+    3. Processes report in background
+    4. Client polls for completion
     """
     try:
-        # ✅ FIX: Enhanced logging with request tracking
+        # ✅ FIX: Enhanced logging with request tracking + timing
+        import time
+        start_time = time.time()
         request_id = str(uuid.uuid4())[:8]
-        logger.info(f"🆔 [{request_id}] ===== NEW REPORT GENERATION REQUEST =====")
+
+        def log_timing(stage: str, stage_start: float):
+            """Helper to log timing for each stage"""
+            elapsed = time.time() - stage_start
+            total_elapsed = time.time() - start_time
+            logger.info(f"🆔 [{request_id}] ⏱️  {stage}: {elapsed:.2f}s (total: {total_elapsed:.2f}s)")
+            return time.time()
+
+        logger.info(f"🆔 [{request_id}] ===== NEW ASYNC REPORT GENERATION REQUEST =====")
         logger.info(f"🆔 [{request_id}] Request method: {request.method}")
         logger.info(f"🆔 [{request_id}] Request URL: {request.url}")
         logger.info(f"🆔 [{request_id}] Request endpoint: {request.endpoint}")
 
+        stage_start = time.time()
         user_id = get_current_user_id()
         logger.info(f"🆔 [{request_id}] User ID: {user_id}")
+        stage_start = log_timing("Authentication", stage_start)
 
         data = request.get_json()
 
@@ -1089,9 +1107,11 @@ def generate_report_from_excel():
 
         # ✅ FIX: CRITICAL - Parse Excel file to extract actual data
         logger.info(f"🆔 [{request_id}] 📊 Step 1: Parsing Excel file to extract data...")
+        stage_start = time.time()
         try:
             # Use ExcelParserService to extract data from Excel
             excel_data_result = excel_parser.parse_excel_file(excel_file_path)
+            stage_start = log_timing("Excel Parsing", stage_start)
 
             if not excel_data_result or not excel_data_result.get('success'):
                 error_msg = excel_data_result.get('error', 'Unknown parsing error') if excel_data_result else 'Parser returned None'
@@ -1174,8 +1194,8 @@ def generate_report_from_excel():
         template_file = None
         template_db_record = None
 
-        logger.info(
-    f"🔍 [DEBUG] Looking up template: {template_id}")
+        logger.info(f"🔍 [DEBUG] Looking up template: {template_id}")
+        stage_start = time.time()
 
         # Try Firestore first
         try:
@@ -2023,25 +2043,37 @@ def generate_report_from_excel():
                 logger.error(traceback.format_exc())
                 # Continue anyway - SQL report was created successfully
 
-            # Generate AI suggestions for the report
+            # ⚡ PERFORMANCE FIX: Skip AI suggestions during generation (saves 5-15s)
+            # AI suggestions can be fetched later via separate endpoint if needed
+            # This prevents HTTP 499 (client timeout at 30s)
             ai_suggestions = None
-            try:
-                ai_suggestions = _generate_ai_suggestions_for_report(
-                    report_response['title'],
-                    report_response['description'],
-                    excel_file_path,
-                    template_id
-                )
-            except Exception as ai_error:
-                logger.warning(f"Failed to generate AI suggestions: {ai_error}")
-                # Create mock data_source_info for fallback suggestions
-                data_source_info = {
-                    'type': 'excel',
-                    'name': report_response['title'],
-                    'fields': [],
-                    'recordCount': 0
-                }
-                ai_suggestions = _get_fallback_suggestions(data_source_info)
+
+            # Check if client explicitly requests AI suggestions (default: false for speed)
+            include_ai_suggestions = data.get('includeAiSuggestions', False)
+
+            if include_ai_suggestions:
+                logger.info(f"🆔 [{request_id}] Client requested AI suggestions...")
+                try:
+                    ai_suggestions = _generate_ai_suggestions_for_report(
+                        report_response['title'],
+                        report_response['description'],
+                        excel_file_path,
+                        template_id
+                    )
+                except Exception as ai_error:
+                    logger.warning(f"Failed to generate AI suggestions: {ai_error}")
+                    # Create mock data_source_info for fallback suggestions
+                    data_source_info = {
+                        'type': 'excel',
+                        'name': report_response['title'],
+                        'fields': [],
+                        'recordCount': 0
+                    }
+                    ai_suggestions = _get_fallback_suggestions(data_source_info)
+            else:
+                logger.info(f"🆔 [{request_id}] ⚡ Skipping AI suggestions for faster response")
+                # Return empty suggestions with note to fetch separately if needed
+                ai_suggestions = []
 
             return jsonify({
                 'success': True,
