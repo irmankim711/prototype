@@ -54,6 +54,15 @@ def register_blueprints(app):
             from app.routes.firebase_auth_routes import verify_token
             return verify_token()
 
+        @api_auth_bp.route('/login', methods=['POST', 'OPTIONS'])
+        def api_login():
+            """Standard login endpoint - redirects to Firebase login"""
+            # Handle OPTIONS request for CORS preflight
+            if request.method == 'OPTIONS':
+                return jsonify({'status': 'ok'}), 200
+            from app.routes.firebase_auth_routes import firebase_sync
+            return firebase_sync()
+
         @api_auth_bp.route('/logout', methods=['POST', 'OPTIONS'])
         def api_logout():
             """Logout endpoint - Always succeeds to ensure users can logout"""
@@ -139,6 +148,24 @@ def register_blueprints(app):
         app.logger.info("✅ API auth routes registered under /api/auth")
     except Exception as e:
         app.logger.warning(f"Could not register API auth routes: {e}")
+
+    # Add /auth/login route without /api prefix for compatibility
+    try:
+        from flask import Blueprint, request, jsonify
+        auth_compat_bp = Blueprint('auth_compat', __name__, url_prefix='/auth')
+
+        @auth_compat_bp.route('/login', methods=['POST', 'OPTIONS'])
+        def compat_login():
+            """Compatibility login endpoint - works with /auth/login"""
+            if request.method == 'OPTIONS':
+                return jsonify({'status': 'ok'}), 200
+            from app.routes.firebase_auth_routes import firebase_sync
+            return firebase_sync()
+
+        app.register_blueprint(auth_compat_bp)
+        app.logger.info("✅ Auth compatibility routes registered under /auth")
+    except Exception as e:
+        app.logger.warning(f"Could not register auth compatibility routes: {e}")
 
     try:
         from app.routes.quick_auth import quick_auth_bp
@@ -241,6 +268,11 @@ def register_blueprints(app):
 
         @simple_health_bp.route('/api/health', methods=['GET'])
         def simple_health():
+            return jsonify({'status': 'ok', 'message': 'Server is running'})
+
+        @simple_health_bp.route('/health', methods=['GET'])
+        def health_check():
+            """Health check endpoint without /api prefix"""
             return jsonify({'status': 'ok', 'message': 'Server is running'})
 
         @simple_health_bp.route('/api/debug/routes', methods=['GET'])
