@@ -799,7 +799,10 @@ def _extract_template_placeholders(content: str) -> List[str]:
 @cross_origin(supports_credentials=True)
 @firebase_auth_required
 def upload_excel_file():
-    """Upload and process Excel file for report automation"""
+    """
+    Upload and process Excel file for report automation with database tracking.
+    ENHANCED: Now saves file records to database and returns file ID for multi-file support.
+    """
     try:
         user_id = get_current_user_id()
 
@@ -822,18 +825,21 @@ def upload_excel_file():
         if file_size > 50 * 1024 * 1024:  # 50MB limit
             return jsonify({'error': 'File size exceeds 50MB limit'}), 400
 
+        # Generate file ID
+        file_id = str(uuid.uuid4())
+
         # Save uploaded file
         upload_dir = Path(current_app.root_path) / \
                           'static' / 'uploads' / 'excel'
         upload_dir.mkdir(parents=True, exist_ok=True)
 
-        filename = f"{user_id}_{uuid.uuid4().hex}_{file.filename}"
+        filename = f"{user_id}_{file_id}_{file.filename}"
         file_path = upload_dir / filename
         file.save(str(file_path))
 
         # Process Excel file with enhanced error handling
         try:
-            processing_result = excel_parser.parse_excel_file(str(file_path))
+            processing_result = excel_parser.parse_excel_file(str(file_path), file.filename)
         except Exception as parse_error:
             logger.error(f"Excel parsing failed: {str(parse_error)}")
             # Clean up the uploaded file
@@ -857,28 +863,62 @@ def upload_excel_file():
                 'details': processing_result.get('error', 'Unknown error')
             }), 400
 
-        # Debug logging to see what processing_result contains
+        # Debug logging
         logger.info(f"Processing result keys: {list(processing_result.keys())}")
         logger.info(f"Processing result success: {processing_result.get('success')}")
-        logger.info(f"Processing result tables: {processing_result.get('tables', [])}")
+        logger.info(f"Processing result tables: {len(processing_result.get('tables', []))} tables")
         logger.info(f"Processing result total_rows: {processing_result.get('total_rows', 0)}")
 
         # Extract columns from the parsed tables
         columns = _extract_columns_from_tables(
             processing_result.get('tables', []))
         logger.info(f"Extracted columns: {len(columns)} columns")
-        for i, col in enumerate(columns):
-            logger.info(
-                f"Column {i + 1}: {col.get('name', 'Unknown')} - {col.get('data_type', 'unknown')}"
+
+        # ✅ NEW: Save to database for multi-file tracking
+        from app.models import ParsedExcelFile, ExcelTable
+
+        parsed_file = ParsedExcelFile(
+            id=file_id,
+            user_id=user_id,
+            original_filename=file.filename,
+            file_path=str(file_path),
+            file_size=file_size,
+            status='completed',
+            tables_count=len(processing_result.get('tables', [])),
+            total_rows=processing_result.get('total_rows', 0),
+            total_columns=processing_result.get('total_columns', 0),
+            sheets_processed=processing_result.get('sheets_processed', 0),
+            metadata=processing_result.get('metadata', {})
+        )
+        db.session.add(parsed_file)
+
+        # Save tables to database
+        for table in processing_result.get('tables', []):
+            excel_table = ExcelTable(
+                id=str(uuid.uuid4()),
+                parsed_file_id=file_id,
+                name=table.get('name', ''),
+                sheet_name=table.get('sheet_name', ''),
+                row_count=table.get('row_count', 0),
+                column_count=table.get('column_count', 0),
+                headers=table.get('headers', []),
+                data_types=table.get('data_types', []),
+                table_range=table.get('range', ''),
+                data=table.get('data', None)  # Store full data
             )
+            db.session.add(excel_table)
+
+        db.session.commit()
+        logger.info(f"✅ Saved Excel file to database: file_id={file_id}")
 
         # Create data source from Excel file with proper structure
         data_source = {
-            'id': f'excel_{uuid.uuid4().hex}',
+            'id': file_id,  # ✅ CHANGED: Use database file_id instead of generated ID
+            'fileId': file_id,  # ✅ NEW: Explicit file ID for backend queries
             'name': file.filename,
             'type': 'excel',
             'description': f'Uploaded Excel file: {file.filename}',
-            'filePath': str(file_path),
+            'filePath': str(file_path),  # ✅ KEPT: For backward compatibility
             'connectionStatus': 'connected',
             'lastUpdated': datetime.now().isoformat(),
             'recordCount': processing_result.get('total_rows', 0),
@@ -888,22 +928,26 @@ def upload_excel_file():
                 'fileSize': file_size,
                 'uploadedAt': datetime.now().isoformat(),
                 'processedAt': datetime.now().isoformat(),
-                'processingStatus': 'completed'
+                'processingStatus': 'completed',
+                'tablesCount': len(processing_result.get('tables', []))
             }
         }
 
         logger.info(
-    f"Excel file uploaded successfully: {filename}, {data_source['recordCount']} records")
+    f"Excel file uploaded successfully: {filename}, {data_source['recordCount']} records, file_id={file_id}")
 
         return jsonify({
             'success': True,
             'message': 'Excel file uploaded and processed successfully',
+            'fileId': file_id,  # ✅ NEW: Return file ID for database lookup
             'dataSource': data_source,
             'processingResult': processing_result
         }), 200
 
     except Exception as e:
         logger.error(f"Error uploading Excel file: {str(e)}")
+        # Rollback database changes
+        db.session.rollback()
         # Clean up any uploaded files in case of error
         try:
             if 'file_path' in locals():
@@ -1014,6 +1058,173 @@ def _convert_excel_columns_to_fields(columns: List[Dict]) -> List[Dict]:
 
     return fields
 
+# ================ MULTI-FILE MANAGEMENT ENDPOINTS ================
+
+@nextgen_bp.route('/excel/user-files', methods=['GET'])
+@cross_origin(supports_credentials=True)
+@firebase_auth_required
+def get_user_excel_files():
+    """
+    Get list of user's uploaded Excel files for multi-file selection.
+    Supports pagination and search.
+    """
+    try:
+        user_id = get_current_user_id()
+
+        # Pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 20)), 100)
+        search = request.args.get('search', '').strip()
+
+        # Import model
+        from app.models import ParsedExcelFile
+
+        # Build query
+        query = ParsedExcelFile.query.filter_by(user_id=user_id)
+
+        # Apply search filter
+        if search:
+            query = query.filter(ParsedExcelFile.original_filename.like(f'%{search}%'))
+
+        # Order by upload date (most recent first)
+        query = query.order_by(ParsedExcelFile.uploaded_at.desc())
+
+        # Paginate
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+        files = []
+        for parsed_file in pagination.items:
+            files.append({
+                'id': parsed_file.id,
+                'fileId': parsed_file.id,
+                'name': parsed_file.original_filename,
+                'originalFilename': parsed_file.original_filename,
+                'filePath': parsed_file.file_path,
+                'fileSize': parsed_file.file_size,
+                'status': parsed_file.status,
+                'uploadedAt': parsed_file.uploaded_at.isoformat() if parsed_file.uploaded_at else None,
+                'tablesCount': parsed_file.tables_count,
+                'totalRows': parsed_file.total_rows,
+                'totalColumns': parsed_file.total_columns,
+                'sheetsProcessed': parsed_file.sheets_processed,
+                'metadata': parsed_file.metadata
+            })
+
+        return jsonify({
+            'success': True,
+            'files': files,
+            'pagination': {
+                'page': page,
+                'perPage': per_page,
+                'totalPages': pagination.pages,
+                'totalFiles': pagination.total,
+                'hasNext': pagination.has_next,
+                'hasPrev': pagination.has_prev
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error fetching user Excel files: {str(e)}")
+        return jsonify({'error': 'Failed to fetch Excel files', 'details': str(e)}), 500
+
+
+@nextgen_bp.route('/excel/files/<file_id>', methods=['GET'])
+@cross_origin(supports_credentials=True)
+@firebase_auth_required
+def get_excel_file_details(file_id):
+    """
+    Get detailed information about a specific Excel file including its tables.
+    """
+    try:
+        user_id = get_current_user_id()
+
+        # Import models
+        from app.models import ParsedExcelFile, ExcelTable
+
+        # Get file record (verify ownership)
+        parsed_file = ParsedExcelFile.query.filter_by(
+            id=file_id,
+            user_id=user_id
+        ).first()
+
+        if not parsed_file:
+            return jsonify({'error': 'Excel file not found or access denied'}), 404
+
+        # Get associated tables
+        tables = ExcelTable.query.filter_by(parsed_file_id=file_id).all()
+
+        return jsonify({
+            'success': True,
+            'file': parsed_file.to_dict(),
+            'tables': [table.to_dict() for table in tables]
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error fetching Excel file details: {str(e)}")
+        return jsonify({'error': 'Failed to fetch file details', 'details': str(e)}), 500
+
+
+@nextgen_bp.route('/excel/files/<file_id>/data', methods=['GET'])
+@cross_origin(supports_credentials=True)
+@firebase_auth_required
+def get_excel_file_data(file_id):
+    """
+    Get full data from an Excel file by file ID (for report generation).
+    Returns records and columns extracted from the file's tables.
+    """
+    try:
+        user_id = get_current_user_id()
+
+        # Import models
+        from app.models import ParsedExcelFile, ExcelTable
+
+        # Get file record (verify ownership)
+        parsed_file = ParsedExcelFile.query.filter_by(
+            id=file_id,
+            user_id=user_id
+        ).first()
+
+        if not parsed_file:
+            return jsonify({'error': 'Excel file not found or access denied'}), 404
+
+        # Get first table with data
+        table = ExcelTable.query.filter_by(parsed_file_id=file_id).first()
+
+        if not table or not table.data:
+            return jsonify({'error': 'No data available for this file'}), 404
+
+        # Convert table data to records format
+        table_data = table.data
+        headers = table.headers if table.headers else (table_data[0] if table_data else [])
+
+        records = []
+        data_start_idx = 0 if table.headers else 1  # Skip header row if not already extracted
+
+        for row in table_data[data_start_idx:]:
+            if row and any(cell for cell in row):
+                record = {headers[i]: row[i] for i in range(min(len(headers), len(row)))}
+                records.append(record)
+
+        return jsonify({
+            'success': True,
+            'fileId': file_id,
+            'filePath': parsed_file.file_path,
+            'originalFilename': parsed_file.original_filename,
+            'records': records,
+            'columns': headers,
+            'totalRecords': len(records),
+            'metadata': {
+                'tablesCount': parsed_file.tables_count,
+                'totalRows': parsed_file.total_rows,
+                'totalColumns': parsed_file.total_columns
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error fetching Excel file data: {str(e)}")
+        return jsonify({'error': 'Failed to fetch file data', 'details': str(e)}), 500
+
+
 @nextgen_bp.route('/excel/generate-report', methods=['POST'])
 @firebase_auth_required
 def generate_report_from_excel():
@@ -1061,124 +1272,189 @@ def generate_report_from_excel():
             logger.error(f"🆔 [{request_id}] ❌ No data provided in request")
             return jsonify({'error': 'No data provided'}), 400
 
-        excel_file_path = data.get('excelFilePath')
+        # ✅ NEW: Support multiple file IDs for multi-file processing
+        file_ids = data.get('fileIds', [])
+        file_id = data.get('fileId')  # Single file ID
+        excel_file_path = data.get('excelFilePath')  # Legacy path-based (backward compatibility)
+
         template_id = data.get('templateId')
         report_title = data.get('reportTitle', 'Automated Excel Report')
         charts = data.get('charts', [])  # Chart configurations from frontend
         images = data.get('images', [])  # Image configurations from frontend
 
-        logger.info(f"🆔 [{request_id}] 📄 Excel file path: {excel_file_path}")
+        logger.info(f"🆔 [{request_id}] 📄 File IDs: {file_ids}")
+        logger.info(f"🆔 [{request_id}] 📄 Single File ID: {file_id}")
+        logger.info(f"🆔 [{request_id}] 📄 Excel file path (legacy): {excel_file_path}")
         logger.info(f"🆔 [{request_id}] 📋 Template ID: {template_id}")
         logger.info(f"🆔 [{request_id}] 📝 Report title: {report_title}")
         logger.info(f"🆔 [{request_id}] 📊 Charts to embed: {len(charts)}")
         logger.info(f"🆔 [{request_id}] 🖼️  Images to embed: {len(images)}")
 
-        if not excel_file_path or not template_id:
+        # Validate input: must have fileIds, fileId, or excelFilePath
+        if not file_ids and not file_id and not excel_file_path:
             logger.error(f"🆔 [{request_id}] ❌ Missing required fields")
             return jsonify(
-                {'error': 'Excel file path and template ID are required'}), 400
+                {'error': 'Either fileIds, fileId, or excelFilePath is required'}), 400
 
-        # ✅ FIX: Validate Excel file exists and is accessible (Railway-compatible)
-        try:
-            from app.utils.railway_paths import validate_excel_path
+        if not template_id:
+            logger.error(f"🆔 [{request_id}] ❌ Missing template ID")
+            return jsonify({'error': 'Template ID is required'}), 400
 
-            excel_path = validate_excel_path(excel_file_path)
-            if not excel_path:
-                logger.error(f"🔍 [DEBUG] Excel file not found: {excel_file_path}")
-                return jsonify({'error': f'Excel file not found: {excel_file_path}'}), 400
+        # Normalize input: convert single fileId to list
+        if file_id and not file_ids:
+            file_ids = [file_id]
 
-            if not excel_path.is_file():
-                logger.error(f"🔍 [DEBUG] Excel path is not a file: {excel_file_path}")
-                return jsonify({'error': f'Excel path is not a file: {excel_file_path}'}), 400
+        # ✅ NEW: Process single or multiple file IDs, or legacy file path
+        excel_records = []
+        excel_columns = []
+        excel_metadata = {}
+        file_size = 0
+        source_files = []
 
-            # Check if file is readable
-            if not os.access(str(excel_path), os.R_OK):
-                logger.error(f"🔍 [DEBUG] Excel file is not readable: {excel_path}")
-                return jsonify({'error': f'Excel file is not readable: {excel_path}'}), 400
-
-            file_size = excel_path.stat().st_size
-            excel_file_path = str(excel_path)  # Update to resolved path
-            logger.info(f"🆔 [{request_id}] ✅ Excel file validated: {excel_file_path} (size: {file_size} bytes)")
-
-        except Exception as e:
-            logger.error(f"🆔 [{request_id}] ❌ Error validating Excel file: {str(e)}")
-            return jsonify(
-                {'error': f'Error accessing Excel file: {str(e)}'}), 400
-
-        # ✅ FIX: CRITICAL - Parse Excel file to extract actual data
-        logger.info(f"🆔 [{request_id}] 📊 Step 1: Parsing Excel file to extract data...")
+        logger.info(f"🆔 [{request_id}] 📊 Step 1: Loading and parsing Excel data...")
         stage_start = time.time()
+
         try:
-            # Use ExcelParserService to extract data from Excel
-            excel_data_result = excel_parser.parse_excel_file(excel_file_path)
-            stage_start = log_timing("Excel Parsing", stage_start)
+            if file_ids:
+                # ✅ NEW: Multi-file or single-file ID mode
+                logger.info(f"🆔 [{request_id}] 🆕 Using file ID(s): {file_ids}")
+                from app.models import ParsedExcelFile, ExcelTable
 
-            if not excel_data_result or not excel_data_result.get('success'):
-                error_msg = excel_data_result.get('error', 'Unknown parsing error') if excel_data_result else 'Parser returned None'
-                logger.error(f"🆔 [{request_id}] ❌ Excel parsing failed: {error_msg}")
-                return jsonify({
-                    'error': f'Failed to parse Excel file: {error_msg}',
-                    'suggestion': 'Please ensure the Excel file is valid and not corrupted'
-                }), 500
+                for fid in file_ids:
+                    # Get file record from database
+                    parsed_file = ParsedExcelFile.query.filter_by(
+                        id=fid,
+                        user_id=user_id
+                    ).first()
 
-            # ✅ FIX: Extract records from tables structure
-            # ExcelParserService returns 'tables' with 'data' arrays, not 'records'
-            excel_records = []
-            excel_columns = []
+                    if not parsed_file:
+                        logger.warning(f"🆔 [{request_id}] ⚠️ File not found or access denied: {fid}")
+                        continue
 
-            tables = excel_data_result.get('tables', [])
-            logger.info(f"🆔 [{request_id}] 📊 Found {len(tables)} tables in Excel")
+                    # Get first table with data
+                    table = ExcelTable.query.filter_by(parsed_file_id=fid).first()
 
-            if tables:
-                # Use the first table with data
-                for table in tables:
-                    table_data = table.get('data', [])
-                    table_headers = table.get('headers', [])
+                    if not table or not table.data:
+                        logger.warning(f"🆔 [{request_id}] ⚠️ No data available for file: {fid}")
+                        continue
 
-                    if table_data and len(table_data) > 0:
-                        logger.info(f"🆔 [{request_id}] 📋 Using table: {table.get('name', 'unknown')}")
-                        logger.info(f"🆔 [{request_id}]    - Rows: {len(table_data)}")
-                        logger.info(f"🆔 [{request_id}]    - Headers: {table_headers[:10]}")
+                    # Extract records from table
+                    table_data = table.data
+                    headers = table.headers if table.headers else (table_data[0] if table_data else [])
 
-                        # Convert table data to records (list of dicts)
-                        excel_columns = table_headers
+                    # Update columns list (merge unique columns from all files)
+                    for header in headers:
+                        if header not in excel_columns:
+                            excel_columns.append(header)
 
-                        # Skip header row if it's duplicated in data
-                        data_start_idx = 0
-                        if table_data and table_data[0] == table_headers:
-                            data_start_idx = 1
-                            logger.info(f"🆔 [{request_id}] ⚠️  Skipping duplicate header row")
+                    # Skip header row if not already extracted
+                    data_start_idx = 0 if table.headers else 1
 
-                        # Convert rows to dict records
-                        for row_idx, row in enumerate(table_data[data_start_idx:], start=1):
-                            if row and any(cell for cell in row):  # Skip empty rows
-                                record = {}
-                                for col_idx, header in enumerate(excel_columns):
-                                    if col_idx < len(row):
-                                        record[header] = row[col_idx]
-                                excel_records.append(record)
+                    for row in table_data[data_start_idx:]:
+                        if row and any(cell for cell in row):
+                            record = {headers[i]: row[i] for i in range(min(len(headers), len(row)))}
+                            record['_source_file'] = parsed_file.original_filename
+                            record['_source_file_id'] = fid
+                            excel_records.append(record)
 
-                        logger.info(f"🆔 [{request_id}] ✅ Converted {len(excel_records)} rows to records")
-                        break  # Use first non-empty table
+                    file_size += parsed_file.file_size or 0
+                    source_files.append(parsed_file.original_filename)
+                    logger.info(f"🆔 [{request_id}] ✅ Loaded {len(excel_records)} records from {parsed_file.original_filename}")
 
-            excel_metadata = excel_data_result.get('metadata', {})
+                if not excel_records:
+                    return jsonify({
+                        'error': 'No data found in selected files',
+                        'suggestion': 'Please ensure the selected files contain data rows'
+                    }), 400
+
+                # Update excel_file_path for compatibility (use first file's path)
+                first_file = ParsedExcelFile.query.get(file_ids[0])
+                excel_file_path = first_file.file_path if first_file else 'multiple_files'
+
+                logger.info(f"🆔 [{request_id}] ✅ Multi-file data loaded:")
+                logger.info(f"🆔 [{request_id}]    - Files: {len(file_ids)}")
+                logger.info(f"🆔 [{request_id}]    - Total records: {len(excel_records)}")
+                logger.info(f"🆔 [{request_id}]    - Merged columns: {len(excel_columns)}")
+                logger.info(f"🆔 [{request_id}]    - Source files: {', '.join(source_files)}")
+
+            else:
+                # ✅ LEGACY: Path-based mode for backward compatibility
+                logger.info(f"🆔 [{request_id}] 📄 Using legacy file path mode")
+                from app.utils.railway_paths import validate_excel_path
+
+                excel_path = validate_excel_path(excel_file_path)
+                if not excel_path:
+                    logger.error(f"🔍 [DEBUG] Excel file not found: {excel_file_path}")
+                    return jsonify({'error': f'Excel file not found: {excel_file_path}'}), 400
+
+                if not excel_path.is_file():
+                    logger.error(f"🔍 [DEBUG] Excel path is not a file: {excel_file_path}")
+                    return jsonify({'error': f'Excel path is not a file: {excel_file_path}'}), 400
+
+                if not os.access(str(excel_path), os.R_OK):
+                    logger.error(f"🔍 [DEBUG] Excel file is not readable: {excel_path}")
+                    return jsonify({'error': f'Excel file is not readable: {excel_path}'}), 400
+
+                file_size = excel_path.stat().st_size
+                excel_file_path = str(excel_path)
+                logger.info(f"🆔 [{request_id}] ✅ Excel file validated: {excel_file_path} (size: {file_size} bytes)")
+
+                # Parse Excel file
+                excel_data_result = excel_parser.parse_excel_file(excel_file_path)
+
+                if not excel_data_result or not excel_data_result.get('success'):
+                    error_msg = excel_data_result.get('error', 'Unknown parsing error') if excel_data_result else 'Parser returned None'
+                    logger.error(f"🆔 [{request_id}] ❌ Excel parsing failed: {error_msg}")
+                    return jsonify({
+                        'error': f'Failed to parse Excel file: {error_msg}',
+                        'suggestion': 'Please ensure the Excel file is valid and not corrupted'
+                    }), 500
+
+                # Extract records from tables
+                tables = excel_data_result.get('tables', [])
+                logger.info(f"🆔 [{request_id}] 📊 Found {len(tables)} tables in Excel")
+
+                if tables:
+                    for table in tables:
+                        table_data = table.get('data', [])
+                        table_headers = table.get('headers', [])
+
+                        if table_data and len(table_data) > 0:
+                            logger.info(f"🆔 [{request_id}] 📋 Using table: {table.get('name', 'unknown')}")
+                            excel_columns = table_headers
+
+                            data_start_idx = 0
+                            if table_data and table_data[0] == table_headers:
+                                data_start_idx = 1
+                                logger.info(f"🆔 [{request_id}] ⚠️ Skipping duplicate header row")
+
+                            for row in table_data[data_start_idx:]:
+                                if row and any(cell for cell in row):
+                                    record = {}
+                                    for col_idx, header in enumerate(excel_columns):
+                                        if col_idx < len(row):
+                                            record[header] = row[col_idx]
+                                    excel_records.append(record)
+
+                            logger.info(f"🆔 [{request_id}] ✅ Converted {len(excel_records)} rows to records")
+                            break
+
+                excel_metadata = excel_data_result.get('metadata', {})
+
+            stage_start = log_timing("Excel Data Loading", stage_start)
 
             logger.info(f"🆔 [{request_id}] ✅ Excel data extraction complete:")
             logger.info(f"🆔 [{request_id}]    - Records: {len(excel_records)}")
             logger.info(f"🆔 [{request_id}]    - Columns: {len(excel_columns)}")
-            logger.info(f"🆔 [{request_id}]    - Column names: {excel_columns[:5]}...")  # First 5 columns
+            logger.info(f"🆔 [{request_id}]    - Column names: {excel_columns[:5]}...")
             if excel_records:
                 logger.info(f"🆔 [{request_id}]    - Sample record keys: {list(excel_records[0].keys())[:5]}...")
                 logger.info(f"🆔 [{request_id}]    - Sample values: {list(excel_records[0].values())[:3]}...")
 
-            # ✅ VERIFICATION: Ensure we have data
+            # Verification
             if not excel_records:
-                logger.warning(f"🆔 [{request_id}] ⚠️  No records found in Excel file!")
-                logger.info(f"🆔 [{request_id}] 💡 Tables found: {len(tables)}")
-                if tables:
-                    logger.info(f"🆔 [{request_id}] 💡 First table data length: {len(tables[0].get('data', []))}")
                 return jsonify({
-                    'error': 'Excel file contains no data records',
+                    'error': 'Excel file(s) contain no data records',
                     'suggestion': 'Please check that the Excel file has data rows (not just headers)'
                 }), 400
 

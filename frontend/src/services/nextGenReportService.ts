@@ -1475,6 +1475,174 @@ class NextGenReportService {
     }
   }
 
+  // ✅ NEW: Get user's uploaded Excel files (multi-file support)
+  async getUserExcelFiles(page: number = 1, perPage: number = 20, search: string = ''): Promise<any> {
+    try {
+      this.logger.info('Fetching user Excel files', { page, perPage, search });
+
+      const params = new URLSearchParams({
+        page: page.toString(),
+        per_page: perPage.toString(),
+        ...(search && { search })
+      });
+
+      const response = await this.retryWithBackoff(async () => {
+        return await axiosInstance.get(`/api/v1/nextgen/excel/user-files?${params}`);
+      });
+
+      if (response.data.success) {
+        this.logger.info('User files retrieved successfully', {
+          count: response.data.files.length,
+          total: response.data.pagination.totalFiles
+        });
+        return response.data;
+      } else {
+        throw new Error('Failed to retrieve user files');
+      }
+    } catch (error: any) {
+      this.logger.error('Error fetching user files', error);
+      throw new Error(error.response?.data?.error || 'Failed to fetch Excel files');
+    }
+  }
+
+  // ✅ NEW: Get specific Excel file details with tables
+  async getExcelFileDetails(fileId: string): Promise<any> {
+    try {
+      this.logger.info('Fetching Excel file details', { fileId });
+
+      const response = await this.retryWithBackoff(async () => {
+        return await axiosInstance.get(`/api/v1/nextgen/excel/files/${fileId}`);
+      });
+
+      if (response.data.success) {
+        this.logger.info('File details retrieved', {
+          filename: response.data.file.original_filename,
+          tables: response.data.tables.length
+        });
+        return response.data;
+      } else {
+        throw new Error('Failed to retrieve file details');
+      }
+    } catch (error: any) {
+      this.logger.error('Error fetching file details', error);
+      throw new Error(error.response?.data?.error || 'Failed to fetch file details');
+    }
+  }
+
+  // ✅ NEW: Get Excel file data for report generation
+  async getExcelFileData(fileId: string): Promise<any> {
+    try {
+      this.logger.info('Fetching Excel file data', { fileId });
+
+      const response = await this.retryWithBackoff(async () => {
+        return await axiosInstance.get(`/api/v1/nextgen/excel/files/${fileId}/data`);
+      });
+
+      if (response.data.success) {
+        this.logger.info('File data retrieved', {
+          records: response.data.records.length,
+          columns: response.data.columns.length
+        });
+        return response.data;
+      } else {
+        throw new Error('Failed to retrieve file data');
+      }
+    } catch (error: any) {
+      this.logger.error('Error fetching file data', error);
+      throw new Error(error.response?.data?.error || 'Failed to fetch file data');
+    }
+  }
+
+  // ✅ ENHANCED: Generate report from multiple files or single file/path
+  async generateReportFromFiles(params: {
+    fileIds?: string[];
+    fileId?: string;
+    excelFilePath?: string;
+    templateId: string;
+    reportTitle?: string;
+    charts?: any[];
+    images?: any[];
+  }): Promise<any> {
+    const requestId = Math.random().toString(36).substr(2, 9);
+    console.log(`🆔 [${requestId}] generateReportFromFiles called`);
+
+    try {
+      const { fileIds, fileId, excelFilePath, templateId, reportTitle, charts, images } = params;
+
+      console.log(`🔍 [${requestId}] Generating report with params:`, {
+        fileIds: fileIds?.length || 0,
+        fileId,
+        excelFilePath,
+        templateId,
+        reportTitle
+      });
+
+      // Validate inputs
+      if (!fileIds && !fileId && !excelFilePath) {
+        throw new Error('Either fileIds, fileId, or excelFilePath is required');
+      }
+
+      if (!templateId) {
+        throw new Error('Template ID is required');
+      }
+
+      // Build request payload
+      const payload: any = {
+        templateId,
+        reportTitle: reportTitle || 'Automated Excel Report',
+        charts: charts || [],
+        images: images || []
+      };
+
+      // Add file identifiers
+      if (fileIds && fileIds.length > 0) {
+        payload.fileIds = fileIds;
+        console.log(`✅ [${requestId}] Multi-file mode: ${fileIds.length} files`);
+      } else if (fileId) {
+        payload.fileId = fileId;
+        console.log(`✅ [${requestId}] Single file ID mode`);
+      } else if (excelFilePath) {
+        payload.excelFilePath = excelFilePath;
+        console.log(`✅ [${requestId}] Legacy file path mode`);
+      }
+
+      console.log(`🚀 [${requestId}] Making POST request to /api/v1/nextgen/excel/generate-report`);
+
+      const response = await this.retryWithBackoff(async () => {
+        return await axiosInstance.post('/api/v1/nextgen/excel/generate-report', payload);
+      });
+
+      console.log(`✅ [${requestId}] Report generation response:`, response.data);
+
+      if (response.data.success) {
+        this.logger.info('Report generated successfully', {
+          reportId: response.data.reportId,
+          title: response.data.reportTitle
+        });
+        return response.data;
+      } else {
+        throw new Error(response.data.error || 'Report generation failed');
+      }
+    } catch (error: any) {
+      console.error(`🚨 [${requestId}] generateReportFromFiles failed:`, error);
+      this.logger.error('Error generating report from files', error);
+
+      if (error.response?.status === 500) {
+        throw new Error('Server error occurred while generating report. Please try again.');
+      }
+
+      if (error.response?.status === 404) {
+        throw new Error('One or more files not found. Please check file IDs.');
+      }
+
+      if (error.response?.status === 400) {
+        throw new Error(error.response.data?.error || 'Invalid request parameters.');
+      }
+
+      throw new Error(error.response?.data?.error || error.message || 'Failed to generate report');
+    }
+  }
+
   // Clear cache for specific keys or all
   clearCache(key?: string): void {
     if (key) {
