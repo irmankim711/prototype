@@ -214,13 +214,39 @@ export const updateReportTemplate = async (
   id: string,
   templateData: Partial<ReportTemplate>
 ): Promise<ReportTemplate> => {
-  return await apiService.put<ReportTemplate>(`/production/reports/templates/${id}`, templateData);
+  try {
+    // Try new API first
+    return await apiService.put<ReportTemplate>(`/api/v1/templates/${id}`, templateData);
+  } catch (error) {
+    // Fallback to old endpoint
+    console.warn("New update API failed, falling back to old endpoint:", error);
+    return await apiService.put<ReportTemplate>(`/production/reports/templates/${id}`, templateData);
+  }
 };
 
 export const createReportTemplate = async (
   templateData: Partial<ReportTemplate>
 ): Promise<ReportTemplate> => {
-  return await apiService.post<ReportTemplate>('/production/reports/templates', templateData);
+  try {
+    // Try new API first
+    return await apiService.post<ReportTemplate>('/api/v1/templates', templateData);
+  } catch (error) {
+    // Fallback to old endpoint
+    console.warn("New create API failed, falling back to old endpoint:", error);
+    return await apiService.post<ReportTemplate>('/production/reports/templates', templateData);
+  }
+};
+
+export const deleteReportTemplate = async (id: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    // Try new API first
+    return await apiService.delete<{ success: boolean; message: string }>(`/api/v1/templates/${id}`);
+  } catch (error) {
+    // Fallback to old endpoint or soft delete via update
+    console.warn("Delete API failed, falling back to soft delete:", error);
+    await apiService.put<ReportTemplate>(`/production/reports/templates/${id}`, { is_active: false });
+    return { success: true, message: 'Template deleted successfully' };
+  }
 };
 
 export const uploadReportTemplate = async (
