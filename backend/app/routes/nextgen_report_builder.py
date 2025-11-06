@@ -960,7 +960,19 @@ def upload_excel_file():
         db.session.add(parsed_file)
 
         # Save tables to database
-        for table in processing_result.get('tables', []):
+        logger.info(f"💾 Saving {len(processing_result.get('tables', []))} tables to database...")
+        for idx, table in enumerate(processing_result.get('tables', [])):
+            # ⚡ PERFORMANCE FIX: Only store preview data (first 10 rows) to prevent DB timeout
+            # Full data is available from the saved Excel file on disk
+            table_data = table.get('data', [])
+            preview_data = table_data[:10] if table_data and len(table_data) > 10 else table_data
+
+            # Log data reduction
+            original_rows = len(table_data) if table_data else 0
+            preview_rows = len(preview_data) if preview_data else 0
+            if original_rows > preview_rows:
+                logger.info(f"   Table {idx+1} '{table.get('name', 'Unknown')}': Storing preview ({preview_rows}/{original_rows} rows)")
+
             excel_table = ExcelTable(
                 id=str(uuid.uuid4()),
                 parsed_file_id=file_id,
@@ -971,12 +983,26 @@ def upload_excel_file():
                 headers=table.get('headers', []),
                 data_types=table.get('data_types', []),
                 table_range=table.get('range', ''),
-                data=table.get('data', None)  # Store full data
+                data=preview_data  # Store only preview (first 10 rows)
             )
             db.session.add(excel_table)
 
-        db.session.commit()
-        logger.info(f"✅ Saved Excel file to database: file_id={file_id}")
+        try:
+            db.session.commit()
+            logger.info(f"✅ Saved Excel file to database: file_id={file_id}, tables={len(processing_result.get('tables', []))}")
+        except Exception as db_error:
+            logger.error(f"❌ Database commit failed: {str(db_error)}", exc_info=True)
+            db.session.rollback()
+            # Clean up the uploaded file
+            try:
+                os.remove(str(file_path))
+            except (OSError, FileNotFoundError):
+                pass
+            return jsonify({
+                'error': 'Failed to save file to database',
+                'details': str(db_error),
+                'suggestion': 'The file may be too large or contain incompatible data. Try a smaller file.'
+            }), 500
 
         # Create data source from Excel file with proper structure
         data_source = {
