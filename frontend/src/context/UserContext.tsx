@@ -6,7 +6,7 @@ import {
   useCallback,
 } from "react";
 import type { ReactNode } from "react";
-import { AuthContext } from "./AuthContext";
+import { FirebaseAuthContext } from "./FirebaseAuthTypes";
 import { updateUserProfile } from "../services/api";
 import type {
   User as ApiUser,
@@ -161,7 +161,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     userProfile,
     isLoading: authLoading,
     refreshUserProfile,
-  } = useContext(AuthContext);
+  } = useContext(FirebaseAuthContext);
 
   const [currentUser, setCurrentUser] = useState<EnhancedUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
