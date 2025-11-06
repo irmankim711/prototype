@@ -27,7 +27,7 @@ import {
   Login as LoginIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useFirebaseAuth } from '../../context/FirebaseAuthContext';
 import { formBuilderAPI } from '../../services/formBuilder';
 import FormDataExporter from '../../components/FormDataExporter';
 
@@ -56,7 +56,8 @@ interface GoogleFormsStatus {
 
 const GoogleFormsExport: React.FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user: firebaseUser, isLoading: authLoading } = useFirebaseAuth();
+  const isAuthenticated = !!firebaseUser;
   const [status, setStatus] = useState<GoogleFormsStatus | null>(null);
   const [forms, setForms] = useState<GoogleForm[]>([]);
   const [selectedForm, setSelectedForm] = useState<GoogleForm | null>(null);
