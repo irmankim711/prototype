@@ -51,16 +51,21 @@ class ExcelTableDetector:
     
     def _detect_tables_openpyxl(self) -> List[Dict[str, Any]]:
         """Detect tables using openpyxl for .xlsx files with memory optimization."""
+        import time
         tables = []
         try:
             # Use read_only mode for better memory efficiency
+            load_start = time.time()
             self.workbook = load_workbook(self.file_path, data_only=True, read_only=True)
+            logger.info(f"⏱️ Excel file loaded in {time.time() - load_start:.2f}s")
 
             for sheet_name in self.workbook.sheetnames:
                 try:
+                    sheet_start = time.time()
                     sheet = self.workbook[sheet_name]
                     sheet_tables = self._find_tables_in_sheet_openpyxl(sheet, sheet_name)
                     tables.extend(sheet_tables)
+                    logger.info(f"⏱️ Sheet '{sheet_name}' processed in {time.time() - sheet_start:.2f}s")
                 except Exception as sheet_error:
                     logger.warning(f"Error processing sheet {sheet_name}: {str(sheet_error)}")
                     continue
@@ -95,33 +100,34 @@ class ExcelTableDetector:
         max_row = sheet.max_row
         max_col = sheet.max_column
 
-        # Enforce size limits to prevent memory exhaustion
-        MAX_ROWS = 50000
-        MAX_COLS = 500
+        # ⚡ PERFORMANCE: Much more aggressive limits to prevent 30s timeout
+        # Reduced from 50000 to 5000 rows (10x faster)
+        MAX_ROWS = 5000
+        MAX_COLS = 100  # Reduced from 500 to 100
 
         if max_row > MAX_ROWS:
-            logger.warning(f"Sheet {sheet_name} has {max_row} rows, limiting to {MAX_ROWS}")
+            logger.warning(f"Sheet {sheet_name} has {max_row} rows, limiting to {MAX_ROWS} for performance")
             max_row = MAX_ROWS
 
         if max_col > MAX_COLS:
-            logger.warning(f"Sheet {sheet_name} has {max_col} columns, limiting to {MAX_COLS}")
+            logger.warning(f"Sheet {sheet_name} has {max_col} columns, limiting to {MAX_COLS} for performance")
             max_col = MAX_COLS
 
         if max_row < 2 or max_col < 2:  # Need at least header + 1 data row
             return tables
-        
+
         # Simple approach: treat the entire sheet as one table
         # This is more reliable than complex flood fill algorithms
         table_data = []
-        
-        # Extract all data from the sheet
-        for row_idx in range(1, max_row + 1):
+
+        # ⚡ PERFORMANCE: Use iter_rows() which is much faster than cell() calls
+        # This reads rows in bulk instead of individual cell lookups
+        for row_idx, row in enumerate(sheet.iter_rows(min_row=1, max_row=max_row, max_col=max_col, values_only=True), start=1):
             row_data = []
-            for col_idx in range(1, max_col + 1):
-                cell = sheet.cell(row=row_idx, column=col_idx)
-                value = self._clean_cell_value(cell.value)
+            for cell_value in row:
+                value = self._clean_cell_value(cell_value)
                 row_data.append(value)
-            
+
             # Only add rows that have at least one non-empty cell
             if any(cell is not None and str(cell).strip() for cell in row_data):
                 table_data.append(row_data)
@@ -455,9 +461,11 @@ class ExcelParserService:
     def __init__(self):
         self.supported_extensions = ['.xlsx', '.xls']
         self.max_file_size = 50 * 1024 * 1024  # 50MB
-        self.max_processing_time = 30  # 30 seconds timeout
-        self.max_rows = 50000  # Maximum rows to process
-        self.max_columns = 500  # Maximum columns to process
+        # ⚡ PERFORMANCE: Reduced from 30s to 10s to prevent HTTP 499 timeout
+        # Browser times out at ~30s, so we need to finish well before that
+        self.max_processing_time = 10  # 10 seconds timeout (was 30)
+        self.max_rows = 5000  # Maximum rows to process (reduced from 50000)
+        self.max_columns = 100  # Maximum columns to process (reduced from 500)
 
     def parse_excel_file(self, file_path: Union[str, BytesIO],
                         filename: str = None) -> Dict[str, Any]:

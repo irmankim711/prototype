@@ -40,6 +40,48 @@ excel_parser = ExcelParserService()
 template_optimizer = TemplateOptimizerService()
 ai_report_service = AIReportService()
 
+# ⚡ PERFORMANCE: Template cache to avoid repeated Firestore/DB/filesystem lookups
+# This prevents the 3-8 second template lookup bottleneck
+from functools import lru_cache
+from threading import Lock
+
+_template_cache = {}
+_template_cache_lock = Lock()
+
+def get_cached_template(template_id: str, user_id: str = None):
+    """
+    Get template from cache or lookup if not cached.
+    Cache key includes template_id to handle different templates.
+    Returns (template_file_path, template_db_record) tuple or (None, None).
+    """
+    cache_key = f"{template_id}"
+
+    with _template_cache_lock:
+        if cache_key in _template_cache:
+            cached_entry = _template_cache[cache_key]
+            # Cache expires after 5 minutes
+            if time.time() - cached_entry['timestamp'] < 300:
+                logger.info(f"✅ Template cache HIT for {template_id}")
+                return cached_entry['template_file'], cached_entry['template_record']
+            else:
+                # Expired, remove from cache
+                del _template_cache[cache_key]
+                logger.info(f"⏰ Template cache EXPIRED for {template_id}")
+
+    logger.info(f"❌ Template cache MISS for {template_id}, performing lookup...")
+    return None, None
+
+def cache_template(template_id: str, template_file, template_record):
+    """Store template in cache."""
+    cache_key = f"{template_id}"
+    with _template_cache_lock:
+        _template_cache[cache_key] = {
+            'template_file': template_file,
+            'template_record': template_record,
+            'timestamp': time.time()
+        }
+        logger.info(f"💾 Template cached: {template_id}")
+
 # ================ CORS TEST ENDPOINT ================
 
 @nextgen_bp.route('/cors-test', methods=['GET', 'OPTIONS'])
@@ -1473,12 +1515,20 @@ def generate_report_from_excel():
         logger.info(f"🔍 [DEBUG] Looking up template: {template_id}")
         stage_start = time.time()
 
-        # Try Firestore first
-        try:
-            from app.middleware.firebase_auth import firebase_auth_manager
+        # ⚡ PERFORMANCE: Check cache first (saves 3-8 seconds)
+        template_file, template_db_record = get_cached_template(template_id, user_id)
 
-            if firebase_auth_manager._initialized and firebase_auth_manager._firestore_db:
-                firestore_db = firebase_auth_manager._firestore_db
+        if template_file:
+            logger.info(f"✅ Using cached template: {template_file}")
+            stage_start = log_timing("Template Lookup (cached)", stage_start)
+        else:
+            # Cache miss, do full lookup
+            # Try Firestore first
+            try:
+                from app.middleware.firebase_auth import firebase_auth_manager
+
+                if firebase_auth_manager._initialized and firebase_auth_manager._firestore_db:
+                    firestore_db = firebase_auth_manager._firestore_db
                 templates_collection = firestore_db.collection('templates')
 
                 # Try to find template by name
@@ -1533,124 +1583,124 @@ def generate_report_from_excel():
             else:
                 logger.info("ℹ️ Firestore not available, using SQL database")
 
-        except Exception as firestore_error:
-            logger.warning(f"⚠️ Firestore template lookup failed: {str(firestore_error)}")
-            logger.info("ℹ️ Falling back to SQL database lookup")
+            except Exception as firestore_error:
+                logger.warning(f"⚠️ Firestore template lookup failed: {str(firestore_error)}")
+                logger.info("ℹ️ Falling back to SQL database lookup")
 
-        # If not found in Firestore, try SQL database
-        if not template_file:
-            try:
-                # Import the correct Template model with file_path support
-                from app.models.template_models import Template as TemplateModel
-
-                template_db_record = None
-                logger.info(f"✅ Looking up template in SQL DB: {template_id} (type: {type(template_id).__name__})")
-
-                # Try integer lookup first (if template_id is numeric)
+            # If not found in Firestore, try SQL database
+            if not template_file:
                 try:
-                    template_id_int = int(template_id)
-                    logger.info(f"🔍 Attempting integer ID lookup: {template_id_int}")
-                    template_db_record = TemplateModel.query.filter_by(
-                        id=template_id_int, is_active=True
-                    ).first()
+                    # Import the correct Template model with file_path support
+                    from app.models.template_models import Template as TemplateModel
 
-                    if template_db_record:
-                        logger.info(f"✅ Found template by ID in database: {template_db_record.name}")
-                    else:
-                        logger.info(f"ℹ️ No template found with ID {template_id_int}")
+                    template_db_record = None
+                    logger.info(f"✅ Looking up template in SQL DB: {template_id} (type: {type(template_id).__name__})")
 
-                except (ValueError, TypeError):
-                    # Not a valid integer, template_id is a string name
-                    logger.info(f"🔍 Template ID is not numeric, trying name-based lookup: {template_id}")
-
-                    # Try to find by name or file_path
-                    # Strip common file extensions from template_id for matching
-                    template_name = str(template_id)
-                    for ext in ['.docx', '.jinja', '.tex', '.html']:
-                        if template_name.endswith(ext):
-                            template_name = template_name[:-len(ext)]
-                            break
-
-                    # Search by name (exact match)
-                    template_db_record = TemplateModel.query.filter_by(
-                        name=template_name, is_active=True
-                    ).first()
-
-                    if template_db_record:
-                        logger.info(f"✅ Found template by name in database: {template_db_record.name}")
-                    else:
-                        # Try partial match on file_path
-                        logger.info(f"🔍 Trying file_path partial match for: {template_id}")
-                        template_db_record = TemplateModel.query.filter(
-                            TemplateModel.file_path.like(f"%{template_id}%"),
-                            TemplateModel.is_active == True
+                    # Try integer lookup first (if template_id is numeric)
+                    try:
+                        template_id_int = int(template_id)
+                        logger.info(f"🔍 Attempting integer ID lookup: {template_id_int}")
+                        template_db_record = TemplateModel.query.filter_by(
+                            id=template_id_int, is_active=True
                         ).first()
 
                         if template_db_record:
-                            logger.info(f"✅ Found template by file_path match: {template_db_record.name}")
+                            logger.info(f"✅ Found template by ID in database: {template_db_record.name}")
                         else:
-                            logger.info(f"ℹ️ No template found in database with name/path: {template_id}")
+                            logger.info(f"ℹ️ No template found with ID {template_id_int}")
 
-                except Exception as query_error:
-                    logger.warning(f"⚠️ Template query failed: {query_error}")
-                    template_db_record = None
+                    except (ValueError, TypeError):
+                        # Not a valid integer, template_id is a string name
+                        logger.info(f"🔍 Template ID is not numeric, trying name-based lookup: {template_id}")
 
-                if template_db_record:
-                    # Get file path from database
-                    file_path = getattr(template_db_record, 'file_path', None)
-
-                    if file_path:
-                        template_path = Path(file_path)
-                        if template_path.exists():
-                            template_file = template_path
-                            logger.info(f"✅ Template file found: {template_file}")
-                        else:
-                            logger.warning(f"⚠️ Template file not found: {file_path}")
-                    else:
-                        logger.warning(f"⚠️ Template has no file_path")
-
-            except Exception as db_error:
-                logger.warning(f"🔍 [DEBUG] Database template lookup failed: {str(db_error)}")
-
-        # Fallback to filesystem lookup if not found in database
-        if not template_file:
-            from app.utils.railway_paths import get_templates_dir
-
-            logger.info(f"🔍 [DEBUG] Template not found in DB, falling back to filesystem lookup")
-            templates_dir = get_templates_dir()
-            logger.info(f"🔍 [DEBUG] Templates directory: {templates_dir}")
-            logger.info(f"🔍 [DEBUG] Templates directory exists: {templates_dir.exists()}")
-            logger.info(f"🔍 [DEBUG] Looking for template_id: {repr(template_id)}")
-
-            # First, try the template_id as-is (in case it already has an extension)
-            potential_file = templates_dir / template_id
-            logger.info(
-                f"🔍 [DEBUG] Checking template as-is: {potential_file} (exists: {potential_file.exists()})")
-            if potential_file.exists():
-                template_file = potential_file
-            else:
-                # If not found, try adding extensions
-                for ext in ['.jinja', '.docx', '.tex', '.html']:
-                    potential_file = templates_dir / f'{template_id}{ext}'
-                    logger.info(
-    f"🔍 [DEBUG] Checking template with extension: {potential_file} (exists: {potential_file.exists()})")
-                    if potential_file.exists():
-                        template_file = potential_file
-                        break
-
-                # If still not found, try fuzzy matching (case-insensitive, ignore underscores/spaces)
-                if not template_file and templates_dir.exists():
-                    logger.info("🔍 [DEBUG] Attempting fuzzy match...")
-                    normalized_id = template_id.lower().replace('_', '').replace(' ', '').replace('-', '')
-
-                    for template_path in templates_dir.iterdir():
-                        if template_path.is_file():
-                            normalized_filename = template_path.name.lower().replace('_', '').replace(' ', '').replace('-', '')
-                            # Check if template_id matches the filename (with or without extension)
-                            if normalized_id in normalized_filename or normalized_filename.startswith(normalized_id):
-                                logger.info(f"🔍 [DEBUG] Fuzzy match found: {template_path.name}")
-                                template_file = template_path
+                        # Try to find by name or file_path
+                        # Strip common file extensions from template_id for matching
+                        template_name = str(template_id)
+                        for ext in ['.docx', '.jinja', '.tex', '.html']:
+                            if template_name.endswith(ext):
+                                template_name = template_name[:-len(ext)]
                                 break
+
+                        # Search by name (exact match)
+                        template_db_record = TemplateModel.query.filter_by(
+                            name=template_name, is_active=True
+                        ).first()
+
+                        if template_db_record:
+                            logger.info(f"✅ Found template by name in database: {template_db_record.name}")
+                        else:
+                            # Try partial match on file_path
+                            logger.info(f"🔍 Trying file_path partial match for: {template_id}")
+                            template_db_record = TemplateModel.query.filter(
+                                TemplateModel.file_path.like(f"%{template_id}%"),
+                                TemplateModel.is_active == True
+                            ).first()
+
+                            if template_db_record:
+                                logger.info(f"✅ Found template by file_path match: {template_db_record.name}")
+                            else:
+                                logger.info(f"ℹ️ No template found in database with name/path: {template_id}")
+
+                    except Exception as query_error:
+                        logger.warning(f"⚠️ Template query failed: {query_error}")
+                        template_db_record = None
+
+                    if template_db_record:
+                        # Get file path from database
+                        file_path = getattr(template_db_record, 'file_path', None)
+
+                        if file_path:
+                            template_path = Path(file_path)
+                            if template_path.exists():
+                                template_file = template_path
+                                logger.info(f"✅ Template file found: {template_file}")
+                            else:
+                                logger.warning(f"⚠️ Template file not found: {file_path}")
+                        else:
+                            logger.warning(f"⚠️ Template has no file_path")
+
+                except Exception as db_error:
+                    logger.warning(f"🔍 [DEBUG] Database template lookup failed: {str(db_error)}")
+
+            # Fallback to filesystem lookup if not found in database
+            if not template_file:
+                from app.utils.railway_paths import get_templates_dir
+
+                logger.info(f"🔍 [DEBUG] Template not found in DB, falling back to filesystem lookup")
+                templates_dir = get_templates_dir()
+                logger.info(f"🔍 [DEBUG] Templates directory: {templates_dir}")
+                logger.info(f"🔍 [DEBUG] Templates directory exists: {templates_dir.exists()}")
+                logger.info(f"🔍 [DEBUG] Looking for template_id: {repr(template_id)}")
+
+                # First, try the template_id as-is (in case it already has an extension)
+                potential_file = templates_dir / template_id
+                logger.info(
+                    f"🔍 [DEBUG] Checking template as-is: {potential_file} (exists: {potential_file.exists()})")
+                if potential_file.exists():
+                    template_file = potential_file
+                else:
+                    # If not found, try adding extensions
+                    for ext in ['.jinja', '.docx', '.tex', '.html']:
+                        potential_file = templates_dir / f'{template_id}{ext}'
+                        logger.info(
+        f"🔍 [DEBUG] Checking template with extension: {potential_file} (exists: {potential_file.exists()})")
+                        if potential_file.exists():
+                            template_file = potential_file
+                            break
+
+                    # If still not found, try fuzzy matching (case-insensitive, ignore underscores/spaces)
+                    if not template_file and templates_dir.exists():
+                        logger.info("🔍 [DEBUG] Attempting fuzzy match...")
+                        normalized_id = template_id.lower().replace('_', '').replace(' ', '').replace('-', '')
+
+                        for template_path in templates_dir.iterdir():
+                            if template_path.is_file():
+                                normalized_filename = template_path.name.lower().replace('_', '').replace(' ', '').replace('-', '')
+                                # Check if template_id matches the filename (with or without extension)
+                                if normalized_id in normalized_filename or normalized_filename.startswith(normalized_id):
+                                    logger.info(f"🔍 [DEBUG] Fuzzy match found: {template_path.name}")
+                                    template_file = template_path
+                                    break
 
         if not template_file:
             logger.error(f"🔍 [DEBUG] Template not found for ID: {template_id}")
@@ -1671,6 +1721,12 @@ def generate_report_from_excel():
         logger.info(f"🆔 [{request_id}]    - Exists: {template_file.exists()}")
         logger.info(f"🆔 [{request_id}]    - Size: {template_file.stat().st_size if template_file.exists() else 'N/A'} bytes")
         logger.info(f"🆔 [{request_id}]    - Extension: {template_file.suffix}")
+
+        # ⚡ PERFORMANCE: Cache the template for future requests (only if not from cache)
+        if template_file and get_cached_template(template_id, user_id)[0] is None:
+            cache_template(template_id, template_file, template_db_record)
+
+        stage_start = log_timing("Template Lookup", stage_start)
 
         # ✅ FIX: Map extracted data to template format
         logger.info(f"🆔 [{request_id}] ��️  Step 2: Mapping data to template format...")
