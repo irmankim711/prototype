@@ -539,6 +539,9 @@ console.log(`✅ [${loginId}] Firebase authentication successful`);
       setFirebaseUser(authenticatedUser);
       console.log(`✅ [${loginId}] Firebase user state set immediately for: ${authenticatedUser.email}`);
 
+      // Mark the time of login to prevent race condition logout
+      localStorage.setItem("lastLoginTime", Date.now().toString());
+
       // Get ID token and sync with backend immediately (don't wait for onAuthStateChanged)
       try {
         const idToken = await authenticatedUser.getIdToken(true);
@@ -676,6 +679,9 @@ console.log(
       // This prevents the "appears unauthenticated until reload" bug
       setFirebaseUser(authenticatedUser);
       console.log(`✅ [${loginId}] Firebase user state set immediately for: ${authenticatedUser.email}`);
+
+      // Mark the time of login to prevent race condition logout
+      localStorage.setItem("lastLoginTime", Date.now().toString());
 
       // Get ID token and sync with backend immediately (don't wait for onAuthStateChanged)
       try {
@@ -1022,19 +1028,34 @@ console.error(
                   }
                 }
               } else {
+                // Only clear auth data if we're not in the middle of a login
+                // Check if there's a recent login timestamp (within last 5 seconds)
+                const recentLoginTime = localStorage.getItem('lastLoginTime');
+                const now = Date.now();
+                const isRecentLogin = recentLoginTime && (now - parseInt(recentLoginTime)) < 5000;
+
+                if (isRecentLogin) {
+                  console.log(
+                    `⚠️ [${stateChangeId}] No Firebase user but recent login detected - waiting for auth to sync...`
+                  );
+                  // Don't clear auth data immediately after login - let Firebase sync
+                  return;
+                }
+
                 console.log(
                   `🔄 [${stateChangeId}] No Firebase user - clearing all auth data`
                 );
-                
+
 setFirebaseUser(null);
-                
+
 setUser(null);
-                
+
 setUserProfile(null);
 
                 // Clear stored tokens and axios headers
                 localStorage.removeItem("firebaseToken");
-                
+                localStorage.removeItem("lastLoginTime");
+
 if (axiosInstance.defaults.headers.common) {
                   delete axiosInstance.defaults.headers.common["Authorization"];
                 }
