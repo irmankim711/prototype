@@ -27,6 +27,7 @@ import { login, register } from "../../services/api";
 import React from "react";
 import GoogleSignInButton from "../../components/GoogleSignInButton";
 import { useAuth } from "../../context/AuthContext";
+import { useFirebaseAuth } from "../../context/FirebaseAuthContext";
 import {
   AutoAwesome,
   Security,
@@ -302,6 +303,7 @@ export default function LandingPageEnhanced() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const auth = useAuth();
+  const firebaseAuth = useFirebaseAuth();
   const [showLogin, setShowLogin] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
   const [showQuickAccess, setShowQuickAccess] = useState(false);
@@ -371,9 +373,9 @@ export default function LandingPageEnhanced() {
     setErrorMessage("");
     console.log("Login attempt started with:", { email, password });
     try {
-      // Use the AuthContext login method to properly update state
-      await auth.login(email, password);
-      console.log("Login successful via AuthContext, navigating to google-forms-export...");
+      // Use Firebase authentication with backend sync
+      await firebaseAuth.loginWithEmail(email, password);
+      console.log("Login successful via Firebase, navigating to google-forms-export...");
       navigate("/google-forms-export");
     } catch (err: any) {
       console.error("Login error:", err);
@@ -398,17 +400,17 @@ export default function LandingPageEnhanced() {
     }
     setSignupLoading(true);
     try {
-      await register({
-        email: signupEmail,
-        password: signupPassword,
-        confirmPassword: signupConfirm,
-      });
+      // Use Firebase authentication for registration
+      await firebaseAuth.registerWithEmail(signupEmail, signupPassword);
       setSignupSuccess(true);
       setSignupEmail("");
       setSignupPassword("");
       setSignupConfirm("");
+      setTimeout(() => {
+        navigate("/google-forms-export");
+      }, 1000);
     } catch (err: any) {
-      setSignupError(err?.response?.data?.msg || "Registration failed.");
+      setSignupError(err?.message || "Registration failed.");
     } finally {
       setSignupLoading(false);
     }
