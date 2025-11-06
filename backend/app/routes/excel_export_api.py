@@ -11,12 +11,11 @@ import os
 import logging
 from typing import Dict, Any
 
-from ..models import db, Form, FormSubmission, User
-from ..decorators import get_current_user_id
+from ..models import db, Form, FormSubmission, User, UserRole
+from ..decorators import get_current_user_id, role_required
 from ..services.excel_export_service import excel_export_service
 from ..tasks.enhanced_report_tasks import export_form_to_excel_task
 from ..core.exceptions import ExportError
-from ..decorators import role_required, UserRole
 
 logger = logging.getLogger(__name__)
 
