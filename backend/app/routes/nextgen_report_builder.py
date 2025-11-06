@@ -2657,7 +2657,6 @@ def generate_report_from_excel():
 
     except Exception as e:
         import traceback
-        import os
         import sys
 
         # Critical: Always rollback on any exception to prevent tainted
