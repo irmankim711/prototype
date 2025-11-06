@@ -955,7 +955,7 @@ def upload_excel_file():
             total_rows=processing_result.get('total_rows', 0),
             total_columns=processing_result.get('total_columns', 0),
             sheets_processed=processing_result.get('sheets_processed', 0),
-            metadata=processing_result.get('metadata', {})
+            file_metadata=processing_result.get('metadata', {})
         )
         db.session.add(parsed_file)
 
