@@ -85,6 +85,18 @@ def upload_and_parse_excel():
                 result = excel_service.parse_excel_file(file_path, original_filename)
                 
                 if result['success']:
+                    from sqlalchemy.exc import IntegrityError, DatabaseError
+                    
+                    # Check if file already exists (in case of retry)
+                    existing_file = ParsedExcelFile.query.filter_by(id=file_id).first()
+                    if existing_file:
+                        current_app.logger.warning(f"File with ID {file_id} already exists, cleaning up old records...")
+                        # Delete existing tables first (due to foreign key constraint)
+                        ExcelTable.query.filter_by(parsed_file_id=file_id).delete()
+                        # Delete existing file record
+                        db.session.delete(existing_file)
+                        db.session.flush()
+                    
                     # Save to database
                     parsed_file = ParsedExcelFile(
                         id=file_id,
@@ -93,28 +105,56 @@ def upload_and_parse_excel():
                         file_size=file_size,
                         status='completed',
                         tables_count=result['tables_count'],
-                        parsed_at=datetime.utcnow(),
+                        uploaded_at=datetime.utcnow(),
                         metadata=result['metadata']
                     )
                     db.session.add(parsed_file)
                     
-                    # Save tables
-                    for table in result['tables']:
-                        excel_table = ExcelTable(
-                            id=str(uuid.uuid4()),
-                            parsed_file_id=file_id,
-                            name=table['name'],
-                            sheet_name=table['sheet_name'],
-                            row_count=table['row_count'],
-                            column_count=table['column_count'],
-                            headers=table['headers'],
-                            data_types=table['data_types'],
-                            table_range=table['range'],
-                            data=table['data'] if include_preview else None
-                        )
-                        db.session.add(excel_table)
+                    # ✅ CRITICAL FIX: Flush to ensure ParsedExcelFile is inserted before ExcelTable records
+                    try:
+                        db.session.flush()
+                        current_app.logger.info(f"✅ ParsedExcelFile flushed to database: file_id={file_id}")
+                    except (IntegrityError, DatabaseError) as db_error:
+                        current_app.logger.error(f"❌ Failed to insert ParsedExcelFile: {str(db_error)}", exc_info=True)
+                        db.session.rollback()
+                        return jsonify({
+                            'error': 'Failed to save file record to database',
+                            'details': str(db_error)
+                        }), 500
                     
-                    db.session.commit()
+                    # Save tables
+                    try:
+                        for table in result['tables']:
+                            excel_table = ExcelTable(
+                                id=str(uuid.uuid4()),
+                                parsed_file_id=file_id,  # This will now reference an existing parent record
+                                name=table['name'],
+                                sheet_name=table['sheet_name'],
+                                row_count=table['row_count'],
+                                column_count=table['column_count'],
+                                headers=table['headers'],
+                                data_types=table['data_types'],
+                                table_range=table['range'],
+                                data=table['data'] if include_preview else None
+                            )
+                            db.session.add(excel_table)
+                        
+                        db.session.commit()
+                    except IntegrityError as integrity_error:
+                        current_app.logger.error(f"❌ Foreign key constraint violation: {str(integrity_error)}", exc_info=True)
+                        db.session.rollback()
+                        return jsonify({
+                            'error': 'Database constraint violation',
+                            'details': 'The parent file record was not properly saved.',
+                            'technical_details': str(integrity_error)
+                        }), 500
+                    except DatabaseError as db_error:
+                        current_app.logger.error(f"❌ Database error during commit: {str(db_error)}", exc_info=True)
+                        db.session.rollback()
+                        return jsonify({
+                            'error': 'Database error while saving file',
+                            'details': str(db_error)
+                        }), 500
                     
                     # Prepare response
                     response = {

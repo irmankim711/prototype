@@ -943,7 +943,19 @@ def upload_excel_file():
 
         # ✅ NEW: Save to database for multi-file tracking
         from app.models import ParsedExcelFile, ExcelTable
+        from sqlalchemy.exc import IntegrityError, DatabaseError
 
+        # Check if file already exists (in case of retry)
+        existing_file = ParsedExcelFile.query.filter_by(id=file_id).first()
+        if existing_file:
+            logger.warning(f"File with ID {file_id} already exists, cleaning up old records...")
+            # Delete existing tables first (due to foreign key constraint)
+            ExcelTable.query.filter_by(parsed_file_id=file_id).delete()
+            # Delete existing file record
+            db.session.delete(existing_file)
+            db.session.flush()
+
+        # Create and save ParsedExcelFile first
         parsed_file = ParsedExcelFile(
             id=file_id,
             user_id=user_id,
@@ -958,40 +970,178 @@ def upload_excel_file():
             file_metadata=processing_result.get('metadata', {})
         )
         db.session.add(parsed_file)
+        
+        # ✅ CRITICAL FIX: Flush to ensure ParsedExcelFile is inserted before ExcelTable records
+        # This ensures the parent record exists in the database before we try to insert child records
+        try:
+            db.session.flush()
+            logger.info(f"✅ ParsedExcelFile flushed to database: file_id={file_id}")
+        except IntegrityError as integrity_error:
+            logger.error(f"❌ Failed to insert ParsedExcelFile: {str(integrity_error)}", exc_info=True)
+            db.session.rollback()
+            try:
+                os.remove(str(file_path))
+            except (OSError, FileNotFoundError):
+                pass
+            return jsonify({
+                'error': 'Failed to save file record to database',
+                'details': str(integrity_error),
+                'suggestion': 'The file record may already exist or there is a database constraint violation.'
+            }), 500
+        except DatabaseError as db_error:
+            logger.error(f"❌ Database error inserting ParsedExcelFile: {str(db_error)}", exc_info=True)
+            db.session.rollback()
+            try:
+                os.remove(str(file_path))
+            except (OSError, FileNotFoundError):
+                pass
+            return jsonify({
+                'error': 'Database error while saving file record',
+                'details': str(db_error),
+                'suggestion': 'Please try again or contact support if the issue persists.'
+            }), 500
 
         # Save tables to database
         logger.info(f"💾 Saving {len(processing_result.get('tables', []))} tables to database...")
-        for idx, table in enumerate(processing_result.get('tables', [])):
-            # ⚡ PERFORMANCE FIX: Only store preview data (first 10 rows) to prevent DB timeout
-            # Full data is available from the saved Excel file on disk
-            table_data = table.get('data', [])
-            preview_data = table_data[:10] if table_data and len(table_data) > 10 else table_data
-
-            # Log data reduction
-            original_rows = len(table_data) if table_data else 0
-            preview_rows = len(preview_data) if preview_data else 0
-            if original_rows > preview_rows:
-                logger.info(f"   Table {idx+1} '{table.get('name', 'Unknown')}': Storing preview ({preview_rows}/{original_rows} rows)")
-
-            excel_table = ExcelTable(
-                id=str(uuid.uuid4()),
-                parsed_file_id=file_id,
-                name=table.get('name', ''),
-                sheet_name=table.get('sheet_name', ''),
-                row_count=table.get('row_count', 0),
-                column_count=table.get('column_count', 0),
-                headers=table.get('headers', []),
-                data_types=table.get('data_types', []),
-                table_range=table.get('range', ''),
-                data=preview_data  # Store only preview (first 10 rows)
-            )
-            db.session.add(excel_table)
-
+        tables_added = 0
         try:
+            for idx, table in enumerate(processing_result.get('tables', [])):
+                # ⚡ PERFORMANCE FIX: Only store preview data (first 10 rows) to prevent DB timeout
+                # Full data is available from the saved Excel file on disk
+                table_data = table.get('data', [])
+                preview_data = table_data[:10] if table_data and len(table_data) > 10 else table_data
+
+                # Log data reduction
+                original_rows = len(table_data) if table_data else 0
+                preview_rows = len(preview_data) if preview_data else 0
+                if original_rows > preview_rows:
+                    logger.info(f"   Table {idx+1} '{table.get('name', 'Unknown')}': Storing preview ({preview_rows}/{original_rows} rows)")
+
+                excel_table = ExcelTable(
+                    id=str(uuid.uuid4()),
+                    parsed_file_id=file_id,  # This will now reference an existing parent record
+                    name=table.get('name', ''),
+                    sheet_name=table.get('sheet_name', ''),
+                    row_count=table.get('row_count', 0),
+                    column_count=table.get('column_count', 0),
+                    headers=table.get('headers', []),
+                    data_types=table.get('data_types', []),
+                    table_range=table.get('range', ''),
+                    data=preview_data  # Store only preview (first 10 rows)
+                )
+                db.session.add(excel_table)
+                tables_added += 1
+
+            # Commit all changes (both ParsedExcelFile and ExcelTable records)
             db.session.commit()
-            logger.info(f"✅ Saved Excel file to database: file_id={file_id}, tables={len(processing_result.get('tables', []))}")
+            logger.info(f"✅ Saved Excel file to database: file_id={file_id}, tables={tables_added}")
+            
+            # ✅ SYNC TO FIRESTORE: Save to Firestore for cross-platform access
+            # Only sync after successful SQL commit to ensure data consistency
+            try:
+                if firebase_auth_manager._initialized and firebase_auth_manager._firestore_db:
+                    firestore_db = firebase_auth_manager._firestore_db
+                    parsed_files_collection = firestore_db.collection('parsed_excel_files')
+                    excel_tables_collection = firestore_db.collection('excel_tables')
+                    
+                    # Prepare file data for Firestore
+                    file_data = {
+                        'id': parsed_file.id,
+                        'user_id': parsed_file.user_id,
+                        'original_filename': parsed_file.original_filename,
+                        'file_path': parsed_file.file_path,
+                        'file_size': parsed_file.file_size,
+                        'status': parsed_file.status,
+                        'uploaded_at': parsed_file.uploaded_at.isoformat() if parsed_file.uploaded_at else datetime.utcnow().isoformat(),
+                        'tables_count': parsed_file.tables_count,
+                        'total_rows': parsed_file.total_rows,
+                        'total_columns': parsed_file.total_columns,
+                        'sheets_processed': parsed_file.sheets_processed,
+                        'metadata': parsed_file.file_metadata or {},
+                        'error_message': parsed_file.error_message,
+                        'created_at': datetime.utcnow().isoformat(),
+                        'updated_at': datetime.utcnow().isoformat()
+                    }
+                    
+                    # ✅ CRITICAL: Save parent file to Firestore FIRST (same pattern as SQL)
+                    parsed_files_collection.document(parsed_file.id).set(file_data)
+                    logger.info(f"✅ Saved ParsedExcelFile to Firestore: file_id={file_id}")
+                    
+                    # Save tables to Firestore (only after parent file is saved)
+                    firestore_tables_synced = 0
+                    for idx, table in enumerate(processing_result.get('tables', [])):
+                        # Get the ExcelTable record we just created
+                        excel_table_record = ExcelTable.query.filter_by(
+                            parsed_file_id=file_id,
+                            name=table.get('name', '')
+                        ).first()
+                        
+                        if excel_table_record:
+                            firestore_table_data = {
+                                'id': excel_table_record.id,
+                                'parsed_file_id': excel_table_record.parsed_file_id,  # References parent file
+                                'name': excel_table_record.name,
+                                'sheet_name': excel_table_record.sheet_name,
+                                'row_count': excel_table_record.row_count,
+                                'column_count': excel_table_record.column_count,
+                                'headers': excel_table_record.headers,
+                                'data_types': excel_table_record.data_types,
+                                'table_range': excel_table_record.table_range,
+                                'has_data': excel_table_record.data is not None,
+                                # Note: Don't store full data in Firestore (can be large)
+                                'created_at': excel_table_record.created_at.isoformat() if excel_table_record.created_at else datetime.utcnow().isoformat()
+                            }
+                            
+                            excel_tables_collection.document(excel_table_record.id).set(firestore_table_data)
+                            firestore_tables_synced += 1
+                    
+                    logger.info(f"✅ Synced {firestore_tables_synced} ExcelTable records to Firestore")
+                else:
+                    logger.warning("⚠️ Firestore not available - skipping Firestore sync")
+            except Exception as firestore_error:
+                # Don't fail the entire request if Firestore sync fails
+                # SQL database is the source of truth
+                logger.error(f"❌ Failed to sync to Firestore: {str(firestore_error)}", exc_info=True)
+                logger.warning("⚠️ Continuing despite Firestore sync failure - data is saved in SQL database")
+            
+        except IntegrityError as integrity_error:
+            logger.error(f"❌ Foreign key constraint violation: {str(integrity_error)}", exc_info=True)
+            db.session.rollback()
+            # Clean up the uploaded file
+            try:
+                os.remove(str(file_path))
+            except (OSError, FileNotFoundError):
+                pass
+            # Check if the error is specifically about the foreign key
+            error_str = str(integrity_error)
+            if 'foreign key constraint' in error_str.lower() or 'parsed_file_id' in error_str.lower():
+                return jsonify({
+                    'error': 'Database constraint violation',
+                    'details': 'The parent file record was not properly saved. This may indicate a database issue.',
+                    'technical_details': str(integrity_error),
+                    'suggestion': 'Please try uploading the file again. If the problem persists, contact support.'
+                }), 500
+            else:
+                return jsonify({
+                    'error': 'Failed to save file to database',
+                    'details': str(integrity_error),
+                    'suggestion': 'The file may be too large or contain incompatible data. Try a smaller file.'
+                }), 500
+        except DatabaseError as db_error:
+            logger.error(f"❌ Database error during commit: {str(db_error)}", exc_info=True)
+            db.session.rollback()
+            # Clean up the uploaded file
+            try:
+                os.remove(str(file_path))
+            except (OSError, FileNotFoundError):
+                pass
+            return jsonify({
+                'error': 'Database error while saving file',
+                'details': str(db_error),
+                'suggestion': 'Please try again or contact support if the issue persists.'
+            }), 500
         except Exception as db_error:
-            logger.error(f"❌ Database commit failed: {str(db_error)}", exc_info=True)
+            logger.error(f"❌ Unexpected error during database commit: {str(db_error)}", exc_info=True)
             db.session.rollback()
             # Clean up the uploaded file
             try:
