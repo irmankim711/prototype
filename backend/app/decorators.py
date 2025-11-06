@@ -163,6 +163,9 @@ def require_role(*allowed_roles):
         return decorated_function
     return decorator
 
+# Alias for backward compatibility
+role_required = require_role
+
 def get_current_user():
     """Get current authenticated user from Firebase context."""
     return getattr(g, 'current_user', None)
