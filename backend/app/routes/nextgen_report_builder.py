@@ -129,10 +129,21 @@ def routes_debug():
 
 @nextgen_bp.route('/data-sources', methods=['GET'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def get_data_sources():
     """Get available data sources for the report builder with pagination"""
     try:
         user_id = get_current_user_id()
+
+        # ✅ DEBUGGING: Log authentication status
+        logger.info(f"📊 Data sources endpoint called by user_id: {user_id}")
+
+        if not user_id:
+            logger.error("❌ No user_id found - authentication may have failed")
+            return jsonify({
+                'error': 'Authentication required',
+                'message': 'User ID not found in request context'
+            }), 401
 
         # Get pagination parameters
         page = int(request.args.get('page', 1))
@@ -263,15 +274,23 @@ def get_data_sources():
         }), 200
 
     except Exception as e:
-        logger.error(f"Error fetching data sources: {str(e)}")
-        return jsonify({'error': 'Failed to fetch data sources'}), 500
+        logger.error(f"❌ Error fetching data sources: {str(e)}", exc_info=True)
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return jsonify({
+            'error': 'Failed to fetch data sources',
+            'message': str(e),
+            'type': type(e).__name__
+        }), 500
 
 @nextgen_bp.route('/data-sources/<data_source_id>/fields', methods=['GET'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def get_data_source_fields(data_source_id):
     """Get fields for a specific data source"""
     try:
         user_id = get_current_user_id()
+        logger.info(f"📋 Data source fields requested for: {data_source_id} by user: {user_id}")
 
         fields = []
 
@@ -406,6 +425,7 @@ def _get_sample_values(form_id: int, field_id: str) -> List[str]:
 
 @nextgen_bp.route('/templates', methods=['GET'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def get_report_templates():
     """Get available report templates from database with filesystem fallback"""
     try:
@@ -642,6 +662,7 @@ def _get_template_description(template_stem: str) -> str:
 
 @nextgen_bp.route('/templates', methods=['POST'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def save_report_template():
     """Save a new report template or update existing one"""
     try:
@@ -681,6 +702,8 @@ def save_report_template():
         }), 500
 
 @nextgen_bp.route('/templates/<template_id>/metadata', methods=['GET'])
+@cross_origin(supports_credentials=True)
+@firebase_auth_required
 def get_template_metadata(template_id):
     """Get detailed metadata for a specific template"""
     try:
@@ -752,6 +775,8 @@ def _get_template_usage_instructions(template_id: str) -> str:
      'Upload your Excel data and the template will generate a formatted report automatically.')
 
 @nextgen_bp.route('/templates/<template_id>', methods=['GET'])
+@cross_origin(supports_credentials=True)
+@firebase_auth_required
 def get_template_content(template_id):
     """Get template content by ID"""
     try:
