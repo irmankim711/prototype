@@ -1213,15 +1213,37 @@ const refreshToken = async () => {
 
         // Store the token in localStorage for API service to use
         localStorage.setItem("firebaseToken", idToken);
-        
-        // Verify the token with backend to ensure proper session management
+
+        // CRITICAL: Verify the token with backend to ensure proper session management
+        // If backend verification fails, the token refresh should be considered failed
         try {
           await axiosInstance.post('/api/auth/verify-token', {}, {
-            headers: { 'Authorization': `Bearer ${idToken}` }
+            headers: { 'Authorization': `Bearer ${idToken}` },
+            timeout: 10000 // 10 second timeout for verification
           });
           console.log(`✅ [${refreshId}] Token verified with backend successfully`);
-        } catch (syncError) {
-          console.warn(`⚠️ [${refreshId}] Failed to verify token with backend:`, syncError);
+        } catch (syncError: any) {
+          console.error(`❌ [${refreshId}] Failed to verify token with backend:`, syncError);
+
+          // If backend doesn't accept the token, we need to handle this properly
+          if (syncError.response?.status === 401) {
+            console.error(`🔒 [${refreshId}] Backend rejected token - user needs to re-authenticate`);
+            // Sign out to force re-authentication
+            if (authRef.current) {
+              const { signOut } = await import("firebase/auth");
+              await signOut(authRef.current);
+            }
+            throw new Error('Token verification failed - please log in again');
+          } else if (syncError.response?.status >= 500) {
+            // Backend server error - log but don't force logout
+            console.warn(`⚠️ [${refreshId}] Backend server error during verification - allowing offline operation`);
+          } else if (syncError.code === 'ECONNABORTED' || syncError.message?.includes('timeout')) {
+            // Timeout - backend might be slow, allow it
+            console.warn(`⚠️ [${refreshId}] Backend verification timeout - allowing offline operation`);
+          } else {
+            // Unknown error - log and allow
+            console.warn(`⚠️ [${refreshId}] Backend verification failed with unknown error - allowing offline operation`);
+          }
         }
 
         console.log(`✅ [${refreshId}] Token refreshed successfully`);
@@ -1246,9 +1268,10 @@ await signOut(authRef.current);
       }
     };
 
-    // Refresh token every 55 minutes (Firebase tokens expire in 1 hour)
-    // Increased from 50 minutes to reduce frequency of token refreshes
-    const interval = setInterval(refreshToken, 55 * 60 * 1000);
+    // Refresh token every 50 minutes (Firebase tokens expire in 1 hour)
+    // This gives us 10 minutes buffer before expiry (with 1-minute check buffer)
+    // 50 min refresh + 10 min buffer = 60 min total
+    const interval = setInterval(refreshToken, 50 * 60 * 1000);
 
     // Also refresh token immediately to ensure we have a fresh one
     refreshToken();

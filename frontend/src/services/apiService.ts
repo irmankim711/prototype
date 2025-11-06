@@ -369,8 +369,12 @@ export class ApiService implements IApiService {
   }
 
   public setAuthToken(token: string): void {
+    // CRITICAL FIX: Store token in single location (firebaseToken) for consistency
+    localStorage.setItem(STORAGE_KEYS.FIREBASE_TOKEN, token);
+
+    // Also store in ACCESS_TOKEN for backward compatibility (will be removed in migration)
     localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
-    
+
     // Set token expiry
     try {
       const decoded = jwtDecode<JwtPayload>(token);
@@ -584,6 +588,8 @@ export class ApiService implements IApiService {
   public async refreshToken(): Promise<RefreshTokenResponse> {
     // Firebase-only refresh: ask Firebase SDK for a new ID token, then re-sync with backend
     try {
+      console.log('🔄 [refreshToken] Starting token refresh process...');
+
       let firebaseToken = await this.getFreshFirebaseIdToken(true);
       if (!firebaseToken) {
         // Fallback: try existing stored token if available
@@ -594,18 +600,41 @@ export class ApiService implements IApiService {
         throw new Error('No Firebase ID token available');
       }
 
-      // Sync with backend using the fresh token
+      console.log('✅ [refreshToken] Firebase token obtained, syncing with backend...');
+
+      // CRITICAL FIX: Sync with backend is now REQUIRED, not optional
+      // If backend doesn't accept the token, the refresh should fail
       try {
         await this.authAxiosInstance.post(
-          '/auth/firebase-sync',
+          '/api/auth/verify-token',
           {},
-          { headers: { Authorization: `Bearer ${firebaseToken}` } }
+          {
+            headers: { Authorization: `Bearer ${firebaseToken}` },
+            timeout: 10000 // 10 second timeout
+          }
         );
+        console.log('✅ [refreshToken] Backend sync successful');
       } catch (syncError: any) {
-        // If sync fails with 401, the token might still be invalid
-        // If sync fails with 500, it might be a backend issue but the token is valid
-        console.warn('Firebase sync failed during refresh:', syncError);
-        // Continue anyway if we have a fresh Firebase token
+        console.error('❌ [refreshToken] Backend sync failed:', syncError);
+
+        // If backend rejects token with 401, this is a critical failure
+        if (syncError.response?.status === 401) {
+          console.error('🔒 [refreshToken] Backend rejected token - clearing auth and forcing re-login');
+          this.clearAuthToken();
+          throw new Error('Token rejected by backend - please log in again');
+        }
+
+        // For 5xx errors or timeouts, allow offline operation but log warning
+        if (syncError.response?.status >= 500) {
+          console.warn('⚠️ [refreshToken] Backend server error - allowing offline operation');
+        } else if (syncError.code === 'ECONNABORTED' || syncError.message?.includes('timeout')) {
+          console.warn('⚠️ [refreshToken] Backend timeout - allowing offline operation');
+        } else {
+          // For other errors, fail the refresh to be safe
+          console.error('❌ [refreshToken] Unknown sync error - failing refresh for safety');
+          this.clearAuthToken();
+          throw new Error('Token refresh failed - backend sync error');
+        }
       }
 
       // Keep using the Firebase token as our access token
@@ -615,17 +644,20 @@ export class ApiService implements IApiService {
       try {
         const decoded = jwtDecode<JwtPayload>(firebaseToken);
         if (decoded?.exp) {
-          expiresIn = Math.max(0, Math.floor(decoded.exp * 1000 - Date.now()) / 1000);
+          expiresIn = Math.max(0, Math.floor((decoded.exp * 1000 - Date.now()) / 1000));
         }
       } catch (_) {
         // ignore decode errors
       }
+
+      console.log(`✅ [refreshToken] Token refresh completed successfully (expires in ${expiresIn}s)`);
 
       return {
         access_token: firebaseToken,
         expires_in: expiresIn,
       } as RefreshTokenResponse;
     } catch (error: any) {
+      console.error('❌ [refreshToken] Token refresh failed:', error);
       this.clearAuthToken();
       throw this.createApiError(error, 'TOKEN_REFRESH_FAILED');
     }
@@ -781,10 +813,24 @@ export class ApiService implements IApiService {
   }
 
   public getAuthToken(): string | null {
-    return (
-      localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN) ||
-      localStorage.getItem(STORAGE_KEYS.FIREBASE_TOKEN)
-    );
+    // CRITICAL FIX: Use single source of truth for token storage
+    // Priority: firebaseToken (primary) -> accessToken (legacy fallback)
+    const firebaseToken = localStorage.getItem(STORAGE_KEYS.FIREBASE_TOKEN);
+    if (firebaseToken) {
+      return firebaseToken;
+    }
+
+    // Fallback to legacy accessToken if exists, but migrate it
+    const legacyToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+    if (legacyToken) {
+      // Migrate legacy token to new storage key
+      localStorage.setItem(STORAGE_KEYS.FIREBASE_TOKEN, legacyToken);
+      localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+      console.log('🔄 Migrated legacy access token to firebaseToken storage');
+      return legacyToken;
+    }
+
+    return null;
   }
 
   public getTokenExpiry(): number | null {
@@ -795,9 +841,9 @@ export class ApiService implements IApiService {
   public isTokenExpired(): boolean {
     const expiry = this.getTokenExpiry();
     if (!expiry) return true;
-    
-    // Add 5 minute buffer before expiry
-    return Date.now() >= (expiry - 5 * 60 * 1000);
+
+    // Add 1 minute buffer before expiry (reduced from 5 minutes to prevent premature expiration)
+    return Date.now() >= (expiry - 1 * 60 * 1000);
   }
 
   /**
