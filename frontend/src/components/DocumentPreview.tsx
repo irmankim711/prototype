@@ -120,14 +120,15 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     },
     onSuccess: (data) => {
       if (data.success) {
-        if (data.preview_data) {
-          // Handle NextGen preview data
-          setPreviewData(data.preview_data);
-          setPreviewType('data');
-        } else if (data.preview_url) {
-          // Handle legacy preview URL
+        if (data.preview_url) {
+          // Handle preview URL first (PDF/DOCX files)
           setPreviewUrl(data.preview_url);
           setPreviewType(data.preview_type || 'html');
+          setPreviewData(data.preview_data); // Still store data for metadata
+        } else if (data.preview_data) {
+          // Fallback: Handle NextGen preview data without URL
+          setPreviewData(data.preview_data);
+          setPreviewType('data');
         }
         setError(null);
       } else {

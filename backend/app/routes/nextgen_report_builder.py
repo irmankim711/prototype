@@ -4181,10 +4181,19 @@ def delete_report(report_id):
     """Delete a report"""
     try:
         user_id = get_current_user_id()
-        
-        report = Report.query.filter_by(id=report_id, created_by=user_id).first()
+
+        # Get the report - check both created_by and user_id fields for compatibility
+        report = Report.query.filter_by(id=report_id).first()
         if not report:
             return jsonify({'error': 'Report not found'}), 404
+
+        # Check user authorization - support both created_by and user_id fields
+        if hasattr(report, 'created_by') and report.created_by:
+            if report.created_by != user_id:
+                return jsonify({'error': 'Access denied'}), 403
+        elif hasattr(report, 'user_id') and report.user_id:
+            if report.user_id != user_id:
+                return jsonify({'error': 'Access denied'}), 403
         
         try:
             db.session.delete(report)
@@ -4279,10 +4288,18 @@ def download_report_pdf(report_id):
     try:
         user_id = get_current_user_id()
 
-        # Get the report
-        report = Report.query.filter_by(id=report_id, created_by=user_id).first()
+        # Get the report - check both created_by and user_id fields for compatibility
+        report = Report.query.filter_by(id=report_id).first()
         if not report:
-            return jsonify({'error': 'Report not found or access denied'}), 404
+            return jsonify({'error': 'Report not found'}), 404
+
+        # Check user authorization - support both created_by and user_id fields
+        if hasattr(report, 'created_by') and report.created_by:
+            if report.created_by != user_id:
+                return jsonify({'error': 'Access denied'}), 403
+        elif hasattr(report, 'user_id') and report.user_id:
+            if report.user_id != user_id:
+                return jsonify({'error': 'Access denied'}), 403
 
         # Check if PDF file exists
         if not report.pdf_file_path or not os.path.exists(report.pdf_file_path):
@@ -4307,10 +4324,18 @@ def download_report_docx(report_id):
     try:
         user_id = get_current_user_id()
 
-        # Get the report
-        report = Report.query.filter_by(id=report_id, created_by=user_id).first()
+        # Get the report - check both created_by and user_id fields for compatibility
+        report = Report.query.filter_by(id=report_id).first()
         if not report:
-            return jsonify({'error': 'Report not found or access denied'}), 404
+            return jsonify({'error': 'Report not found'}), 404
+
+        # Check user authorization - support both created_by and user_id fields
+        if hasattr(report, 'created_by') and report.created_by:
+            if report.created_by != user_id:
+                return jsonify({'error': 'Access denied'}), 403
+        elif hasattr(report, 'user_id') and report.user_id:
+            if report.user_id != user_id:
+                return jsonify({'error': 'Access denied'}), 403
 
         # Check if DOCX file exists
         if not report.docx_file_path or not os.path.exists(report.docx_file_path):
@@ -4335,10 +4360,18 @@ def download_report_excel(report_id):
     try:
         user_id = get_current_user_id()
 
-        # Get the report
-        report = Report.query.filter_by(id=report_id, created_by=user_id).first()
+        # Get the report - check both created_by and user_id fields for compatibility
+        report = Report.query.filter_by(id=report_id).first()
         if not report:
-            return jsonify({'error': 'Report not found or access denied'}), 404
+            return jsonify({'error': 'Report not found'}), 404
+
+        # Check user authorization - support both created_by and user_id fields
+        if hasattr(report, 'created_by') and report.created_by:
+            if report.created_by != user_id:
+                return jsonify({'error': 'Access denied'}), 403
+        elif hasattr(report, 'user_id') and report.user_id:
+            if report.user_id != user_id:
+                return jsonify({'error': 'Access denied'}), 403
 
         # Check if Excel file exists
         if not report.excel_file_path or not os.path.exists(report.excel_file_path):
