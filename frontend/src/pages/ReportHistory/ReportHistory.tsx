@@ -40,7 +40,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { reportService } from "../../services/reportService";
 import type { Report } from "../../types/reports";
 import DocumentPreview from "../../components/DocumentPreview";
-import { useAuth } from "../../contexts/FirebaseAuthContext";
+import { useAuth } from "../../context/FirebaseAuthContext";
 
 const getStatusColor = (
   status: string
