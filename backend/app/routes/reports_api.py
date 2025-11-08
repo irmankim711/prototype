@@ -253,9 +253,8 @@ def generate_report():
             program_id=1,  # Default program
             generation_config=data['config'],
             data_source=data['data'],
-            user_id=user_id,
+            user_id=user_id,  # This sets created_by via the property setter
             organization_id=None,  # Set to None to avoid foreign key constraint
-            created_by=None,  # Set to None to avoid foreign key constraint - in production, use authenticated user's UUID
             download_count=0,
             view_count=0
         )
@@ -455,6 +454,7 @@ def get_report_status(report_id):
         }), 500
 
 @reports_bp.route('/<int:report_id>/preview', methods=['GET'])
+@firebase_auth_required
 def preview_report(report_id):
     """
     Enhanced preview generated report with file information and download links
@@ -463,18 +463,60 @@ def preview_report(report_id):
     try:
         user_id = get_current_user_id()
 
+        # Ensure user is authenticated (should not be None due to @firebase_auth_required)
+        if user_id is None:
+            logger.warning(f"Preview request for report {report_id} - user_id is None despite authentication decorator")
+            return jsonify({
+                'error': 'Authentication required',
+                'code': 'UNAUTHORIZED'
+            }), 401
+
         # Get report
         report = Report.query.get(report_id)
         if not report:
-            return jsonify({'error': 'Report not found'}), 404
+            logger.warning(f"Preview request for report {report_id} - report not found")
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
 
         # Check access - allow if user owns the report OR user is admin
         user = User.query.get(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
-        # Convert both to string for comparison to handle type mismatches
-        if str(report.user_id) != str(user_id) and not is_admin:
-            return jsonify({'error': 'Access denied'}), 403
+        # Get report owner - handle both created_by and user_id properties
+        report_owner_id = report.user_id  # This uses the property that extracts from created_by
+        report_created_by = report.created_by  # Direct field access
+
+        # Log authorization attempt for debugging
+        logger.info(f"Preview authorization check - user_id: {user_id}, report_owner_id: {report_owner_id}, "
+                   f"report_created_by: {report_created_by}, is_admin: {is_admin}")
+
+        # Check authorization: user must own the report OR be an admin
+        # Handle None values properly
+        user_owns_report = False
+        if report_owner_id is not None and user_id is not None:
+            # Both are not None, compare them
+            user_owns_report = str(report_owner_id) == str(user_id)
+        elif report_created_by is not None and user_id is not None:
+            # Fallback: check created_by directly if user_id property returned None
+            # created_by might be a string representation of user_id
+            try:
+                # Try to convert created_by to int for comparison
+                created_by_int = int(report_created_by) if report_created_by.isdigit() else None
+                if created_by_int is not None:
+                    user_owns_report = created_by_int == int(user_id)
+            except (ValueError, TypeError):
+                # If conversion fails, compare as strings
+                user_owns_report = str(report_created_by) == str(user_id)
+
+        if not user_owns_report and not is_admin:
+            logger.warning(f"Access denied for user {user_id} attempting to preview report {report_id} "
+                          f"(owned by {report_owner_id or report_created_by})")
+            return jsonify({
+                'error': 'Access denied - you do not have permission to view this report',
+                'code': 'INSUFFICIENT_PERMISSIONS'
+            }), 403
         
         # Check if report is ready
         if report.status != 'completed':
@@ -685,6 +727,7 @@ def convert_latex_report(report_id):
         }), 500
 
 @reports_bp.route('/<int:report_id>/download/<file_type>', methods=['GET'])
+@firebase_auth_required
 def download_report(report_id, file_type):
     """
     Download generated report file
@@ -697,19 +740,56 @@ def download_report(report_id, file_type):
     try:
         user_id = get_current_user_id()
 
+        # Ensure user is authenticated (should not be None due to @firebase_auth_required)
+        if user_id is None:
+            logger.warning(f"Download request for report {report_id} - user_id is None despite authentication decorator")
+            return jsonify({
+                'error': 'Authentication required',
+                'code': 'UNAUTHORIZED'
+            }), 401
+
         # Get report
         report = Report.query.get(report_id)
         if not report:
-            return jsonify({'error': 'Report not found'}), 404
+            logger.warning(f"Download request for report {report_id} - report not found")
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
 
         # Check access - allow if user owns the report OR user is admin
         user = User.query.get(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
-        # Convert both to string for comparison to handle type mismatches
-        if str(report.user_id) != str(user_id) and not is_admin:
-            logger.warning(f"User {user_id} (admin={is_admin}) attempted to download report {report_id} owned by user {report.user_id}")
-            return jsonify({'error': 'Access denied - you can only download your own reports'}), 403
+        # Get report owner - handle both created_by and user_id properties
+        report_owner_id = report.user_id  # This uses the property that extracts from created_by
+        report_created_by = report.created_by  # Direct field access
+
+        # Check authorization: user must own the report OR be an admin
+        # Handle None values properly
+        user_owns_report = False
+        if report_owner_id is not None and user_id is not None:
+            # Both are not None, compare them
+            user_owns_report = str(report_owner_id) == str(user_id)
+        elif report_created_by is not None and user_id is not None:
+            # Fallback: check created_by directly if user_id property returned None
+            # created_by might be a string representation of user_id
+            try:
+                # Try to convert created_by to int for comparison
+                created_by_int = int(report_created_by) if report_created_by.isdigit() else None
+                if created_by_int is not None:
+                    user_owns_report = created_by_int == int(user_id)
+            except (ValueError, TypeError):
+                # If conversion fails, compare as strings
+                user_owns_report = str(report_created_by) == str(user_id)
+
+        if not user_owns_report and not is_admin:
+            logger.warning(f"Access denied for user {user_id} attempting to download report {report_id} "
+                          f"(owned by {report_owner_id or report_created_by})")
+            return jsonify({
+                'error': 'Access denied - you do not have permission to download this report',
+                'code': 'INSUFFICIENT_PERMISSIONS'
+            }), 403
 
         # Check if report is ready
         if report.status != 'completed':
