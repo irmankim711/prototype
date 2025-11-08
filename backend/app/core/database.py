@@ -222,9 +222,16 @@ class DatabaseManager:
             if self.is_initialized:
                 logger.info("Database manager already initialized")
                 return
-                
+
+            # Check if SQL database is disabled (using Firestore only)
+            database_url = self.config.primary_database.url
+            if not database_url or database_url == 'sqlite:///:memory:' or database_url.endswith('/app.db'):
+                logger.info("SQL database disabled - application using Firestore only")
+                self.is_initialized = True
+                return
+
             logger.info("Initializing production database manager...")
-            
+
             # Initialize primary database (read/write)
             self._initialize_primary_database()
             

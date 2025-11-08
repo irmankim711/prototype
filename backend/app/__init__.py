@@ -81,11 +81,27 @@ def create_app(config=None):
 
 def init_extensions(app):
     """Initialize Flask extensions"""
-    # Initialize database
-    db.init_app(app)
-    migrate.init_app(app, db)
-    
-    # Import models after db is initialized to avoid circular imports
-    with app.app_context():
-        from app import models  # noqa: F401
-        db.create_all()
+    # Only initialize SQL database if DATABASE_URL is set
+    # (Firestore is used as primary database, SQL is optional for legacy compatibility)
+    database_url = app.config.get('SQLALCHEMY_DATABASE_URI')
+    use_sql_db = database_url and database_url != 'sqlite:///:memory:' and not database_url.endswith('/app.db')
+
+    if use_sql_db:
+        app.logger.info(f"Initializing SQL database: {database_url[:20]}...")
+        # Initialize database
+        db.init_app(app)
+        migrate.init_app(app, db)
+
+        # Import models after db is initialized to avoid circular imports
+        with app.app_context():
+            try:
+                from app import models  # noqa: F401
+                db.create_all()
+                app.logger.info("SQL database initialized successfully")
+            except Exception as e:
+                app.logger.warning(f"SQL database initialization failed (using Firestore only): {e}")
+    else:
+        app.logger.info("SQL database disabled - using Firestore only")
+        # Configure a dummy database to prevent errors
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
