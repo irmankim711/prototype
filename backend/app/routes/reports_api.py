@@ -14,7 +14,7 @@ import logging
 from typing import Dict, Any
 
 from .. import db
-from ..decorators import get_current_user_id, firebase_token_optional
+from ..decorators import get_current_user_id, firebase_token_optional, firebase_auth_required
 from ..models import Report, Form, FormSubmission, User, UserRole, ReportTemplate
 from ..services.report_generation_service import report_generation_service
 from ..services.excel_export_service import excel_export_service
@@ -809,13 +809,21 @@ def get_report(report_id):
         if not report:
             return jsonify({'error': 'Report not found'}), 404
 
-        # Check access - allow if user owns the report OR user is admin
-        user = User.query.get(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        # If user is authenticated, check access - allow if user owns the report OR user is admin
+        if user_id is not None:
+            user = User.query.get(user_id)
+            is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
-        # Convert both to string for comparison to handle type mismatches
-        if str(report.user_id) != str(user_id) and not is_admin:
-            return jsonify({'error': 'Access denied'}), 403
+            # Convert both to string for comparison to handle type mismatches
+            if str(report.user_id) != str(user_id) and not is_admin:
+                return jsonify({'error': 'Access denied'}), 403
+        else:
+            # Unauthenticated users cannot access reports
+            logger.warning(f"Unauthenticated user attempted to access report {report_id}")
+            return jsonify({
+                'error': 'Authentication required',
+                'code': 'UNAUTHORIZED'
+            }), 401
 
         # Convert to dictionary using the model's to_dict method or fallback
         report_data = report.to_dict() if hasattr(report, 'to_dict') else {
@@ -846,6 +854,7 @@ def get_report(report_id):
         }), 500
 
 @reports_bp.route('/<int:report_id>', methods=['DELETE'])
+@firebase_auth_required
 def delete_report(report_id):
     """
     Delete a report and its files
@@ -853,6 +862,15 @@ def delete_report(report_id):
     """
     try:
         user_id = get_current_user_id()
+
+        # Authentication is guaranteed by @firebase_auth_required decorator
+        # This check provides an additional safety layer
+        if user_id is None:
+            logger.error(f"Authentication failed for delete_report {report_id} - user_id is None despite decorator")
+            return jsonify({
+                'error': 'Authentication required',
+                'code': 'UNAUTHORIZED'
+            }), 401
 
         # Get report
         report = Report.query.get(report_id)
