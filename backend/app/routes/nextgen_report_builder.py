@@ -5,7 +5,7 @@ template management, Excel automation, and report generation
 """
 
 from flask import Blueprint, request, jsonify, send_file, current_app
-from ..decorators import get_current_user_id, firebase_auth_required
+from ..decorators import get_current_user_id, get_current_user, firebase_auth_required
 
 from flask_cors import cross_origin
 from datetime import datetime, timedelta
@@ -19,7 +19,7 @@ from typing import Dict, List, Any, Optional
 from collections import Counter
 
 from app import db, limiter
-from app.models import User, Form, FormSubmission
+from app.models import User, Form, FormSubmission, UserRole
 # Import the simple Report model that matches SQLite schema
 from app.models import Report
 from .reports_api import resolve_template_id
@@ -3854,6 +3854,7 @@ def _get_fallback_suggestions(
 
 @nextgen_bp.route('/reports', methods=['POST'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def create_report():
     """Create a new report"""
     try:
@@ -3996,19 +3997,36 @@ def create_report():
 
 @nextgen_bp.route('/reports/<int:report_id>', methods=['PUT'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def update_report(report_id):
     """Update an existing report"""
     try:
         user_id = get_current_user_id()
         data = request.get_json()
-        
+
         if not data:
             return jsonify({'error': 'No data provided'}), 400
-        
+
         # Get the report
-        report = Report.query.filter_by(id=report_id, created_by=user_id).first()
+        report = Report.query.filter_by(id=report_id).first()
         if not report:
-            return jsonify({'error': 'Report not found'}), 404
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
+
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        # Support both created_by and user_id fields for compatibility
+        report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+
+        if str(report_owner) != str(user_id) and not is_admin:
+            return jsonify({
+                'error': 'Access denied - you do not have permission to update this report',
+                'code': 'INSUFFICIENT_PERMISSIONS'
+            }), 403
         
         # Update report fields
         if 'title' in data:
@@ -4056,21 +4074,32 @@ def update_report(report_id):
 
 @nextgen_bp.route('/reports/<int:report_id>', methods=['GET'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def get_report(report_id):
     """Get a specific report"""
     try:
         user_id = get_current_user_id()
-        logger.info(f"GET REPORT DEBUG - JWT user_id: {user_id} (type: {type(user_id)})")
-        
-        # Debug: Check all reports for this user with different formats
-        all_reports = Report.query.filter_by(id=report_id).all()
-        logger.info(f"DEBUG - Found {len(all_reports)} reports with ID {report_id}")
-        for r in all_reports:
-            logger.info(f"DEBUG - Report ID {r.id}: created_by='{r.created_by}' (type: {type(r.created_by)})")
-        
-        report = Report.query.filter_by(id=report_id, created_by=user_id).first()
+
+        # Get the report
+        report = Report.query.filter_by(id=report_id).first()
         if not report:
-            return jsonify({'error': 'Report not found'}), 404
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
+
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        # Support both created_by and user_id fields for compatibility
+        report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+
+        if str(report_owner) != str(user_id) and not is_admin:
+            return jsonify({
+                'error': 'Access denied - you do not have permission to view this report',
+                'code': 'INSUFFICIENT_PERMISSIONS'
+            }), 403
         
         return jsonify({
             'success': True,
@@ -4093,6 +4122,7 @@ def get_report(report_id):
 
 @nextgen_bp.route('/reports', methods=['GET'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def get_user_reports():
     """Get all reports for the current user from both SQL and Firestore"""
     try:
@@ -4177,23 +4207,32 @@ def get_user_reports():
 
 @nextgen_bp.route('/reports/<int:report_id>', methods=['DELETE'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def delete_report(report_id):
     """Delete a report"""
     try:
         user_id = get_current_user_id()
 
-        # Get the report - check both created_by and user_id fields for compatibility
+        # Get the report
         report = Report.query.filter_by(id=report_id).first()
         if not report:
-            return jsonify({'error': 'Report not found'}), 404
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
 
-        # Check user authorization - support both created_by and user_id fields
-        if hasattr(report, 'created_by') and report.created_by:
-            if report.created_by != user_id:
-                return jsonify({'error': 'Access denied'}), 403
-        elif hasattr(report, 'user_id') and report.user_id:
-            if report.user_id != user_id:
-                return jsonify({'error': 'Access denied'}), 403
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        # Support both created_by and user_id fields for compatibility
+        report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+
+        if str(report_owner) != str(user_id) and not is_admin:
+            return jsonify({
+                'error': 'Access denied - you do not have permission to delete this report',
+                'code': 'INSUFFICIENT_PERMISSIONS'
+            }), 403
         
         try:
             db.session.delete(report)
@@ -4219,15 +4258,32 @@ def delete_report(report_id):
 
 @nextgen_bp.route('/reports/<int:report_id>/preview', methods=['GET'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def preview_report(report_id):
     """Preview a report without downloading"""
     try:
         user_id = get_current_user_id()
-        
+
         # Get the report
-        report = Report.query.filter_by(id=report_id, created_by=user_id).first()
+        report = Report.query.filter_by(id=report_id).first()
         if not report:
-            return jsonify({'error': 'Report not found or access denied'}), 404
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
+
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        # Support both created_by and user_id fields for compatibility
+        report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+
+        if str(report_owner) != str(user_id) and not is_admin:
+            return jsonify({
+                'error': 'Access denied - you do not have permission to view this report',
+                'code': 'INSUFFICIENT_PERMISSIONS'
+            }), 403
         
         preview_data = {
             'id': report.id,
@@ -4283,23 +4339,32 @@ def preview_report(report_id):
 
 @nextgen_bp.route('/reports/<int:report_id>/download/pdf', methods=['GET'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def download_report_pdf(report_id):
     """Download report as PDF"""
     try:
         user_id = get_current_user_id()
 
-        # Get the report - check both created_by and user_id fields for compatibility
+        # Get the report
         report = Report.query.filter_by(id=report_id).first()
         if not report:
-            return jsonify({'error': 'Report not found'}), 404
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
 
-        # Check user authorization - support both created_by and user_id fields
-        if hasattr(report, 'created_by') and report.created_by:
-            if report.created_by != user_id:
-                return jsonify({'error': 'Access denied'}), 403
-        elif hasattr(report, 'user_id') and report.user_id:
-            if report.user_id != user_id:
-                return jsonify({'error': 'Access denied'}), 403
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        # Support both created_by and user_id fields for compatibility
+        report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+
+        if str(report_owner) != str(user_id) and not is_admin:
+            return jsonify({
+                'error': 'Access denied - you do not have permission to download this report',
+                'code': 'INSUFFICIENT_PERMISSIONS'
+            }), 403
 
         # Check if PDF file exists
         if not report.pdf_file_path or not os.path.exists(report.pdf_file_path):
@@ -4319,23 +4384,32 @@ def download_report_pdf(report_id):
 
 @nextgen_bp.route('/reports/<int:report_id>/download/docx', methods=['GET'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def download_report_docx(report_id):
     """Download report as DOCX"""
     try:
         user_id = get_current_user_id()
 
-        # Get the report - check both created_by and user_id fields for compatibility
+        # Get the report
         report = Report.query.filter_by(id=report_id).first()
         if not report:
-            return jsonify({'error': 'Report not found'}), 404
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
 
-        # Check user authorization - support both created_by and user_id fields
-        if hasattr(report, 'created_by') and report.created_by:
-            if report.created_by != user_id:
-                return jsonify({'error': 'Access denied'}), 403
-        elif hasattr(report, 'user_id') and report.user_id:
-            if report.user_id != user_id:
-                return jsonify({'error': 'Access denied'}), 403
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        # Support both created_by and user_id fields for compatibility
+        report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+
+        if str(report_owner) != str(user_id) and not is_admin:
+            return jsonify({
+                'error': 'Access denied - you do not have permission to download this report',
+                'code': 'INSUFFICIENT_PERMISSIONS'
+            }), 403
 
         # Check if DOCX file exists
         if not report.docx_file_path or not os.path.exists(report.docx_file_path):
@@ -4355,23 +4429,32 @@ def download_report_docx(report_id):
 
 @nextgen_bp.route('/reports/<int:report_id>/download/excel', methods=['GET'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def download_report_excel(report_id):
     """Download report as Excel"""
     try:
         user_id = get_current_user_id()
 
-        # Get the report - check both created_by and user_id fields for compatibility
+        # Get the report
         report = Report.query.filter_by(id=report_id).first()
         if not report:
-            return jsonify({'error': 'Report not found'}), 404
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
 
-        # Check user authorization - support both created_by and user_id fields
-        if hasattr(report, 'created_by') and report.created_by:
-            if report.created_by != user_id:
-                return jsonify({'error': 'Access denied'}), 403
-        elif hasattr(report, 'user_id') and report.user_id:
-            if report.user_id != user_id:
-                return jsonify({'error': 'Access denied'}), 403
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        # Support both created_by and user_id fields for compatibility
+        report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+
+        if str(report_owner) != str(user_id) and not is_admin:
+            return jsonify({
+                'error': 'Access denied - you do not have permission to download this report',
+                'code': 'INSUFFICIENT_PERMISSIONS'
+            }), 403
 
         # Check if Excel file exists
         if not report.excel_file_path or not os.path.exists(report.excel_file_path):
@@ -4600,20 +4683,42 @@ Report generated using fallback method due to primary service unavailability.
 
 @nextgen_bp.route('/reports/<int:report_id>/view', methods=['GET'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def get_report_content(report_id):
     """Get report content for viewing and editing"""
     try:
-        current_user_id = get_current_user_id()
-        
-        # Get report from database
+        user_id = get_current_user_id()
+
+        # Get the report
+        report_obj = Report.query.filter_by(id=report_id).first()
+        if not report_obj:
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
+
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        # Support both created_by and user_id fields for compatibility
+        report_owner = report_obj.created_by if hasattr(report_obj, 'created_by') and report_obj.created_by else report_obj.user_id
+
+        if str(report_owner) != str(user_id) and not is_admin:
+            return jsonify({
+                'error': 'Access denied - you do not have permission to view this report',
+                'code': 'INSUFFICIENT_PERMISSIONS'
+            }), 403
+
+        # Get report from database for detailed data
         from sqlalchemy import text
         result = db.session.execute(text("""
-            SELECT id, title, description, report_type, generation_status, 
+            SELECT id, title, description, report_type, generation_status,
                    data_source, generation_config, created_at
-            FROM reports 
-            WHERE id = :report_id AND created_by = :user_id
-        """), {'report_id': report_id, 'user_id': current_user_id})
-        
+            FROM reports
+            WHERE id = :report_id
+        """), {'report_id': report_id})
+
         report = result.fetchone()
         if not report:
             return jsonify({'error': 'Report not found'}), 404
@@ -4655,24 +4760,36 @@ def get_report_content(report_id):
 
 @nextgen_bp.route('/reports/<int:report_id>/edit', methods=['PUT'])
 @cross_origin(supports_credentials=True)
+@firebase_auth_required
 def update_report_content(report_id):
     """Update report content with edited text"""
     try:
-        current_user_id = get_current_user_id()
+        user_id = get_current_user_id()
         data = request.get_json()
-        
+
         if not data or 'latex_content' not in data:
             return jsonify({'error': 'LaTeX content is required'}), 400
-        
-        # Verify user owns the report
-        from sqlalchemy import text
-        result = db.session.execute(text("""
-            SELECT id FROM reports 
-            WHERE id = :report_id AND created_by = :user_id
-        """), {'report_id': report_id, 'user_id': current_user_id})
-        
-        if not result.fetchone():
-            return jsonify({'error': 'Report not found'}), 404
+
+        # Get the report
+        report_obj = Report.query.filter_by(id=report_id).first()
+        if not report_obj:
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
+
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        # Support both created_by and user_id fields for compatibility
+        report_owner = report_obj.created_by if hasattr(report_obj, 'created_by') and report_obj.created_by else report_obj.user_id
+
+        if str(report_owner) != str(user_id) and not is_admin:
+            return jsonify({
+                'error': 'Access denied - you do not have permission to edit this report',
+                'code': 'INSUFFICIENT_PERMISSIONS'
+            }), 403
         
         # Save the updated content
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
