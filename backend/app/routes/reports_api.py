@@ -428,14 +428,17 @@ def get_report_status(report_id):
     """
     try:
         user_id = get_current_user_id()
-        
+
         # Get report
         report = Report.query.get(report_id)
         if not report:
             return jsonify({'error': 'Report not found'}), 404
-        
-        # Check access
-        if report.user_id != user_id:
+
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        if report.user_id != user_id and not is_admin:
             return jsonify({'error': 'Access denied'}), 403
         
         return jsonify({
@@ -458,14 +461,17 @@ def preview_report(report_id):
     """
     try:
         user_id = get_current_user_id()
-        
+
         # Get report
         report = Report.query.get(report_id)
         if not report:
             return jsonify({'error': 'Report not found'}), 404
-        
-        # Check access
-        if report.user_id != user_id:
+
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        if report.user_id != user_id and not is_admin:
             return jsonify({'error': 'Access denied'}), 403
         
         # Check if report is ready
@@ -524,14 +530,17 @@ def edit_report(report_id):
     """
     try:
         user_id = get_current_user_id()
-        
+
         # Get report
         report = Report.query.get(report_id)
         if not report:
             return jsonify({'error': 'Report not found'}), 404
-        
-        # Check access
-        if report.user_id != user_id:
+
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        if report.user_id != user_id and not is_admin:
             return jsonify({'error': 'Access denied'}), 403
         
         # Get updated data
@@ -589,14 +598,17 @@ def convert_latex_report(report_id):
     """
     try:
         user_id = get_current_user_id()
-        
+
         # Get report
         report = Report.query.get(report_id)
         if not report:
             return jsonify({'error': 'Report not found'}), 404
-        
-        # Check access
-        if report.user_id != user_id:
+
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        if report.user_id != user_id and not is_admin:
             return jsonify({'error': 'Access denied'}), 403
         
         # Get LaTeX file path from request
@@ -686,9 +698,13 @@ def download_report(report_id, file_type):
         if not report:
             return jsonify({'error': 'Report not found'}), 404
 
-        # Check access
-        if report.user_id != user_id:
-            return jsonify({'error': 'Access denied'}), 403
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        if report.user_id != user_id and not is_admin:
+            logger.warning(f"User {user_id} (admin={is_admin}) attempted to download report {report_id} owned by user {report.user_id}")
+            return jsonify({'error': 'Access denied - you can only download your own reports'}), 403
 
         # Check if report is ready
         if report.status != 'completed':
@@ -788,8 +804,11 @@ def get_report(report_id):
         if not report:
             return jsonify({'error': 'Report not found'}), 404
 
-        # Check access
-        if report.user_id != user_id:
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        if report.user_id != user_id and not is_admin:
             return jsonify({'error': 'Access denied'}), 403
 
         # Convert to dictionary using the model's to_dict method or fallback
@@ -828,15 +847,23 @@ def delete_report(report_id):
     """
     try:
         user_id = get_current_user_id()
-        
+
         # Get report
         report = Report.query.get(report_id)
         if not report:
             return jsonify({'error': 'Report not found'}), 404
-        
-        # Check access
-        if report.user_id != user_id:
-            return jsonify({'error': 'Access denied'}), 403
+
+        # Check access - allow if user owns the report OR user is admin
+        user = User.query.get(user_id)
+        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+        if report.user_id != user_id and not is_admin:
+            logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete report {report_id} owned by user {report.user_id}")
+            return jsonify({'error': 'Access denied - you can only delete your own reports'}), 403
+
+        # Log admin deletion
+        if is_admin and report.user_id != user_id:
+            logger.info(f"Admin user {user_id} deleting report {report_id} owned by user {report.user_id}")
 
         # Remove files - try all possible formats based on the base file_path
         if report.file_path:
