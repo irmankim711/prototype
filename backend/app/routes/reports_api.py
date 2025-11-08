@@ -438,7 +438,8 @@ def get_report_status(report_id):
         user = User.query.get(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
-        if report.user_id != user_id and not is_admin:
+        # Convert both to string for comparison to handle type mismatches
+        if str(report.user_id) != str(user_id) and not is_admin:
             return jsonify({'error': 'Access denied'}), 403
         
         return jsonify({
@@ -471,7 +472,8 @@ def preview_report(report_id):
         user = User.query.get(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
-        if report.user_id != user_id and not is_admin:
+        # Convert both to string for comparison to handle type mismatches
+        if str(report.user_id) != str(user_id) and not is_admin:
             return jsonify({'error': 'Access denied'}), 403
         
         # Check if report is ready
@@ -540,7 +542,8 @@ def edit_report(report_id):
         user = User.query.get(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
-        if report.user_id != user_id and not is_admin:
+        # Convert both to string for comparison to handle type mismatches
+        if str(report.user_id) != str(user_id) and not is_admin:
             return jsonify({'error': 'Access denied'}), 403
         
         # Get updated data
@@ -608,7 +611,8 @@ def convert_latex_report(report_id):
         user = User.query.get(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
-        if report.user_id != user_id and not is_admin:
+        # Convert both to string for comparison to handle type mismatches
+        if str(report.user_id) != str(user_id) and not is_admin:
             return jsonify({'error': 'Access denied'}), 403
         
         # Get LaTeX file path from request
@@ -702,7 +706,8 @@ def download_report(report_id, file_type):
         user = User.query.get(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
-        if report.user_id != user_id and not is_admin:
+        # Convert both to string for comparison to handle type mismatches
+        if str(report.user_id) != str(user_id) and not is_admin:
             logger.warning(f"User {user_id} (admin={is_admin}) attempted to download report {report_id} owned by user {report.user_id}")
             return jsonify({'error': 'Access denied - you can only download your own reports'}), 403
 
@@ -808,7 +813,8 @@ def get_report(report_id):
         user = User.query.get(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
-        if report.user_id != user_id and not is_admin:
+        # Convert both to string for comparison to handle type mismatches
+        if str(report.user_id) != str(user_id) and not is_admin:
             return jsonify({'error': 'Access denied'}), 403
 
         # Convert to dictionary using the model's to_dict method or fallback
@@ -854,19 +860,13 @@ def delete_report(report_id):
             return jsonify({'error': 'Report not found'}), 404
 
         # Check access - allow if user owns the report OR user is admin
-        # TEMPORARY: Ownership check disabled after Firestore data cleanup
-        # TODO: Re-enable once user ownership is properly reassigned
         user = User.query.get(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
-        # Commented out ownership check - allows any authenticated user to delete
-        # if report.user_id != user_id and not is_admin:
-        #     logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete report {report_id} owned by user {report.user_id}")
-        #     return jsonify({'error': 'Access denied - you can only delete your own reports'}), 403
-
-        # Log if user is deleting someone else's report
-        if report.user_id and report.user_id != user_id:
-            logger.info(f"User {user_id} deleting report {report_id} originally owned by user {report.user_id}")
+        # Convert both to string for comparison to handle type mismatches
+        if str(report.user_id) != str(user_id) and not is_admin:
+            logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete report {report_id} owned by user {report.user_id}")
+            return jsonify({'error': 'Access denied - you can only delete your own reports'}), 403
 
         # Remove files - try all possible formats based on the base file_path
         if report.file_path:
