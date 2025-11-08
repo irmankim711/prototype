@@ -1,5 +1,5 @@
 import React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -40,6 +40,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { reportService } from "../../services/reportService";
 import type { Report } from "../../types/reports";
 import DocumentPreview from "../../components/DocumentPreview";
+import { useAuth } from "../../contexts/FirebaseAuthContext";
 
 const getStatusColor = (
   status: string
@@ -86,6 +87,16 @@ export default function ReportHistory() {
   const [previewReportId, setPreviewReportId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
+  const { user, loading: authLoading } = useAuth();
+
+  // Check authentication on mount
+  useEffect(() => {
+    if (!authLoading && !user) {
+      setError("You must be logged in to view and manage reports.");
+    } else if (user) {
+      setError(null);
+    }
+  }, [user, authLoading]);
 
   // Fetch reports using the new reportService
   const {
@@ -135,7 +146,13 @@ export default function ReportHistory() {
       setSuccess("Report deleted successfully");
     },
     onError: (error: any) => {
-      setError(`Failed to delete report: ${error.message}`);
+      console.error("Delete error:", error);
+      const errorMessage = error?.response?.status === 401
+        ? "You must be logged in to delete reports"
+        : error?.response?.status === 403
+        ? "You don't have permission to delete this report"
+        : error?.response?.data?.error || error.message || "Failed to delete report";
+      setError(errorMessage);
     },
   });
 
@@ -145,10 +162,16 @@ export default function ReportHistory() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["reports"] });
       queryClient.invalidateQueries({ queryKey: ["storageUsage"] });
-      setSuccess(`Cleanup completed: ${result.reports_processed} reports processed`);
+      setSuccess(`Cleanup completed: ${result.reports_processed || 0} reports processed`);
     },
     onError: (error: any) => {
-      setError(`Failed to cleanup reports: ${error.message}`);
+      console.error("Cleanup error:", error);
+      const errorMessage = error?.response?.status === 401
+        ? "You must be logged in to cleanup reports"
+        : error?.response?.status === 403
+        ? "You don't have permission to cleanup reports"
+        : error?.response?.data?.error || error.message || "Failed to cleanup reports";
+      setError(errorMessage);
     },
   });
 
