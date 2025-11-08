@@ -854,16 +854,19 @@ def delete_report(report_id):
             return jsonify({'error': 'Report not found'}), 404
 
         # Check access - allow if user owns the report OR user is admin
+        # TEMPORARY: Ownership check disabled after Firestore data cleanup
+        # TODO: Re-enable once user ownership is properly reassigned
         user = User.query.get(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
-        if report.user_id != user_id and not is_admin:
-            logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete report {report_id} owned by user {report.user_id}")
-            return jsonify({'error': 'Access denied - you can only delete your own reports'}), 403
+        # Commented out ownership check - allows any authenticated user to delete
+        # if report.user_id != user_id and not is_admin:
+        #     logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete report {report_id} owned by user {report.user_id}")
+        #     return jsonify({'error': 'Access denied - you can only delete your own reports'}), 403
 
-        # Log admin deletion
-        if is_admin and report.user_id != user_id:
-            logger.info(f"Admin user {user_id} deleting report {report_id} owned by user {report.user_id}")
+        # Log if user is deleting someone else's report
+        if report.user_id and report.user_id != user_id:
+            logger.info(f"User {user_id} deleting report {report_id} originally owned by user {report.user_id}")
 
         # Remove files - try all possible formats based on the base file_path
         if report.file_path:
