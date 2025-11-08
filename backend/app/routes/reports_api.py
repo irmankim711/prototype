@@ -923,9 +923,9 @@ def get_user_reports(user_id):
     """
     try:
         current_user_id = get_current_user_id()
-        
-        # Check access
-        if current_user_id != user_id:
+
+        # Check access - convert both to string for comparison to handle type mismatches
+        if str(current_user_id) != str(user_id):
             return jsonify({'error': 'Access denied'}), 403
         
         # Get reports
