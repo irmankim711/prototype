@@ -405,6 +405,14 @@ def register_blueprints(app):
     except Exception as e:
         app.logger.warning(f"Could not import google_forms_routes: {e}")
 
+    # Debug route for Google Forms (temporary)
+    try:
+        from app.routes.debug_google_forms import debug_gf_bp
+        app.register_blueprint(debug_gf_bp)
+        app.logger.info("✅ Debug Google Forms routes registered")
+    except Exception as e:
+        app.logger.warning(f"Could not import debug_google_forms: {e}")
+
     # Form data export routes (Excel, CSV, Google Sheets export)
     try:
         from app.routes.form_data_export_routes import register_export_blueprints
