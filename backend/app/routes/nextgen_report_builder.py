@@ -2232,6 +2232,12 @@ def generate_report_from_excel():
                     logger.info(f"🔍 [DEBUG] Created default program ID: {default_program_id}")
                 except Exception as create_error:
                     logger.error(f"❌ CRITICAL: Failed to create default program: {create_error}")
+                    # Rollback tainted transaction from failed program creation
+                    try:
+                        db.session.rollback()
+                        logger.info("🔄 Rolled back failed program creation")
+                    except Exception:
+                        pass
                     # Try to use a hardcoded fallback ID if creation fails
                     try:
                         # Check if any programs exist at all
@@ -2352,6 +2358,12 @@ def generate_report_from_excel():
                             logger.info(f"🔍 [DEBUG] Created default template ID: {template_db_id}")
                         except Exception as create_template_error:
                             logger.error(f"❌ CRITICAL: Failed to create default template: {create_template_error}")
+                            # Rollback tainted transaction from failed template creation
+                            try:
+                                db.session.rollback()
+                                logger.info("🔄 Rolled back failed template creation")
+                            except Exception:
+                                pass
                             # Try to use any existing template as emergency fallback
                             try:
                                 any_template = ReportTemplate.query.first()
@@ -2481,7 +2493,15 @@ def generate_report_from_excel():
                     logger.warning("⚠️ No valid template_id available - report will be created without template association")
             
             logger.info(f"🔧 Creating report with safe data: {list(safe_report_data.keys())}")
-            
+
+            # CRITICAL: Ensure session is clean before INSERT
+            # Any failed operations above (program/template creation) may have tainted the transaction
+            try:
+                db.session.rollback()
+                logger.info("🔄 Performed safety rollback to ensure clean transaction state")
+            except Exception as rollback_error:
+                logger.warning(f"⚠️ Safety rollback failed (session may already be clean): {rollback_error}")
+
             # Use direct SQL insertion to avoid model mismatch issues
             from sqlalchemy import text
 
