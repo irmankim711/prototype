@@ -340,6 +340,7 @@ class ProductionGoogleFormsService:
             for idx, item in enumerate(items):
                 logger.debug(f"Processing item {idx}: keys={list(item.keys())}")
 
+                # Handle questionItem format
                 if 'questionItem' in item:
                     question_id = item['itemId']
                     question = item['questionItem']['question']
@@ -349,8 +350,21 @@ class ProductionGoogleFormsService:
                         'required': question.get('required', False)
                     }
                     logger.debug(f"  ✅ Added question: {questions[question_id]['title']}")
+                # Handle direct question format (alternative structure)
+                elif 'question' in item:
+                    question_id = item.get('itemId', f'q_{idx}')
+                    question = item['question']
+                    questions[question_id] = {
+                        'title': question.get('questionTitle', item.get('title', f'Question {idx}')),
+                        'type': self._get_question_type(question),
+                        'required': question.get('required', False)
+                    }
+                    logger.debug(f"  ✅ Added question (direct): {questions[question_id]['title']}")
+                # Handle title-only items (might be section headers)
+                elif 'title' in item and item.get('title'):
+                    logger.debug(f"  ℹ️  Skipping title item: {item.get('title')}")
                 else:
-                    logger.debug(f"  ⚠️  Item {idx} has no questionItem (keys: {list(item.keys())})")
+                    logger.debug(f"  ⚠️  Item {idx} has no question data (keys: {list(item.keys())})")
             
             # Parse and structure real responses
             structured_responses = []
