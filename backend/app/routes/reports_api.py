@@ -553,10 +553,17 @@ def preview_report(report_id):
                 'total_size_mb': round(report.file_size / (1024 * 1024), 2) if report.file_size else 0
             }
         }
-        
+
+        # Return response with both top-level fields for frontend compatibility
+        # and nested preview data for backward compatibility
         return jsonify({
             'success': True,
-            'preview': preview_data
+            'reportId': report.id,           # Frontend expects reportId at top level
+            'reportTitle': report.title,     # Frontend expects reportTitle at top level
+            'reportType': report.report_type, # Frontend expects reportType at top level
+            'id': report.id,                 # Also include id for consistency
+            'title': report.title,           # Also include title for consistency
+            'preview': preview_data          # Keep nested structure for backward compatibility
         }), 200
         
     except Exception as e:
