@@ -312,9 +312,11 @@ class ProductionGoogleFormsService:
             forms_service = build('forms', 'v1', credentials=credentials)
             
             logger.info(f"Fetching real responses for form {form_id} (user: {user_id})")
-            
+
             # Get form structure with real API call
             form = forms_service.forms().get(formId=form_id).execute()
+            logger.info(f"📝 Form retrieved: '{form.get('info', {}).get('title', 'Unknown')}'")
+            logger.info(f"📝 Form contains {len(form.get('items', []))} items")
             
             # Get real responses from Google Forms API
             responses_result = forms_service.forms().responses().list(
@@ -327,7 +329,17 @@ class ProductionGoogleFormsService:
             
             # Parse form structure to understand questions
             questions = {}
-            for item in form.get('items', []):
+            items = form.get('items', [])
+
+            # DEBUG: Log form structure
+            logger.info(f"📋 Form has {len(items)} items total")
+            if items and len(items) > 0:
+                logger.info(f"📋 First item keys: {list(items[0].keys())}")
+                logger.info(f"📋 First item sample: {str(items[0])[:200]}")
+
+            for idx, item in enumerate(items):
+                logger.debug(f"Processing item {idx}: keys={list(item.keys())}")
+
                 if 'questionItem' in item:
                     question_id = item['itemId']
                     question = item['questionItem']['question']
@@ -336,6 +348,9 @@ class ProductionGoogleFormsService:
                         'type': self._get_question_type(question),
                         'required': question.get('required', False)
                     }
+                    logger.debug(f"  ✅ Added question: {questions[question_id]['title']}")
+                else:
+                    logger.debug(f"  ⚠️  Item {idx} has no questionItem (keys: {list(item.keys())})")
             
             # Parse and structure real responses
             structured_responses = []
