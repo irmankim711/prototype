@@ -253,19 +253,86 @@ export const uploadReportTemplate = async (
   file: File,
   name?: string,
   description?: string,
-  type?: string
+  category?: string,
+  templateType?: string
 ): Promise<ReportTemplate> => {
   const formData = new FormData();
-  formData.append('template_file', file);
+  formData.append('file', file);
   if (name) formData.append('name', name);
   if (description) formData.append('description', description);
-  if (type) formData.append('type', type);
+  if (category) formData.append('category', category);
+  if (templateType) formData.append('template_type', templateType);
   
-  return await apiService.post<ReportTemplate>('/production/reports/templates/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+  try {
+    // Try new API first
+    const response = await apiService.post<{ success: boolean; template: ReportTemplate }>('/api/v1/templates/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.template || response as any;
+  } catch (error) {
+    // Fallback to old endpoint
+    console.warn("New upload API failed, falling back to old endpoint:", error);
+    const formDataOld = new FormData();
+    formDataOld.append('template_file', file);
+    if (name) formDataOld.append('name', name);
+    if (description) formDataOld.append('description', description);
+    if (templateType) formDataOld.append('type', templateType);
+    return await apiService.post<ReportTemplate>('/production/reports/templates/upload', formDataOld, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  }
+};
+
+export const downloadTemplateFile = async (templateId: string, filename?: string): Promise<void> => {
+  try {
+    // Use axios directly to get blob with authentication
+    const axios = (await import('axios')).default;
+    const baseURL = apiService.getBaseURL();
+    const token = apiService.getAuthToken();
+    
+    const response = await axios.get(`${baseURL}/api/v1/templates/${templateId}/download`, {
+      responseType: 'blob',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    
+    // Create blob URL and trigger download
+    const blob = new Blob([response.data]);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename || 'template';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Download error:', error);
+    throw error;
+  }
+};
+
+export const getTemplateDownloadUrl = (templateId: string): string => {
+  const baseURL = apiService.getBaseURL();
+  return `${baseURL}/api/v1/templates/${templateId}/download`;
+};
+
+export const getTemplateFileInfo = async (templateId: string): Promise<{
+  file_path: string;
+  file_size: number;
+  file_modified: string;
+  file_extension: string;
+  download_url: string;
+  template_name: string;
+  template_type: string;
+}> => {
+  const response = await apiService.get<{ success: boolean; file_info: any }>(`/api/v1/templates/${templateId}/file`);
+  return response.file_info;
 };
 
 export const createReport = async (

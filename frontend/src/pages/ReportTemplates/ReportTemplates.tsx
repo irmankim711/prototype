@@ -23,10 +23,25 @@ import {
   FormControl,
   InputLabel,
   Snackbar,
+  Chip,
 } from "@mui/material";
-import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from "@mui/icons-material";
+import { 
+  Edit as EditIcon, 
+  Delete as DeleteIcon, 
+  Add as AddIcon,
+  Download as DownloadIcon,
+  Upload as UploadIcon,
+  Description as DescriptionIcon
+} from "@mui/icons-material";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchReportTemplates, updateReportTemplate, createReportTemplate, deleteReportTemplate } from "../../services/api";
+import { 
+  fetchReportTemplates, 
+  updateReportTemplate, 
+  createReportTemplate, 
+  deleteReportTemplate,
+  uploadReportTemplate,
+  downloadTemplateFile
+} from "../../services/api";
 import type { ReportTemplate } from "../../services/api";
 
 // No mock data - templates will be fetched from backend
@@ -40,6 +55,8 @@ export default function ReportTemplates() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState<ReportTemplate | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFileName, setUploadFileName] = useState<string>('');
   const queryClient = useQueryClient();
 
   const {
@@ -58,7 +75,28 @@ export default function ReportTemplates() {
   // Use templates from API only
   const displayTemplates = templates || [];
 
-  const createTemplateMutation = useMutation({
+  const uploadTemplateMutation = useMutation({
+    mutationFn: ({ file, name, description, category, templateType }: { 
+      file: File; 
+      name?: string; 
+      description?: string; 
+      category?: string;
+      templateType?: string;
+    }) => uploadReportTemplate(file, name, description, category, templateType),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reportTemplates"] });
+      setSnackbar({ open: true, message: 'Template uploaded successfully!', severity: 'success' });
+      setUploadFile(null);
+      setUploadFileName('');
+      handleCloseDialog();
+    },
+    onError: (error: any) => {
+      console.error("Upload template error:", error);
+      setSnackbar({ open: true, message: error.message || 'Failed to upload template', severity: 'error' });
+    },
+  });
+
+   const createTemplateMutation = useMutation({  
     mutationFn: (data: Partial<ReportTemplate>) => createReportTemplate(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reportTemplates"] });
@@ -109,15 +147,30 @@ export default function ReportTemplates() {
     setIsDialogOpen(true);
   };
 
-  const handleOpenRenameDialog = (template: ReportTemplate) => {
-    setDialogMode('rename');
-    setEditTemplate(template);
-    setIsDialogOpen(true);
-  };
 
   const handleCloseDialog = () => {
     setEditTemplate(null);
     setIsDialogOpen(false);
+    setUploadFile(null);
+    setUploadFileName('');
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setUploadFile(file);
+      setUploadFileName(file.name);
+    }
+  };
+
+  const handleDownloadTemplate = async (template: ReportTemplate) => {
+    try {
+      await downloadTemplateFile(template.id, template.name);
+      setSnackbar({ open: true, message: 'Template downloaded successfully', severity: 'success' });
+    } catch (error: any) {
+      console.error("Download error:", error);
+      setSnackbar({ open: true, message: error.message || 'Failed to download template', severity: 'error' });
+    }
   };
 
   const handleSaveTemplate = (event: React.FormEvent) => {
@@ -125,6 +178,24 @@ export default function ReportTemplates() {
     const formData = new FormData(event.target as HTMLFormElement);
 
     if (dialogMode === 'create') {
+      // If file is uploaded, use file upload
+      if (uploadFile) {
+        const name = formData.get("name") as string || uploadFileName.replace(/\.[^/.]+$/, "");
+        const description = formData.get("description") as string || '';
+        const category = formData.get("category") as string || 'general';
+        const templateType = formData.get("template_type") as string || '';
+        
+        uploadTemplateMutation.mutate({
+          file: uploadFile,
+          name,
+          description,
+          category,
+          templateType
+        });
+        return;
+      }
+
+      // Otherwise, use text content (fallback)
       const data = {
         name: formData.get("name") as string,
         description: formData.get("description") as string,
@@ -220,51 +291,73 @@ export default function ReportTemplates() {
       <Grid container spacing={3}>
         {displayTemplates?.map((template: any) => (
           <Grid item xs={12} sm={6} md={4} key={template.id}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {template.name}
+            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <CardContent sx={{ flexGrow: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 1 }}>
+                  <Typography variant="h6" gutterBottom>
+                    {template.name}
+                  </Typography>
+                  <Chip 
+                    label={template.template_type || 'Unknown'} 
+                    size="small" 
+                    color="primary"
+                    variant="outlined"
+                  />
+                </Box>
+                <Typography color="textSecondary" gutterBottom variant="body2">
+                  {template.description || 'No description'}
                 </Typography>
-                <Typography color="textSecondary" gutterBottom>
-                  {template.description}
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  Type: {template.template_type || 'Unknown'}
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
                   Category: {template.category || 'General'}
                 </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  Placeholders:{" "}
-                  {Array.isArray(template.placeholder_schema?.fields)
-                    ? template.placeholder_schema.fields.length
-                    : 0}
-                </Typography>
+                {template.file_path && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, gap: 0.5 }}>
+                    <DescriptionIcon fontSize="small" color="action" />
+                    <Typography variant="caption" color="textSecondary">
+                      File available
+                    </Typography>
+                  </Box>
+                )}
+                {template.file_size && (
+                  <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5 }}>
+                    Size: {(template.file_size / 1024).toFixed(2)} KB
+                  </Typography>
+                )}
                 <FormControlLabel
                   control={
                     <Switch
                       checked={template.is_active}
                       color="primary"
                       disabled
+                      size="small"
                     />
                   }
                   label={template.is_active ? "Active" : "Inactive"}
+                  sx={{ mt: 1 }}
                 />
               </CardContent>
-              <CardActions>
-                <Button
-                  size="small"
-                  startIcon={<EditIcon />}
-                  onClick={() => handleOpenEditDialog(template)}
-                >
-                  Edit
-                </Button>
-                <Button
-                  size="small"
-                  onClick={() => handleOpenRenameDialog(template)}
-                >
-                  Rename
-                </Button>
+              <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
+                <Box>
+                  <Button
+                    size="small"
+                    startIcon={<EditIcon />}
+                    onClick={() => handleOpenEditDialog(template)}
+                  >
+                    Edit
+                  </Button>
+                  {template.file_path && (
+                    <>
+                      <Button
+                        size="small"
+                        startIcon={<DownloadIcon />}
+                        onClick={() => handleDownloadTemplate(template)}
+                        color="success"
+                      >
+                        Download
+                      </Button>
+                    </>
+                  )}
+                </Box>
                 <IconButton
                   size="small"
                   color="error"
@@ -314,19 +407,37 @@ export default function ReportTemplates() {
 
                 {dialogMode === 'create' && (
                   <>
-                    <FormControl fullWidth margin="normal">
-                      <InputLabel>Template Type</InputLabel>
-                      <Select
-                        name="template_type"
-                        defaultValue="jinja2"
-                        label="Template Type"
-                        required
-                      >
-                        <MenuItem value="jinja2">Jinja2</MenuItem>
-                        <MenuItem value="latex">LaTeX</MenuItem>
-                        <MenuItem value="docx">DOCX</MenuItem>
-                      </Select>
-                    </FormControl>
+                    <Box sx={{ mt: 2, mb: 2 }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        Upload Template File (DOCX, DOC, TXT, etc.)
+                      </Typography>
+                      <input
+                        accept=".docx,.doc,.txt,.html,.tex,.jinja,.jinja2"
+                        style={{ display: 'none' }}
+                        id="template-file-upload"
+                        type="file"
+                        onChange={handleFileChange}
+                      />
+                      <label htmlFor="template-file-upload">
+                        <Button
+                          variant="outlined"
+                          component="span"
+                          startIcon={<UploadIcon />}
+                          fullWidth
+                          sx={{ mb: 2 }}
+                        >
+                          {uploadFile ? uploadFileName : 'Choose Template File'}
+                        </Button>
+                      </label>
+                      {uploadFile && (
+                        <Alert severity="info" sx={{ mt: 1 }}>
+                          File selected: {uploadFileName}
+                        </Alert>
+                      )}
+                      <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
+                        Supported formats: DOCX, DOC, TXT, HTML, TEX, JINJA, JINJA2
+                      </Typography>
+                    </Box>
 
                     <FormControl fullWidth margin="normal">
                       <InputLabel>Category</InputLabel>
@@ -343,15 +454,34 @@ export default function ReportTemplates() {
                       </Select>
                     </FormControl>
 
+                    <FormControl fullWidth margin="normal">
+                      <InputLabel>Template Type (Optional - auto-detected from file)</InputLabel>
+                      <Select
+                        name="template_type"
+                        defaultValue=""
+                        label="Template Type (Optional - auto-detected from file)"
+                      >
+                        <MenuItem value="">Auto-detect</MenuItem>
+                        <MenuItem value="docx">DOCX</MenuItem>
+                        <MenuItem value="jinja2">Jinja2</MenuItem>
+                        <MenuItem value="latex">LaTeX</MenuItem>
+                        <MenuItem value="text">Text</MenuItem>
+                      </Select>
+                    </FormControl>
+
+                    <Typography variant="body2" color="textSecondary" sx={{ mt: 2, mb: 1 }}>
+                      OR enter template content manually (if not uploading a file):
+                    </Typography>
                     <TextField
                       name="template_content"
-                      label="Template Content"
+                      label="Template Content (Optional)"
                       fullWidth
                       multiline
                       rows={6}
                       margin="normal"
                       placeholder="Enter your template content here..."
-                      helperText="Use {{variable_name}} for placeholders"
+                      helperText="Use {{variable_name}} for placeholders. Leave empty if uploading a file."
+                      disabled={!!uploadFile}
                     />
                   </>
                 )}
@@ -377,12 +507,16 @@ export default function ReportTemplates() {
               type="submit"
               variant="contained"
               color="primary"
-              disabled={createTemplateMutation.isPending || updateTemplateMutation.isPending}
+              disabled={
+                createTemplateMutation.isPending || 
+                updateTemplateMutation.isPending || 
+                uploadTemplateMutation.isPending
+              }
             >
-              {(createTemplateMutation.isPending || updateTemplateMutation.isPending) ? (
+              {(createTemplateMutation.isPending || updateTemplateMutation.isPending || uploadTemplateMutation.isPending) ? (
                 <CircularProgress size={24} />
               ) : (
-                dialogMode === 'create' ? 'Create Template' : 'Save Changes'
+                dialogMode === 'create' ? (uploadFile ? 'Upload Template' : 'Create Template') : 'Save Changes'
               )}
             </Button>
           </DialogActions>
@@ -433,3 +567,4 @@ export default function ReportTemplates() {
     </Box>
   );
 }
+

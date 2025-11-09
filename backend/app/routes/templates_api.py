@@ -3,7 +3,12 @@ Template Management API Routes
 RESTful endpoints for template CRUD operations
 """
 import logging
-from flask import Blueprint, request, jsonify, current_app
+import os
+import uuid
+from datetime import datetime
+from pathlib import Path
+from werkzeug.utils import secure_filename
+from flask import Blueprint, request, jsonify, current_app, send_file
 
 from ..services.template_service import template_service
 from ..decorators import get_current_user_id
@@ -12,6 +17,20 @@ from ..decorators import firebase_auth_required
 logger = logging.getLogger(__name__)
 
 templates_api = Blueprint('templates_api', __name__)
+
+# Allowed file extensions for template uploads
+ALLOWED_EXTENSIONS = {'docx', 'doc', 'txt', 'html', 'tex', 'jinja', 'jinja2'}
+
+def allowed_file(filename):
+    """Check if file extension is allowed"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_template_upload_path():
+    """Get the path for template file uploads"""
+    upload_path = Path(current_app.root_path).parent / 'templates' / 'uploads'
+    upload_path.mkdir(parents=True, exist_ok=True)
+    return upload_path
 
 @templates_api.route('/api/v1/templates/debug', methods=['GET'])
 def debug_templates():
@@ -427,6 +446,228 @@ def get_template_types():
         return jsonify({
             'success': False,
             'error': 'Failed to fetch types',
+            'message': str(e)
+        }), 500
+
+@templates_api.route('/api/v1/templates/upload', methods=['POST'])
+@firebase_auth_required
+def upload_template_file():
+    """
+    Upload a template file (DOCX, DOC, TXT, etc.)
+    
+    Form Data:
+    - file: The template file to upload
+    - name: Template name (optional, defaults to filename)
+    - description: Template description (optional)
+    - category: Template category (optional)
+    - template_type: Template type (optional, defaults to 'docx' for DOCX files)
+    """
+    try:
+        user_id = get_current_user_id()
+        
+        # Check if file is present
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No file provided'
+            }), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+        
+        # Validate file extension
+        if not allowed_file(file.filename):
+            return jsonify({
+                'success': False,
+                'error': f'File type not allowed. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'
+            }), 400
+        
+        # Get template metadata from form data
+        template_name = request.form.get('name') or secure_filename(file.filename).rsplit('.', 1)[0]
+        description = request.form.get('description', '')
+        category = request.form.get('category', 'general')
+        template_type = request.form.get('template_type', '')
+        
+        # Determine template type from file extension if not provided
+        if not template_type:
+            ext = file.filename.rsplit('.', 1)[1].lower()
+            if ext == 'docx' or ext == 'doc':
+                template_type = 'docx'
+            elif ext == 'tex':
+                template_type = 'latex'
+            elif ext in ['jinja', 'jinja2']:
+                template_type = 'jinja2'
+            else:
+                template_type = 'text'
+        
+        # Save uploaded file
+        upload_path = get_template_upload_path()
+        file_ext = file.filename.rsplit('.', 1)[1].lower()
+        unique_filename = f"{uuid.uuid4().hex}.{file_ext}"
+        file_path = upload_path / unique_filename
+        file.save(str(file_path))
+        
+        # Read file content if it's a text-based template
+        template_content = ''
+        if file_ext in ['txt', 'html', 'tex', 'jinja', 'jinja2']:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    template_content = f.read()
+            except Exception as e:
+                logger.warning(f"Could not read template content: {e}")
+        
+        # Create template record
+        template_data = {
+            'name': template_name,
+            'description': description,
+            'category': category,
+            'template_type': template_type,
+            'template_content': template_content,
+            'file_path': str(file_path),
+            'is_active': True
+        }
+        
+        # Create template using service
+        template = template_service.create_template(template_data, user_id)
+        
+        if not template:
+            # Clean up uploaded file if template creation failed
+            if file_path.exists():
+                file_path.unlink()
+            return jsonify({
+                'success': False,
+                'error': 'Failed to create template'
+            }), 500
+        
+        return jsonify({
+            'success': True,
+            'template': template,
+            'message': 'Template uploaded successfully'
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Error uploading template file: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to upload template file',
+            'message': str(e)
+        }), 500
+
+@templates_api.route('/api/v1/templates/<int:template_id>/download', methods=['GET'])
+@firebase_auth_required
+def download_template_file(template_id):
+    """
+    Download a template file
+    
+    Returns the template file if it exists
+    """
+    try:
+        user_id = get_current_user_id()
+        
+        # Get template
+        template = template_service.get_template(template_id)
+        
+        if not template:
+            return jsonify({
+                'success': False,
+                'error': 'Template not found'
+            }), 404
+        
+        # Check if template has a file path
+        file_path = template.get('file_path')
+        if not file_path or not os.path.exists(file_path):
+            return jsonify({
+                'success': False,
+                'error': 'Template file not found'
+            }), 404
+        
+        # Determine MIME type based on file extension
+        file_ext = Path(file_path).suffix.lower()
+        mimetype_map = {
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            '.doc': 'application/msword',
+            '.txt': 'text/plain',
+            '.html': 'text/html',
+            '.tex': 'application/x-tex',
+            '.jinja': 'text/plain',
+            '.jinja2': 'text/plain'
+        }
+        mimetype = mimetype_map.get(file_ext, 'application/octet-stream')
+        
+        # Get original filename or construct from template name
+        original_filename = template.get('name', 'template')
+        if file_ext:
+            original_filename = f"{original_filename}{file_ext}"
+        
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name=original_filename,
+            mimetype=mimetype
+        )
+        
+    except Exception as e:
+        logger.error(f"Error downloading template file {template_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to download template file',
+            'message': str(e)
+        }), 500
+
+@templates_api.route('/api/v1/templates/<int:template_id>/file', methods=['GET'])
+@firebase_auth_required
+def get_template_file_info(template_id):
+    """
+    Get template file information (without downloading)
+    
+    Returns file metadata and download URL
+    """
+    try:
+        user_id = get_current_user_id()
+        
+        # Get template
+        template = template_service.get_template(template_id)
+        
+        if not template:
+            return jsonify({
+                'success': False,
+                'error': 'Template not found'
+            }), 404
+        
+        # Check if template has a file path
+        file_path = template.get('file_path')
+        if not file_path or not os.path.exists(file_path):
+            return jsonify({
+                'success': False,
+                'error': 'Template file not found'
+            }), 404
+        
+        # Get file statistics
+        file_stat = os.stat(file_path)
+        file_ext = Path(file_path).suffix.lower()
+        
+        return jsonify({
+            'success': True,
+            'file_info': {
+                'file_path': file_path,
+                'file_size': file_stat.st_size,
+                'file_modified': datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+                'file_extension': file_ext,
+                'download_url': f'/api/v1/templates/{template_id}/download',
+                'template_name': template.get('name'),
+                'template_type': template.get('template_type')
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting template file info {template_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to get template file info',
             'message': str(e)
         }), 500
 
