@@ -95,19 +95,24 @@ def get_service_status():
         # User is authenticated - check Google Forms authorization
         is_authorized = False
         forms_count = 0
+        has_valid_token = False
 
         try:
             credentials = google_forms_service._get_user_credentials(str(user_id))
             is_authorized = credentials is not None
+            has_valid_token = credentials is not None
 
             if is_authorized:
-                # Verify token is valid by trying to get forms
+                # Try to get forms count, but don't fail authorization if this fails
+                # The user may have no forms or there may be temporary API issues
                 try:
                     forms = google_forms_service.get_user_forms(str(user_id), page_size=1)
                     forms_count = len(forms) if forms else 0
+                    logger.info(f"User {user_id} has {forms_count} forms")
                 except Exception as e:
-                    logger.warning(f"Token validation failed for user {user_id}: {e}")
-                    is_authorized = False
+                    logger.warning(f"Could not fetch forms for user {user_id}, but credentials are valid: {e}")
+                    # Keep is_authorized = True since credentials exist
+                    forms_count = 0
         except Exception as e:
             logger.error(f"Error checking user authorization: {e}")
 
@@ -347,16 +352,21 @@ def authorize_google():
 def oauth_callback():
     """Handle Google OAuth callback"""
     try:
+        logger.info(f"OAuth callback received - Method: {request.method}")
+
         # Get authorization code from query params (GET) or body (POST)
         if request.method == 'GET':
             authorization_code = request.args.get('code')
             state = request.args.get('state')
+            logger.info(f"GET callback - Code present: {bool(authorization_code)}, State: {state}")
         else:
             data = request.get_json() or {}
             authorization_code = data.get('code')
             state = data.get('state')
+            logger.info(f"POST callback - Code present: {bool(authorization_code)}, State: {state}")
 
         if not authorization_code:
+            logger.error("OAuth callback missing authorization code")
             return jsonify({
                 'success': False,
                 'error': 'Authorization code is required'
@@ -367,6 +377,7 @@ def oauth_callback():
         if not user_id:
             try:
                 user_id = get_current_user_id()
+                logger.info(f"Using current user ID: {user_id}")
             except (AttributeError, RuntimeError) as e:
                 logger.error(f"Authentication error: {str(e)}")
                 return jsonify({
@@ -374,11 +385,14 @@ def oauth_callback():
                     'error': 'Authentication required'
                 }), 401
 
+        logger.info(f"Processing OAuth callback for user {user_id}")
+
         # Exchange code for tokens using existing method (correct parameter order: user_id, code, state)
         result = google_forms_service.handle_oauth_callback(str(user_id), authorization_code, str(user_id))
 
         if result.get('status') != 'success':
             error_msg = result.get('message', 'Failed to exchange authorization code')
+            logger.error(f"OAuth callback failed for user {user_id}: {error_msg}")
             if request.method == 'GET':
                 return f'<html><body><p>Error: {error_msg}</p></body></html>', 400
             return jsonify({
@@ -386,16 +400,21 @@ def oauth_callback():
                 'error': error_msg
             }), 400
 
+        logger.info(f"OAuth callback successful for user {user_id}")
+
         # For GET requests (browser redirects), return HTML that closes the popup
         if request.method == 'GET':
             return '''
                 <html>
                     <body>
                         <script>
+                            console.log('OAuth successful, posting message to opener');
                             window.opener.postMessage({type: 'google-auth-success'}, '*');
-                            window.close();
+                            setTimeout(function() {
+                                window.close();
+                            }, 500);
                         </script>
-                        <p>Authorization successful! You can close this window.</p>
+                        <p>Authorization successful! Redirecting...</p>
                     </body>
                 </html>
             '''
