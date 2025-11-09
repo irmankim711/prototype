@@ -33,12 +33,8 @@ import {
   CloudUpload,
   TableChart,
   AutoAwesome,
-  Download,
-  Visibility,
   CheckCircle,
   Error as ErrorIcon,
-  FileUpload,
-  Description,
   Assignment,
 } from '@mui/icons-material';
 import { useDropzone } from 'react-dropzone';
@@ -86,9 +82,16 @@ const ExcelImportComponent: React.FC<ExcelImportComponentProps> = ({
   const [selectedDataSource, setSelectedDataSource] = useState<any>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
-  // Load templates on component mount
+  // Load templates on component mount and refresh periodically
   React.useEffect(() => {
     loadTemplates();
+    
+    // Refresh templates every 30 seconds to pick up newly uploaded ones
+    const refreshInterval = setInterval(() => {
+      loadTemplates();
+    }, 30000);
+    
+    return () => clearInterval(refreshInterval);
   }, []);
 
   // Ensure uploadedFiles is always a valid array
@@ -100,6 +103,9 @@ const ExcelImportComponent: React.FC<ExcelImportComponentProps> = ({
 
   const loadTemplates = async () => {
     try {
+      // Clear cache to get fresh templates including newly uploaded ones
+      nextGenReportService.clearCache('reportTemplates');
+      
       const templatesList = await nextGenReportService.getReportTemplates();
       
       // Ensure unique templates by ID or name to prevent React key conflicts
@@ -113,7 +119,17 @@ const ExcelImportComponent: React.FC<ExcelImportComponentProps> = ({
         console.warn(`Filtered out ${templatesList.length - uniqueTemplates.length} duplicate templates`);
       }
       
-      setTemplates(uniqueTemplates);
+      // Sort templates: file-based templates first, then others
+      const sortedTemplates = uniqueTemplates.sort((a, b) => {
+        const aHasFile = !!(a.file_path || a.filePath);
+        const bHasFile = !!(b.file_path || b.filePath);
+        if (aHasFile && !bHasFile) return -1;
+        if (!aHasFile && bHasFile) return 1;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+      
+      setTemplates(sortedTemplates);
+      console.log(`✅ Loaded ${sortedTemplates.length} templates (${sortedTemplates.filter(t => t.file_path || t.filePath).length} with files)`);
     } catch (error) {
       // Templates loading failure is not critical, continue without them
       console.error('Failed to load templates:', error);
@@ -217,7 +233,8 @@ const ExcelImportComponent: React.FC<ExcelImportComponentProps> = ({
     } catch (error: any) {
       // Handle report generation error
       const errorMessage = error.message || 'Failed to generate report';
-      // You could set this to a state variable to show in the UI
+      console.error('Report generation error:', errorMessage);
+      alert(`Failed to generate report: ${errorMessage}`);
     } finally {
       setIsGeneratingReport(false);
     }
@@ -382,44 +399,62 @@ const ExcelImportComponent: React.FC<ExcelImportComponentProps> = ({
                 onChange={(e) => setSelectedTemplate(e.target.value)}
                 label="Select Report Template"
               >
-                {templates.map((template, index) => (
-                  <MenuItem
-                    key={template.id || template.name || `template-${index}`}
-                    value={template.id || template.name}
-                  >
-                    <Box sx={{ py: 1 }}>
-                      <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                        <Typography variant="body1" fontWeight="medium">
-                          {template.name}
+                {templates.map((template, index) => {
+                  const hasFile = !!(template.file_path || template.filePath);
+                  const templateType = template.template_type || template.type || 'unknown';
+                  
+                  return (
+                    <MenuItem
+                      key={template.id || template.name || `template-${index}`}
+                      value={template.id || template.name}
+                    >
+                      <Box sx={{ py: 1 }}>
+                        <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                          <Typography variant="body1" fontWeight="medium">
+                            {template.name}
+                          </Typography>
+                          {hasFile && (
+                            <Chip 
+                              label="📄 File" 
+                              size="small" 
+                              color="success" 
+                              sx={{ height: 16, fontSize: '0.65rem' }}
+                            />
+                          )}
+                          {(templateType === 'docx' || templateType === 'DOCX') && (
+                            <Chip 
+                              label="DOCX" 
+                              size="small" 
+                              color="primary" 
+                              sx={{ height: 16, fontSize: '0.65rem' }}
+                            />
+                          )}
+                          {template.isDefault && (
+                            <Chip 
+                              label="Recommended" 
+                              size="small" 
+                              color="success" 
+                              sx={{ height: 16, fontSize: '0.65rem' }}
+                            />
+                          )}
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {template.description || 'No description'}
                         </Typography>
-                        {template.type === 'docx' && (
-                          <Chip 
-                            label="DOCX" 
-                            size="small" 
-                            color="primary" 
-                            sx={{ height: 16, fontSize: '0.65rem' }}
-                          />
+                        {hasFile && (
+                          <Typography variant="caption" color="info.main" display="block" mt={0.5}>
+                            📎 File-based template
+                          </Typography>
                         )}
-                        {template.isDefault && (
-                          <Chip 
-                            label="Recommended" 
-                            size="small" 
-                            color="success" 
-                            sx={{ height: 16, fontSize: '0.65rem' }}
-                          />
+                        {template.usageInstructions && (
+                          <Typography variant="caption" color="info.main" display="block" mt={0.5}>
+                            💡 {template.usageInstructions}
+                          </Typography>
                         )}
                       </Box>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {template.description}
-                      </Typography>
-                      {template.usageInstructions && (
-                        <Typography variant="caption" color="info.main" display="block" mt={0.5}>
-                          💡 {template.usageInstructions}
-                        </Typography>
-                      )}
-                    </Box>
-                  </MenuItem>
-                ))}
+                    </MenuItem>
+                  );
+                })}
               </Select>
             </FormControl>
 
