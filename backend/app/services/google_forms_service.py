@@ -344,8 +344,10 @@ class ProductionGoogleFormsService:
                 if 'questionItem' in item:
                     question_id = item['itemId']
                     question = item['questionItem']['question']
+                    # IMPORTANT: Title is at item level, not in question!
+                    question_title = item.get('title', question.get('questionTitle', f'Question {idx}'))
                     questions[question_id] = {
-                        'title': question.get('questionTitle', ''),
+                        'title': question_title,
                         'type': self._get_question_type(question),
                         'required': question.get('required', False)
                     }
