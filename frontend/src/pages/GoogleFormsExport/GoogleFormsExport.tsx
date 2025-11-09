@@ -128,12 +128,18 @@ const GoogleFormsExport: React.FC = () => {
     try {
       const authResponse = await formBuilderAPI.initiateGoogleAuth();
       if (authResponse.success && authResponse.authorization_url) {
+        let messageReceived = false;
+        let timeoutId: NodeJS.Timeout;
+
         // Listen for OAuth success message from popup
         const handleAuthMessage = (event: MessageEvent) => {
           if (event.data.type === 'google-auth-success') {
             console.log('✅ Google OAuth successful, reloading forms...');
+            messageReceived = true;
             // Remove listener
             window.removeEventListener('message', handleAuthMessage);
+            // Clear timeout
+            if (timeoutId) clearTimeout(timeoutId);
             // Recheck status to load forms
             checkStatus();
           }
@@ -145,19 +151,26 @@ const GoogleFormsExport: React.FC = () => {
         const authWindow = window.open(
           authResponse.authorization_url,
           'Google OAuth',
-          'width=600,height=700'
+          'width=600,height=700,popup=yes'
         );
 
-        // Fallback: Poll for authentication completion if message not received
-        const pollInterval = setInterval(() => {
-          if (authWindow?.closed) {
-            clearInterval(pollInterval);
-            // Clean up listener
+        // Check if popup was blocked
+        if (!authWindow) {
+          window.removeEventListener('message', handleAuthMessage);
+          setError('Popup was blocked. Please allow popups for this site and try again.');
+          return;
+        }
+
+        // Fallback: If no message received within 5 minutes, clean up and recheck status
+        // This handles cases where the user closes the popup or completes auth but message is lost
+        timeoutId = setTimeout(() => {
+          if (!messageReceived) {
+            console.log('⏱️ OAuth timeout - checking status...');
             window.removeEventListener('message', handleAuthMessage);
-            // Recheck status after auth window closes
-            setTimeout(checkStatus, 1000);
+            // Recheck status in case auth completed but message was lost
+            checkStatus();
           }
-        }, 500);
+        }, 300000); // 5 minutes timeout
       } else {
         setError(authResponse.error || 'Failed to initiate Google authentication');
       }
