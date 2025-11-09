@@ -40,11 +40,14 @@ class ProductionGoogleFormsService:
         self.project_id = os.getenv('GOOGLE_PROJECT_ID', 'default-project')
 
         # Determine redirect URI based on environment
+        # The redirect URI must point to the BACKEND, not the frontend
         flask_env = os.getenv('FLASK_ENV', 'development').lower()
         if flask_env == 'production':
+            # Production backend is on Railway
             self.redirect_uri = os.getenv('GOOGLE_PRODUCTION_REDIRECT_URI',
-                                         'https://stratosys-irmankim711s-projects.vercel.app/api/google-forms/oauth/callback')
+                                         'https://backend-test-6a78.up.railway.app/api/google-forms/oauth/callback')
         else:
+            # Development backend on localhost
             self.redirect_uri = os.getenv('GOOGLE_REDIRECT_URI',
                                          'http://localhost:5000/api/google-forms/oauth/callback')
         
@@ -57,9 +60,12 @@ class ProductionGoogleFormsService:
             logger.warning("⚠️ Google OAuth credentials not configured - service will be disabled")
             self.enabled = False
             return
-        
+
         self.enabled = True
-        logger.info("Production Google Forms service initialized with real API credentials")
+        logger.info(f"✅ Google Forms service initialized successfully")
+        logger.info(f"📍 Environment: {flask_env}")
+        logger.info(f"🔄 OAuth Redirect URI: {self.redirect_uri}")
+        logger.info(f"🔑 Client ID: {self.client_id[:20]}...")  # Show first 20 chars only for security
     
     def is_enabled(self) -> bool:
         """Check if the service is properly configured and enabled"""
