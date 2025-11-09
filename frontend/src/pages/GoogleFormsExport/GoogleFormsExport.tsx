@@ -64,14 +64,23 @@ const GoogleFormsExport: React.FC = () => {
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [isLoadingForms, setIsLoadingForms] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isOAuthInProgress, setIsOAuthInProgress] = useState(false);
 
   // Check if user is authenticated to the application
+  // Only redirect if we're certain the user is not authenticated (not during loading or OAuth)
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      // Redirect to landing page if not logged in
-      navigate('/');
+    if (!authLoading && !isAuthenticated && !isOAuthInProgress) {
+      // Add a small delay to avoid redirecting during OAuth callback processing
+      const redirectTimer = setTimeout(() => {
+        if (!isAuthenticated && !isOAuthInProgress) {
+          console.log('User not authenticated, redirecting to landing page');
+          navigate('/');
+        }
+      }, 1000); // Increased to 1 second to give OAuth more time
+
+      return () => clearTimeout(redirectTimer);
     }
-  }, [authLoading, isAuthenticated, navigate]);
+  }, [authLoading, isAuthenticated, isOAuthInProgress, navigate]);
 
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
@@ -126,6 +135,7 @@ const GoogleFormsExport: React.FC = () => {
 
   const handleGoogleAuth = async () => {
     try {
+      setIsOAuthInProgress(true);
       const authResponse = await formBuilderAPI.initiateGoogleAuth();
       if (authResponse.success && authResponse.authorization_url) {
         let messageReceived = false;
@@ -142,6 +152,8 @@ const GoogleFormsExport: React.FC = () => {
             if (timeoutId) clearTimeout(timeoutId);
             // Recheck status to load forms
             checkStatus();
+            // Keep OAuth flag active for a bit longer to prevent redirects
+            setTimeout(() => setIsOAuthInProgress(false), 2000);
           }
         };
 
@@ -157,6 +169,7 @@ const GoogleFormsExport: React.FC = () => {
         // Check if popup was blocked
         if (!authWindow) {
           window.removeEventListener('message', handleAuthMessage);
+          setIsOAuthInProgress(false);
           setError('Popup was blocked. Please allow popups for this site and try again.');
           return;
         }
@@ -169,13 +182,16 @@ const GoogleFormsExport: React.FC = () => {
             window.removeEventListener('message', handleAuthMessage);
             // Recheck status in case auth completed but message was lost
             checkStatus();
+            setIsOAuthInProgress(false);
           }
         }, 300000); // 5 minutes timeout
       } else {
+        setIsOAuthInProgress(false);
         setError(authResponse.error || 'Failed to initiate Google authentication');
       }
     } catch (err: any) {
       console.error('Error initiating auth:', err);
+      setIsOAuthInProgress(false);
       setError(err.message || 'Failed to start authentication');
     }
   };
