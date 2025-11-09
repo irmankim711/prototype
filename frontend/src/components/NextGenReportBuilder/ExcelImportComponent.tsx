@@ -217,24 +217,57 @@ const ExcelImportComponent: React.FC<ExcelImportComponentProps> = ({
       const templateId = String(selectedTemplate);
       console.log('🎯 Generating report with template ID:', templateId);
 
+      console.log('🚀 Starting report generation...');
+      console.log('📊 Parameters:', {
+        filePath: selectedDataSource.filePath,
+        templateId: templateId,
+        reportTitle: reportTitle
+      });
+
       const report = await nextGenReportService.generateReportFromExcel(
         selectedDataSource.filePath,
         templateId,
         reportTitle
       );
       
-      if (onReportGenerated) {
-        onReportGenerated(report);
+      console.log('✅ Report generation completed successfully');
+      console.log('📄 Report response:', report);
+      console.log('📄 Report response keys:', Object.keys(report || {}));
+      
+      // Validate report response has an ID
+      const reportId = report?.id || report?.reportId || report?.report_id || report?.report?.id;
+      if (!reportId) {
+        console.error('❌ Report generated but missing ID in response');
+        console.error('❌ Full report object:', JSON.stringify(report, null, 2));
+        throw new Error('Report generated but missing ID - please check console for details');
       }
       
+      console.log('✅ Report ID extracted:', reportId);
+      
+      // Call callback with report data
+      if (onReportGenerated) {
+        console.log('📤 Calling onReportGenerated callback...');
+        onReportGenerated(report);
+        console.log('✅ Callback executed');
+      } else {
+        console.warn('⚠️ No onReportGenerated callback provided');
+      }
+      
+      // Close dialog and reset form
       setShowReportDialog(false);
       setSelectedTemplate('');
       setReportTitle('');
+      
+      console.log('✅ Report generation flow completed');
     } catch (error: any) {
       // Handle report generation error
       const errorMessage = error.message || 'Failed to generate report';
-      console.error('Report generation error:', errorMessage);
-      alert(`Failed to generate report: ${errorMessage}`);
+      console.error('❌ Report generation error:', errorMessage);
+      console.error('❌ Error details:', error);
+      console.error('❌ Error response:', error.response?.data);
+      
+      // Show user-friendly error message
+      alert(`Failed to generate report: ${errorMessage}\n\nPlease check the browser console for more details.`);
     } finally {
       setIsGeneratingReport(false);
     }

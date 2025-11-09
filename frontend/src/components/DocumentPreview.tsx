@@ -35,7 +35,7 @@ import {
 } from '@mui/icons-material';
 import { useMutation } from '@tanstack/react-query';
 import axios from 'axios';
-import { reportService } from '../services/reportService';
+import axiosInstance from '../services/axiosInstance';
 
 interface DocumentPreviewProps {
   open: boolean;
@@ -76,29 +76,48 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   // Generate preview mutation - try both NextGen and legacy endpoints
   const previewMutation = useMutation({
     mutationFn: async (id: string | number): Promise<PreviewResponse> => {
+      console.log('🔍 Loading preview for report ID:', id);
+      
       try {
         // First try the NextGen reports preview endpoint
-        const nextgenResponse = await reportService.previewReport(String(id));
-        if (nextgenResponse && nextgenResponse.success) {
+        console.log('📡 Trying NextGen preview endpoint...');
+        const nextgenResponse = await axiosInstance.get(`/api/v1/nextgen/reports/${id}/preview`);
+        console.log('✅ NextGen preview response:', nextgenResponse.data);
+        
+        if (nextgenResponse.data && nextgenResponse.data.success) {
           // Check if we have actual file paths for PDF/DOCX
-          const preview = nextgenResponse.preview;
-          if (preview?.files?.pdf?.exists || preview?.files?.docx?.exists) {
-            // We have actual files - return PDF preview type with download URL
-            const pdfUrl = preview.files.pdf?.exists
-              ? `/api/v1/nextgen/reports/${id}/download/pdf`
-              : preview.files.docx?.exists
-              ? `/api/v1/nextgen/reports/${id}/download/docx`
-              : null;
-
-            return {
-              success: true,
-              preview_url: pdfUrl || '',
-              preview_type: 'pdf' as const,
-              preview_data: preview
-            };
+          const preview = nextgenResponse.data.preview || nextgenResponse.data;
+          
+          console.log('📄 Preview data:', preview);
+          console.log('📄 Preview files:', preview?.files);
+          
+          // Check for existing files
+          if (preview?.files) {
+            if (preview.files.pdf?.exists) {
+              const pdfUrl = `/api/v1/nextgen/reports/${id}/download/pdf`;
+              console.log('✅ PDF file exists, using URL:', pdfUrl);
+              return {
+                success: true,
+                preview_url: pdfUrl,
+                preview_type: 'pdf' as const,
+                preview_data: preview
+              };
+            }
+            
+            if (preview.files.docx?.exists) {
+              // For DOCX, we'll show it as data preview or try to convert
+              console.log('✅ DOCX file exists');
+              return {
+                success: true,
+                preview_url: `/api/v1/nextgen/reports/${id}/download/docx`,
+                preview_type: 'data' as const, // DOCX preview as data for now
+                preview_data: preview
+              };
+            }
           }
-
-          // Fallback to data preview
+          
+          // Fallback to data preview with report information
+          console.log('📊 Using data preview mode');
           return {
             success: true,
             preview_url: `/api/v1/nextgen/reports/${id}/preview`,
@@ -106,48 +125,99 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             preview_data: preview
           };
         }
-      } catch (nextgenError) {
-        console.log('NextGen preview failed, trying legacy endpoint');
+      } catch (nextgenError: any) {
+        console.warn('⚠️ NextGen preview failed:', nextgenError.response?.status, nextgenError.message);
+        console.log('🔄 Trying legacy endpoint...');
       }
 
       try {
-        // Fallback to Excel-to-PDF preview endpoint
+        // Fallback to reports API preview endpoint
+        console.log('📡 Trying reports API preview endpoint...');
+        const response = await axiosInstance.get(`/api/reports/${id}/preview`);
+        console.log('✅ Reports API preview response:', response.data);
+        
+        if (response.data && response.data.success) {
+          const preview = response.data.preview || response.data;
+          return {
+            success: true,
+            preview_url: response.data.preview_url || `/api/reports/${id}/preview`,
+            preview_type: (response.data.preview_type || 'data') as 'html' | 'pdf' | 'image' | 'data',
+            preview_data: preview
+          };
+        }
+      } catch (legacyError: any) {
+        console.warn('⚠️ Reports API preview failed:', legacyError.response?.status, legacyError.message);
+      }
+
+      try {
+        // Final fallback to Excel-to-PDF preview endpoint
+        console.log('📡 Trying Excel-to-PDF preview endpoint...');
         const response = await axios.get(`/api/excel-to-pdf/preview/${id}`);
+        console.log('✅ Excel-to-PDF preview response:', response.data);
         return response.data;
-      } catch (legacyError) {
-        throw new Error('Both NextGen and legacy preview endpoints failed');
+      } catch (finalError: any) {
+        console.error('❌ All preview endpoints failed');
+        console.error('❌ Final error:', finalError.response?.status, finalError.message);
+        throw new Error(`Preview failed: ${finalError.response?.data?.error || finalError.message || 'All preview endpoints failed'}`);
       }
     },
     onSuccess: (data) => {
+      console.log('✅ Preview mutation succeeded:', data);
       if (data.success) {
         if (data.preview_url) {
           // Handle preview URL first (PDF/DOCX files)
+          console.log('📄 Setting preview URL:', data.preview_url);
           setPreviewUrl(data.preview_url);
           setPreviewType(data.preview_type || 'html');
           setPreviewData(data.preview_data); // Still store data for metadata
         } else if (data.preview_data) {
           // Fallback: Handle NextGen preview data without URL
+          console.log('📊 Setting preview data (no URL)');
           setPreviewData(data.preview_data);
           setPreviewType('data');
         }
         setError(null);
       } else {
-        setError(data.error || 'Failed to generate preview');
+        const errorMsg = data.error || 'Failed to generate preview';
+        console.error('❌ Preview failed:', errorMsg);
+        setError(errorMsg);
       }
     },
     onError: (error: any) => {
-      setError(`Preview failed: ${error.response?.data?.error || error.message}`);
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to load preview';
+      console.error('❌ Preview mutation error:', errorMsg);
+      console.error('❌ Error details:', error);
+      setError(errorMsg);
     },
   });
 
   // Load preview when dialog opens
   useEffect(() => {
     if (open && reportId) {
+      console.log('🔄 DocumentPreview: Dialog opened, loading preview for report ID:', reportId);
       setPreviewUrl(null);
       setPreviewData(null);
       setError(null);
       setZoom(100);
-      previewMutation.mutate(reportId);
+      setIsEditMode(false);
+      setEditableContent(null);
+      
+      // Small delay to ensure dialog is fully rendered
+      const loadPreview = () => {
+        console.log('📡 Triggering preview mutation for report ID:', reportId);
+        previewMutation.mutate(reportId);
+      };
+      
+      // Use setTimeout to ensure state is ready
+      const timer = setTimeout(loadPreview, 100);
+      return () => clearTimeout(timer);
+    } else if (!open) {
+      // Reset state when dialog closes
+      setPreviewUrl(null);
+      setPreviewData(null);
+      setError(null);
+      setIsEditMode(false);
+      setEditableContent(null);
     }
   }, [open, reportId]);
 
@@ -201,36 +271,121 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 
   const handleEditToggle = () => {
     if (!isEditMode) {
-      // Entering edit mode - load editable content
-      const sampleEditableContent = {
-        title: "LAPORAN PROGRAM TITLE",
-        location: "LOCATION",
-        tarikh: "TARIKH",
-        time: "9:00 AM - 5:00 PM",
-        resources: "PERUNDING MUBARAK RESOURCES",
-        lokasi: "LOKASI",
-        location2: "LOCATION",
-        anjuran: "ANJURAN",
-        organizer: "ORGANIZER",
-        content: "ISI KANDUNGAN",
-        course: "LAPORAN KURSUS FIQH USRAH DAERAH KUALA SELANGOR",
-        objectives: "Setelah mengikuti modul,peserta akan:",
-        evaluation: "*Rujuk lampiran A: Borang Penilaian Peserta (BPK-11/JPIE)",
-        improvements: "CADANGAN UNTUK PENAMBAHBAIKAN KESELURUHAN PROGRAM",
-        discussions: "CADANGAN PERUNDING"
-      };
-      setEditableContent(sampleEditableContent);
+      // Entering edit mode - load editable content from report data
+      console.log('📝 Entering edit mode for report ID:', reportId);
+      console.log('📝 Current preview data:', previewData);
+      
+      // Try to extract editable content from preview data
+      let contentToEdit: any = {};
+      
+      if (previewData) {
+        // Try to get data from metadata or data_source
+        if (previewData.metadata) {
+          contentToEdit = { ...previewData.metadata };
+        } else if (previewData.data_source) {
+          contentToEdit = typeof previewData.data_source === 'string' 
+            ? JSON.parse(previewData.data_source) 
+            : previewData.data_source;
+        } else if (previewData.generated_data) {
+          contentToEdit = previewData.generated_data;
+        }
+      }
+      
+      // If no content found, use sample structure
+      if (Object.keys(contentToEdit).length === 0) {
+        console.log('⚠️ No editable content found, using sample structure');
+        contentToEdit = {
+          title: previewData?.title || "LAPORAN PROGRAM TITLE",
+          location: "LOCATION",
+          tarikh: "TARIKH",
+          time: "9:00 AM - 5:00 PM",
+          resources: "PERUNDING MUBARAK RESOURCES",
+          lokasi: "LOKASI",
+          location2: "LOCATION",
+          anjuran: "ANJURAN",
+          organizer: "ORGANIZER",
+          content: "ISI KANDUNGAN",
+          course: "LAPORAN KURSUS FIQH USRAH DAERAH KUALA SELANGOR",
+          objectives: "Setelah mengikuti modul,peserta akan:",
+          evaluation: "*Rujuk lampiran A: Borang Penilaian Peserta (BPK-11/JPIE)",
+          improvements: "CADANGAN UNTUK PENAMBAHBAIKAN KESELURUHAN PROGRAM",
+          discussions: "CADANGAN PERUNDING"
+        };
+      }
+      
+      console.log('📝 Editable content loaded:', contentToEdit);
+      setEditableContent(contentToEdit);
     }
     setIsEditMode(!isEditMode);
   };
 
-  const handleSaveChanges = () => {
-    // Save the changes and exit edit mode
-    console.log('Saving changes:', editableContent);
-    setIsEditMode(false);
-    // TODO: Send changes to backend
-    if (onEdit) {
-      onEdit(); // Notify parent component
+  const handleSaveChanges = async () => {
+    if (!editableContent || !reportId) {
+      console.error('❌ Cannot save: missing content or report ID');
+      return;
+    }
+
+    try {
+      console.log('💾 Saving changes for report ID:', reportId);
+      console.log('💾 Changes to save:', editableContent);
+      
+      setIsEditMode(false);
+      
+      // Try to update report via NextGen API first
+      try {
+        const updateResponse = await axiosInstance.put(`/api/v1/nextgen/reports/${reportId}`, {
+          title: editableContent.title || previewData?.title,
+          description: editableContent.description || previewData?.description,
+          generated_data: editableContent,
+          data_source: editableContent
+        });
+        
+        console.log('✅ Report updated successfully:', updateResponse.data);
+        
+        // Refresh preview after update
+        if (open && reportId) {
+          setTimeout(() => {
+            previewMutation.mutate(reportId);
+          }, 500);
+        }
+        
+        if (onEdit) {
+          onEdit(); // Notify parent component
+        }
+      } catch (nextgenError: any) {
+        console.warn('⚠️ NextGen update failed, trying reports API:', nextgenError);
+        
+        // Fallback to reports API
+        try {
+          const updateResponse = await axiosInstance.put(`/api/reports/${reportId}/edit`, {
+            title: editableContent.title || previewData?.title,
+            description: editableContent.description || previewData?.description,
+            data_source: editableContent,
+            generation_config: previewData?.generation_config || {}
+          });
+          
+          console.log('✅ Report updated via reports API:', updateResponse.data);
+          
+          // Refresh preview after update
+          if (open && reportId) {
+            setTimeout(() => {
+              previewMutation.mutate(reportId);
+            }, 500);
+          }
+          
+          if (onEdit) {
+            onEdit();
+          }
+        } catch (reportsError: any) {
+          console.error('❌ Both update endpoints failed:', reportsError);
+          setError(`Failed to save changes: ${reportsError.response?.data?.error || reportsError.message}`);
+          setIsEditMode(true); // Stay in edit mode on error
+        }
+      }
+    } catch (error: any) {
+      console.error('❌ Error saving changes:', error);
+      setError(`Failed to save changes: ${error.message}`);
+      setIsEditMode(true); // Stay in edit mode on error
     }
   };
 

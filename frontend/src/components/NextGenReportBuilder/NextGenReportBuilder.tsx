@@ -500,6 +500,9 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
   const [previewReportId, setPreviewReportId] = useState<string | number | null>(null);
   const [generatedReportId, setGeneratedReportId] = useState<string | number | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [currentGeneratedReport, setCurrentGeneratedReport] = useState<any>(null);
 
   // Edit State (removed - now handled inline in DocumentPreview)
   // const [showEditor, setShowEditor] = useState(false);
@@ -1063,11 +1066,33 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
   const handleClosePreview = () => {
     setShowPreview(false);
     setPreviewReportId(null);
+    setPreviewError(null);
   };
+
+  // Auto-trigger preview when report ID is generated
+  useEffect(() => {
+    if (generatedReportId && !showPreview) {
+      console.log('🔄 Auto-triggering preview for report ID:', generatedReportId);
+      setPreviewReportId(generatedReportId);
+      // Use setTimeout to ensure state updates are processed
+      setTimeout(() => {
+        setShowPreview(true);
+        console.log('✅ Preview dialog opened automatically');
+      }, 100);
+    }
+  }, [generatedReportId, showPreview]);
+
+  // Watch for previewReportId changes and ensure preview opens
+  useEffect(() => {
+    if (previewReportId && !showPreview) {
+      console.log('🔄 Preview report ID set, opening preview dialog:', previewReportId);
+      setShowPreview(true);
+    }
+  }, [previewReportId]);
   
   // Handle Download from Preview
   const handleDownloadFromPreview = async () => {
-    const reportIdToDownload = generatedReportId || previewReportId || currentReport?.id;
+    const reportIdToDownload = generatedReportId || previewReportId || currentGeneratedReport?.id || currentReport?.id;
 
     if (reportIdToDownload && onExportReport) {
       try {
@@ -1357,27 +1382,70 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
               }}
               onReportGenerated={(report) => {
                 console.log('📊 Report generated from Excel import:', report);
+                console.log('📊 Report object keys:', Object.keys(report || {}));
+                console.log('📊 Full report object:', JSON.stringify(report, null, 2));
 
                 // Handle successful report generation from Excel
                 // Check multiple possible ID fields from the backend response
-                const reportId = report?.id || report?.reportId || report?.report?.id;
+                const reportId = report?.id 
+                  || report?.reportId 
+                  || report?.report_id
+                  || report?.report?.id
+                  || report?.reportId
+                  || (report?.report && (report.report.id || report.report.reportId));
+
+                // Also check for title
+                const title = report?.title 
+                  || report?.reportTitle 
+                  || report?.report?.title
+                  || 'Generated Report';
+
+                console.log('🔍 Extracted report ID:', reportId);
+                console.log('🔍 Extracted title:', title);
 
                 if (reportId) {
-                  setGeneratedReportId(reportId);
-                  setPreviewReportId(reportId);
-                  setShowPreview(true);
-                  console.log('🔍 Preview triggered from Excel import, report ID:', reportId);
+                  // Convert to string or number as needed
+                  const normalizedId = typeof reportId === 'string' || typeof reportId === 'number' 
+                    ? reportId 
+                    : String(reportId);
 
+                  console.log('✅ Setting report state with ID:', normalizedId);
+                  
+                  // Set all state synchronously
+                  setGeneratedReportId(normalizedId);
+                  setPreviewReportId(normalizedId);
+                  setReportTitle(title);
+                  
                   // Update current report state with normalized ID
                   const normalizedReport = {
                     ...report,
-                    id: reportId
+                    id: normalizedId,
+                    reportId: normalizedId,
+                    title: title
                   };
-                  setCurrentReport(normalizedReport);
+                  setCurrentGeneratedReport(normalizedReport);
+                  // Also update reportTitle if it's provided
+                  if (title) {
+                    setReportTitle(title);
+                  }
+                  
+                  // Force preview to open immediately
+                  console.log('🚀 Forcing preview to open...');
+                  setShowPreview(true);
+                  
+                  // Clear any previous errors
+                  setPreviewError(null);
+                  setDataError(null);
+                  
+                  console.log('✅ Preview state set - showPreview:', true, 'previewReportId:', normalizedId);
                 } else {
-                  console.warn('⚠️ Report generated but no ID returned:', report);
-                  console.warn('⚠️ Available properties:', Object.keys(report || {}));
-                  setDataError('Report generated but preview unavailable - missing report ID');
+                  console.error('❌ Report generated but no ID found in response');
+                  console.error('❌ Available properties:', Object.keys(report || {}));
+                  console.error('❌ Report object:', report);
+                  const errorMsg = 'Report generated but preview unavailable - missing report ID';
+                  setDataError(errorMsg);
+                  setPreviewError(errorMsg);
+                  alert(errorMsg + '\n\nPlease check the browser console for details.');
                 }
               }}
             />
@@ -1947,10 +2015,42 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
           open={showPreview}
           onClose={handleClosePreview}
           reportId={previewReportId}
-          title={`Preview: ${reportTitle}`}
+          title={`Preview: ${reportTitle || 'Generated Report'}`}
           onDownload={handleDownloadFromPreview}
           onEdit={handleEditFromPreview}
         />
+      )}
+      
+      {/* User Feedback Alerts */}
+      {isGeneratingReport && (
+        <Alert 
+          severity="info" 
+          sx={{ 
+            position: 'fixed', 
+            top: 16, 
+            right: 16, 
+            zIndex: 9999,
+            minWidth: 300
+          }}
+        >
+          Generating report... Please wait.
+        </Alert>
+      )}
+      
+      {previewError && (
+        <Alert 
+          severity="error" 
+          sx={{ 
+            position: 'fixed', 
+            top: isGeneratingReport ? 80 : 16, 
+            right: 16, 
+            zIndex: 9999,
+            minWidth: 300
+          }}
+          onClose={() => setPreviewError(null)}
+        >
+          {previewError}
+        </Alert>
       )}
 
       {/* Report editing is now handled inline within DocumentPreview */}
