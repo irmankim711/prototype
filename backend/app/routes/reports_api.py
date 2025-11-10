@@ -81,14 +81,24 @@ reports_bp = Blueprint('reports', __name__, url_prefix='/api/reports')
 
 @reports_bp.route('', methods=['GET'])
 @reports_bp.route('/', methods=['GET'])
-@firebase_token_optional
+@firebase_auth_required  # SECURITY FIX: Require authentication
 def get_all_reports():
     """
-    Get all reports for the current user or all reports if no authentication
+    Get all reports for the current user (SECURE - requires authentication)
     GET /api/reports
+
+    Security: Now requires authentication and filters by user_id
     """
     try:
         user_id = get_current_user_id()
+
+        # SECURITY: Require user_id
+        if not user_id:
+            logger.warning("Reports query attempted without user_id")
+            return jsonify({
+                'success': False,
+                'error': 'Authentication required'
+            }), 401
 
         # Get query parameters
         page = request.args.get('page', 1, type=int)
@@ -96,12 +106,10 @@ def get_all_reports():
         status = request.args.get('status')
         report_type = request.args.get('report_type')
 
-        # Build query - show all reports for now (demo mode)
-        # In production, you would filter by user_id for authenticated users
-        query = Report.query
+        # SECURITY FIX: Filter by user_id to show only user's own reports
+        query = Report.query.filter_by(user_id=user_id)
 
-        # Debug: Log what user_id we got
-        logger.info(f"Reports query - user_id: {user_id}, showing all reports")
+        logger.info(f"Reports query - user_id: {user_id}, filtering by user")
         
         if status:
             query = query.filter_by(status=status)
