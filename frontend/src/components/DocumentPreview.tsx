@@ -76,6 +76,20 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Helper to make absolute URL for embedding in Office viewer
+  const toAbsoluteUrl = (url: string): string => {
+    try {
+      const u = new URL(url, window.location.origin);
+      return u.toString();
+    } catch {
+      return `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
+    }
+  };
+
+  // Helper to build Office Web Viewer URL for DOCX
+  const buildOfficeViewerUrl = (fileUrl: string): string =>
+    `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(toAbsoluteUrl(fileUrl))}`;
+
   // Generate preview mutation - try both NextGen and legacy endpoints
   const previewMutation = useMutation({
     mutationFn: async (id: string | number): Promise<PreviewResponse> => {
@@ -108,12 +122,13 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             }
             
             if (preview.files.docx?.exists) {
-              // For DOCX, we'll show it as data preview or try to convert
-              console.log('✅ DOCX file exists');
+              // For DOCX, use Office Web Viewer for embedding
+              console.log('✅ DOCX file exists - using Office Web Viewer');
+              const docxUrl = `/api/v1/nextgen/reports/${id}/download/docx`;
               return {
                 success: true,
-                preview_url: `/api/v1/nextgen/reports/${id}/download/docx`,
-                preview_type: 'data' as const, // DOCX preview as data for now
+                preview_url: buildOfficeViewerUrl(docxUrl),
+                preview_type: 'html' as const,
                 preview_data: preview
               };
             }
@@ -200,6 +215,10 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         if (/\.(pdf)(\?|$)/i.test(fallbackDownloadUrl)) {
           setPreviewType('pdf');
           setPreviewUrl(fallbackDownloadUrl);
+        } else if (/\.(docx)(\?|$)/i.test(fallbackDownloadUrl)) {
+          // Use Office viewer for DOCX
+          setPreviewType('html');
+          setPreviewUrl(buildOfficeViewerUrl(fallbackDownloadUrl));
         } else {
           setPreviewType('data');
           setPreviewUrl(fallbackDownloadUrl);
