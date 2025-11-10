@@ -26,6 +26,9 @@ from .template_models import (
     ExcelUpload
 )
 
+# Import security models
+from .export_file import ExportFile
+
 __all__ = [
     'db',
     'User', 'UserToken', 'UserSession',
@@ -37,5 +40,6 @@ __all__ = [
     'UserRole', 'Permission',
     'TemplateModel', 'GeneratedReport', 'DataMapping', 'ReportVersion',
     'ReportEditSession', 'ExcelUpload',
-    'ParsedExcelFile', 'ExcelTable'
+    'ParsedExcelFile', 'ExcelTable',
+    'ExportFile'
 ]

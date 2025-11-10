@@ -6,7 +6,7 @@ Handles export of form submissions to Excel, CSV, and Google Sheets
 from flask import Blueprint, request, jsonify, send_file, current_app
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any
 
 from ..services.form_data_export_service import form_data_export_service
@@ -17,7 +17,8 @@ from ..decorators import (
     require_form_access,
     admin_required
 )
-from ..models import Form
+from ..models import Form, ExportFile
+from .. import db
 from ..core.rate_limiter import rate_limit, RateLimitStrategy, RateLimitScope
 from ..utils.export_cleanup import get_cleanup_service
 
@@ -225,6 +226,25 @@ def export_google_form_data(google_form_id: str):
                    f"download_url={result.get('download_url', 'N/A')}")
 
         if result.get('success'):
+            # SECURITY: Register the export file for access control
+            try:
+                filename = os.path.basename(result.get('file_path', ''))
+                ExportFile.register_export(
+                    filename=filename,
+                    user_id=str(user_id),
+                    file_type='google_forms_export',
+                    file_format=export_format,
+                    file_size=result.get('file_size', 0),
+                    file_path=result.get('file_path', ''),
+                    related_id=google_form_id,
+                    related_type='google_form',
+                    expires_at=datetime.utcnow() + timedelta(hours=24)  # Expire after 24 hours
+                )
+                logger.info(f"Registered export file: {filename} for user {user_id}")
+            except Exception as reg_error:
+                logger.error(f"Failed to register export file: {str(reg_error)}", exc_info=True)
+                # Don't fail the request if registration fails, but log it
+
             return jsonify(result), 200
         else:
             return jsonify(result), 400
@@ -429,34 +449,59 @@ def debug_export_file(filename: str):
 
 
 @exports_bp.route('/download/<filename>', methods=['GET'])
-@rate_limit('export_download', requests=50, window=3600, strategy=RateLimitStrategy.SLIDING_WINDOW, scope=RateLimitScope.IP)
+@require_auth  # SECURITY: Require authentication
+@rate_limit('export_download', requests=50, window=3600, strategy=RateLimitStrategy.SLIDING_WINDOW, scope=RateLimitScope.USER)
 def download_export_file(filename: str):
     """
-    Download an exported file
+    Download an exported file (SECURE - requires authentication and ownership)
 
     GET /api/exports/download/{filename}
 
     Returns: File download
+
+    Security:
+    - Requires authentication (@require_auth)
+    - Verifies file ownership (user can only download their own files)
+    - Prevents directory traversal attacks
+    - Logs all download attempts with user info
     """
     try:
-        logger.info(f"Download request for file: {filename}")
+        # Get current user
+        user_id = get_current_user()
+        logger.info(f"Download request for file: {filename} from user: {user_id}")
 
         # Security: Validate filename (prevent directory traversal)
         if '..' in filename or '/' in filename or '\\' in filename:
-            logger.warning(f"Invalid filename attempted: {filename}")
+            logger.warning(f"Invalid filename attempted: {filename} by user: {user_id}")
             return jsonify({
                 'success': False,
                 'error': 'Invalid filename'
             }), 400
 
-        # Get file path
-        export_folder = form_data_export_service.export_folder
-        file_path = os.path.join(export_folder, filename)
+        # SECURITY: Verify file ownership
+        if not ExportFile.verify_access(filename, str(user_id)):
+            logger.warning(f"Unauthorized download attempt: {filename} by user: {user_id}")
+            return jsonify({
+                'success': False,
+                'error': 'File not found or access denied'
+            }), 404
+
+        # Get file record
+        export_file = ExportFile.get_file_by_filename(filename)
+        if not export_file:
+            logger.error(f"Export file record not found: {filename}")
+            return jsonify({
+                'success': False,
+                'error': 'File not found'
+            }), 404
+
+        file_path = export_file.file_path
         logger.info(f"Looking for file at: {file_path}")
 
-        # Check file exists
+        # Check file exists on disk
         if not os.path.exists(file_path):
-            logger.error(f"File not found: {file_path}")
+            logger.error(f"File not found on disk: {file_path}")
+            export_folder = form_data_export_service.export_folder
             logger.info(f"Export folder contents: {os.listdir(export_folder) if os.path.exists(export_folder) else 'folder does not exist'}")
             return jsonify({
                 'success': False,
@@ -464,7 +509,7 @@ def download_export_file(filename: str):
             }), 404
 
         file_size = os.path.getsize(file_path)
-        logger.info(f"File found. Size: {file_size} bytes")
+        logger.info(f"File found. Size: {file_size} bytes. Owned by: {export_file.user_id}")
 
         # Determine mimetype
         if filename.endswith('.xlsx'):
@@ -476,15 +521,20 @@ def download_export_file(filename: str):
 
         logger.info(f"Sending file with mimetype: {mimetype}")
 
+        # Update download statistics
+        export_file.mark_downloaded()
+
         # Send file - use absolute path and open in binary mode
         try:
-            return send_file(
+            response = send_file(
                 os.path.abspath(file_path),
                 mimetype=mimetype,
                 as_attachment=True,
                 download_name=filename,
                 conditional=False  # Disable conditional GET to avoid 304 responses
             )
+            logger.info(f"File sent successfully to user {user_id}")
+            return response
         except Exception as send_error:
             logger.error(f"Error in send_file: {str(send_error)}", exc_info=True)
             raise
