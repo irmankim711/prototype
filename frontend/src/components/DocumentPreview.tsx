@@ -44,6 +44,8 @@ interface DocumentPreviewProps {
   title?: string;
   onEdit?: () => void;
   onDownload?: () => void;
+  // Used when preview endpoint returns 404 but we still have a file URL
+  fallbackDownloadUrl?: string | null;
 }
 
 interface PreviewResponse {
@@ -61,6 +63,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   title = 'Document Preview',
   onEdit,
   onDownload,
+  fallbackDownloadUrl = null,
 }) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<'html' | 'pdf' | 'image' | 'data'>('html');
@@ -187,6 +190,22 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       const errorMsg = error.response?.data?.error || error.message || 'Failed to load preview';
       console.error('❌ Preview mutation error:', errorMsg);
       console.error('❌ Error details:', error);
+      // If the report is not found by ID but we have a fallback file URL, use that
+      const status = error?.response?.status || error?.response?.data?.code;
+      if ((status === 404 || error?.response?.data?.code === 'NOT_FOUND') && fallbackDownloadUrl) {
+        console.warn('⚠️ Preview 404; falling back to provided download URL:', fallbackDownloadUrl);
+        setError(null);
+        setPreviewData({ fallback: true, url: fallbackDownloadUrl });
+        // Infer preview type from extension; DOCX cannot be embedded reliably, show as data
+        if (/\.(pdf)(\?|$)/i.test(fallbackDownloadUrl)) {
+          setPreviewType('pdf');
+          setPreviewUrl(fallbackDownloadUrl);
+        } else {
+          setPreviewType('data');
+          setPreviewUrl(fallbackDownloadUrl);
+        }
+        return;
+      }
       setError(errorMsg);
     },
   });

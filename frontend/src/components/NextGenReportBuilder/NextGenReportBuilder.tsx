@@ -2018,6 +2018,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
           title={`Preview: ${reportTitle || 'Generated Report'}`}
           onDownload={handleDownloadFromPreview}
           onEdit={handleEditFromPreview}
+          fallbackDownloadUrl={currentGeneratedReport?.download_url || currentGeneratedReport?.downloadUrl || currentGeneratedReport?.fileUrl || null}
         />
       )}
       
