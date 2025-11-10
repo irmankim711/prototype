@@ -695,11 +695,27 @@ class FormDataExportService:
 
             # Answers are keyed by question TITLE, not ID
             answers = response.get('answers', {})
-            logger.debug(f"Response {row_num-1} has {len(answers)} answers: {list(answers.keys())[:3]}...")
+
+            # Detailed logging for first response to debug
+            if row_num == 2:
+                logger.info(f"🔍 DEBUG First Response Structure:")
+                logger.info(f"  Response keys: {list(response.keys())}")
+                logger.info(f"  Answers type: {type(answers)}")
+                logger.info(f"  Answers count: {len(answers)}")
+                logger.info(f"  Answer keys: {list(answers.keys())}")
+                logger.info(f"  Question titles we're looking for: {question_titles}")
+                # Show first answer as sample
+                if answers:
+                    first_key = list(answers.keys())[0]
+                    logger.info(f"  Sample answer - Key: '{first_key}', Value: '{answers[first_key]}'")
 
             for col_num, question_title in enumerate(question_titles, 3):
                 # Get answer directly by question title
                 answer_value = answers.get(question_title, '')
+
+                # Debug logging for first response
+                if row_num == 2 and col_num <= 5:
+                    logger.info(f"  Col {col_num}: Looking for '{question_title}' -> Found: '{answer_value}'")
 
                 # Convert to string if needed
                 if isinstance(answer_value, (dict, list)):
