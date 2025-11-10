@@ -193,7 +193,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 
   // Load preview when dialog opens
   useEffect(() => {
-    if (open && reportId) {
+    if (open && (reportId !== null && reportId !== undefined)) {
       console.log('🔄 DocumentPreview: Dialog opened, loading preview for report ID:', reportId);
       setPreviewUrl(null);
       setPreviewData(null);
