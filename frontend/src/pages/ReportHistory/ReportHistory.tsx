@@ -446,7 +446,12 @@ export default function ReportHistory() {
                           <IconButton
                             size="small"
                             onClick={() => {
-                              setPreviewReportId(report.id.toString());
+                              console.log('👁️ Preview button clicked for report:', report);
+                              console.log('👁️ Report ID:', report.id);
+                              console.log('👁️ Report ID type:', typeof report.id);
+                              const reportIdString = report.id?.toString() || '0';
+                              console.log('👁️ Setting preview report ID:', reportIdString);
+                              setPreviewReportId(reportIdString);
                               setPreviewOpen(true);
                             }}
                             disabled={report.status !== 'completed'}
