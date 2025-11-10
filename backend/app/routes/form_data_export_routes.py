@@ -6,6 +6,7 @@ Handles export of form submissions to Excel, CSV, and Google Sheets
 from flask import Blueprint, request, jsonify, send_file, current_app
 import os
 import logging
+from datetime import datetime
 from typing import Dict, Any
 
 from ..services.form_data_export_service import form_data_export_service
@@ -202,6 +203,7 @@ def export_google_form_data(google_form_id: str):
             }), 500
 
         # Export data
+        logger.info(f"Starting export of {len(responses_data.get('responses', []))} Google Form responses")
         result = form_data_export_service.export_google_form_responses(
             google_form_id=google_form_id,
             form_responses=responses_data.get('responses', []),
@@ -218,7 +220,9 @@ def export_google_form_data(google_form_id: str):
         logger.info(f"Google Forms export audit: user_id={user_id}, google_form_id={google_form_id}, "
                    f"format={export_format}, success={result.get('success')}, "
                    f"responses_count={result.get('responses_count', 0)}, "
-                   f"file_size={result.get('file_size', 0)}")
+                   f"file_size={result.get('file_size', 0)}, "
+                   f"file_path={result.get('file_path', 'N/A')}, "
+                   f"download_url={result.get('download_url', 'N/A')}")
 
         if result.get('success'):
             return jsonify(result), 200
@@ -386,6 +390,44 @@ def preview_google_form_data(google_form_id: str):
 exports_bp = Blueprint('exports', __name__, url_prefix='/api/exports')
 
 
+@exports_bp.route('/debug/<filename>', methods=['GET'])
+def debug_export_file(filename: str):
+    """
+    Debug endpoint to check export file status
+    GET /api/exports/debug/{filename}
+    """
+    try:
+        export_folder = form_data_export_service.export_folder
+        file_path = os.path.join(export_folder, filename)
+
+        debug_info = {
+            'filename': filename,
+            'export_folder': export_folder,
+            'file_path': file_path,
+            'absolute_path': os.path.abspath(file_path),
+            'folder_exists': os.path.exists(export_folder),
+            'file_exists': os.path.exists(file_path),
+            'cwd': os.getcwd(),
+        }
+
+        if os.path.exists(export_folder):
+            debug_info['folder_contents'] = os.listdir(export_folder)
+            debug_info['folder_writable'] = os.access(export_folder, os.W_OK)
+
+        if os.path.exists(file_path):
+            debug_info['file_size'] = os.path.getsize(file_path)
+            debug_info['file_readable'] = os.access(file_path, os.R_OK)
+            debug_info['file_mtime'] = datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat()
+
+        return jsonify(debug_info), 200
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'trace': str(e.__class__.__name__)
+        }), 500
+
+
 @exports_bp.route('/download/<filename>', methods=['GET'])
 @rate_limit('export_download', requests=50, window=3600, strategy=RateLimitStrategy.SLIDING_WINDOW, scope=RateLimitScope.IP)
 def download_export_file(filename: str):
@@ -397,8 +439,11 @@ def download_export_file(filename: str):
     Returns: File download
     """
     try:
+        logger.info(f"Download request for file: {filename}")
+
         # Security: Validate filename (prevent directory traversal)
         if '..' in filename or '/' in filename or '\\' in filename:
+            logger.warning(f"Invalid filename attempted: {filename}")
             return jsonify({
                 'success': False,
                 'error': 'Invalid filename'
@@ -407,13 +452,19 @@ def download_export_file(filename: str):
         # Get file path
         export_folder = form_data_export_service.export_folder
         file_path = os.path.join(export_folder, filename)
+        logger.info(f"Looking for file at: {file_path}")
 
         # Check file exists
         if not os.path.exists(file_path):
+            logger.error(f"File not found: {file_path}")
+            logger.info(f"Export folder contents: {os.listdir(export_folder) if os.path.exists(export_folder) else 'folder does not exist'}")
             return jsonify({
                 'success': False,
                 'error': 'File not found'
             }), 404
+
+        file_size = os.path.getsize(file_path)
+        logger.info(f"File found. Size: {file_size} bytes")
 
         # Determine mimetype
         if filename.endswith('.xlsx'):
@@ -423,13 +474,20 @@ def download_export_file(filename: str):
         else:
             mimetype = 'application/octet-stream'
 
-        # Send file
-        return send_file(
-            file_path,
-            mimetype=mimetype,
-            as_attachment=True,
-            download_name=filename
-        )
+        logger.info(f"Sending file with mimetype: {mimetype}")
+
+        # Send file - use absolute path and open in binary mode
+        try:
+            return send_file(
+                os.path.abspath(file_path),
+                mimetype=mimetype,
+                as_attachment=True,
+                download_name=filename,
+                conditional=False  # Disable conditional GET to avoid 304 responses
+            )
+        except Exception as send_error:
+            logger.error(f"Error in send_file: {str(send_error)}", exc_info=True)
+            raise
 
     except Exception as e:
         logger.error(f"Error downloading file {filename}: {str(e)}", exc_info=True)

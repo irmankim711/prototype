@@ -709,12 +709,22 @@ class FormDataExportService:
         # Save
         filename = f"google_form_{google_form_id[:8]}_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         file_path = os.path.join(self.export_folder, filename)
+
+        logger.info(f"Saving Google Forms export to: {file_path}")
         wb.save(file_path)
+
+        # Verify file was created
+        if not os.path.exists(file_path):
+            logger.error(f"File was not created at {file_path}")
+            raise Exception(f"Failed to create export file at {file_path}")
+
+        file_size = os.path.getsize(file_path)
+        logger.info(f"Google Forms export saved successfully. File size: {file_size} bytes")
 
         return {
             'download_url': f'/api/exports/download/{filename}',
             'file_path': file_path,
-            'file_size': os.path.getsize(file_path)
+            'file_size': file_size
         }
 
     def _export_google_responses_to_csv(
