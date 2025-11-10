@@ -733,7 +733,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           >
             <iframe
               ref={iframeRef}
-              src={`/api/excel-to-pdf/preview-content/${reportId}`}
+              src={previewUrl || `/api/excel-to-pdf/preview-content/${reportId}`}
               style={{
                 width: '100%',
                 height: '100%',
