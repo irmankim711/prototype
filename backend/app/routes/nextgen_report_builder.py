@@ -4347,7 +4347,8 @@ def preview_report(report_id):
         
         return jsonify({
             'success': True,
-            'preview': preview_data,
+            'preview': preview_data,          # Keep for backward compatibility
+            'preview_data': preview_data,     # Add for frontend DocumentPreview component
             'message': 'Report preview retrieved successfully'
         }), 200
         

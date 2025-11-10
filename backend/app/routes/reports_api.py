@@ -572,7 +572,8 @@ def preview_report(report_id):
             'reportType': report.report_type, # Frontend expects reportType at top level
             'id': report.id,                 # Also include id for consistency
             'title': report.title,           # Also include title for consistency
-            'preview': preview_data          # Keep nested structure for backward compatibility
+            'preview': preview_data,         # Keep nested structure for backward compatibility
+            'preview_data': preview_data     # Add for frontend DocumentPreview component
         }), 200
         
     except Exception as e:

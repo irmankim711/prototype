@@ -138,7 +138,6 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           console.log('📊 Using data preview mode');
           return {
             success: true,
-            preview_url: `/api/v1/nextgen/reports/${id}/preview`,
             preview_type: 'data' as const,
             preview_data: preview
           };
@@ -156,12 +155,16 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         
         if (response.data && response.data.success) {
           const preview = response.data.preview || response.data;
-          return {
+          // Only set preview_url if explicitly provided, otherwise use data mode
+          const result: PreviewResponse = {
             success: true,
-            preview_url: response.data.preview_url || `/api/reports/${id}/preview`,
             preview_type: (response.data.preview_type || 'data') as 'html' | 'pdf' | 'image' | 'data',
             preview_data: preview
           };
+          if (response.data.preview_url) {
+            result.preview_url = response.data.preview_url;
+          }
+          return result;
         }
       } catch (legacyError: any) {
         console.warn('⚠️ Reports API preview failed:', legacyError.response?.status, legacyError.message);
@@ -638,8 +641,8 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 
     if (error) {
       return (
-        <Alert 
-          severity="error" 
+        <Alert
+          severity="error"
           sx={{ m: 2 }}
           action={
             <Button size="small" onClick={handleRefresh}>
@@ -653,6 +656,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     }
 
     if (!previewUrl && !previewData) {
+      console.log('❌ No preview available - previewUrl:', previewUrl, 'previewData:', previewData, 'previewType:', previewType);
       return (
         <Alert severity="info" sx={{ m: 2 }}>
           No preview available
@@ -660,11 +664,13 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       );
     }
 
+    console.log('🎨 Rendering preview - Type:', previewType, 'URL:', previewUrl, 'HasData:', !!previewData);
+
     // Render based on preview type
     switch (previewType) {
       case 'data':
         return (
-          <Box sx={{ p: 2 }}>
+          <Box sx={{ p: 3, width: '100%', height: '100%', overflow: 'auto', bgcolor: 'background.paper' }}>
             <Typography variant="h6" gutterBottom>
               {previewData?.title || 'Report Preview'}
             </Typography>
@@ -937,8 +943,9 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           p: 0,
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden',
+          overflow: 'auto',  // Changed from 'hidden' to 'auto' to allow scrolling
           flexGrow: 1,
+          minHeight: 0,  // Fix for flex container scrolling
         }}
         id="document-preview-content"
         aria-describedby="document-preview-content"
