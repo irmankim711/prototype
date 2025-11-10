@@ -175,6 +175,13 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         console.log('📡 Trying Excel-to-PDF preview endpoint...');
         const response = await axios.get(`/api/excel-to-pdf/preview/${id}`);
         console.log('✅ Excel-to-PDF preview response:', response.data);
+
+        // Check if response is HTML instead of JSON (routing issue)
+        if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
+          console.error('❌ Excel-to-PDF endpoint returned HTML instead of JSON - route not found');
+          throw new Error('Preview endpoint not available');
+        }
+
         return response.data;
       } catch (finalError: any) {
         console.error('❌ All preview endpoints failed');
@@ -184,6 +191,14 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     },
     onSuccess: (data) => {
       console.log('✅ Preview mutation succeeded:', data);
+
+      // Validate that data is an object and not HTML string
+      if (typeof data !== 'object' || data === null) {
+        console.error('❌ Invalid preview response - expected object, got:', typeof data);
+        setError('Invalid preview response from server');
+        return;
+      }
+
       if (data.success) {
         if (data.preview_url) {
           // Handle preview URL first (PDF/DOCX files)
@@ -260,6 +275,13 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           setPreviewType('data');
           setPreviewUrl(url);
         }
+        return;
+      }
+
+      // If reportId is 0 but no fallback URL, show error
+      if (reportId === 0 && !fallbackDownloadUrl) {
+        console.warn('⚠️ Report ID is 0 but no fallback URL provided');
+        setError('Report not saved yet. Please save the report first before previewing.');
         return;
       }
 
