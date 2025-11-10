@@ -881,9 +881,9 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
     try {
       setIsGeneratingReport(true);
       setDataError(null);
-      let reportId = currentReport?.id || generatedReportId;
+      let reportId = (currentReport?.id ?? generatedReportId);
 
-      if (!reportId) {
+      if (reportId === undefined || reportId === null) {
         setDataError('No report available to download. Please generate a report first.');
         return;
       }
@@ -976,7 +976,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
           imagesToEmbed
         );
 
-        if (generatedReport?.id) {
+        if ((generatedReport?.id ?? null) !== null) {
           reportId = generatedReport.id;
           console.log('✅ Excel report generated successfully:', { reportId, generatedReport });
         }
@@ -1006,7 +1006,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
           reportTitle
         );
 
-        if (generatedReport?.id) {
+        if ((generatedReport?.id ?? null) !== null) {
           reportId = generatedReport.id;
           console.log('✅ Mock Excel report generated successfully:', { reportId, generatedReport });
         }
@@ -1034,7 +1034,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
       }
 
       // Show preview using the generated/saved report ID
-      if (reportId) {
+      if (reportId !== undefined && reportId !== null) {
         console.log('🔍 Setting up preview for report ID:', reportId);
         setGeneratedReportId(reportId);
         setPreviewReportId(reportId);
@@ -1071,7 +1071,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
 
   // Auto-trigger preview when report ID is generated
   useEffect(() => {
-    if (generatedReportId && !showPreview) {
+    if ((generatedReportId !== null && generatedReportId !== undefined) && !showPreview) {
       console.log('🔄 Auto-triggering preview for report ID:', generatedReportId);
       setPreviewReportId(generatedReportId);
       // Use setTimeout to ensure state updates are processed
@@ -1084,7 +1084,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
 
   // Watch for previewReportId changes and ensure preview opens
   useEffect(() => {
-    if (previewReportId && !showPreview) {
+    if ((previewReportId !== null && previewReportId !== undefined) && !showPreview) {
       console.log('🔄 Preview report ID set, opening preview dialog:', previewReportId);
       setShowPreview(true);
     }
@@ -1092,9 +1092,9 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
   
   // Handle Download from Preview
   const handleDownloadFromPreview = async () => {
-    const reportIdToDownload = generatedReportId || previewReportId || currentGeneratedReport?.id || currentReport?.id;
+    const reportIdToDownload = (generatedReportId ?? previewReportId ?? currentGeneratedReport?.id ?? currentReport?.id);
 
-    if (reportIdToDownload && onExportReport) {
+    if ((reportIdToDownload !== undefined && reportIdToDownload !== null) && onExportReport) {
       try {
         console.log(`⬬ Downloading report ${reportIdToDownload} from preview...`);
         await onExportReport('pdf', reportIdToDownload);
@@ -1388,11 +1388,11 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
                 // Handle successful report generation from Excel
                 // Check multiple possible ID fields from the backend response
                 const reportId = report?.id 
-                  || report?.reportId 
-                  || report?.report_id
-                  || report?.report?.id
-                  || report?.reportId
-                  || (report?.report && (report.report.id || report.report.reportId));
+                  ?? report?.reportId 
+                  ?? report?.report_id
+                  ?? report?.report?.id
+                  ?? report?.reportId
+                  ?? (report?.report && (report.report.id ?? report.report.reportId));
 
                 // Also check for title
                 const title = report?.title 
@@ -1403,7 +1403,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
                 console.log('🔍 Extracted report ID:', reportId);
                 console.log('🔍 Extracted title:', title);
 
-                if (reportId) {
+                if (reportId !== undefined && reportId !== null) {
                   // Convert to string or number as needed
                   const normalizedId = typeof reportId === 'string' || typeof reportId === 'number' 
                     ? reportId 
@@ -1951,7 +1951,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
       >
         <MenuItem
           onClick={() => handleExport('pdf')}
-          disabled={!generatedReportId && !currentReport?.id}
+          disabled={(generatedReportId === null || generatedReportId === undefined) && (currentReport?.id === undefined || currentReport?.id === null)}
         >
           <ListItemIcon>
             <PictureAsPdf fontSize="small" />
@@ -1965,7 +1965,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
         </MenuItem>
         <MenuItem
           onClick={() => handleExport('docx')}
-          disabled={!generatedReportId && !currentReport?.id}
+          disabled={(generatedReportId === null || generatedReportId === undefined) && (currentReport?.id === undefined || currentReport?.id === null)}
         >
           <ListItemIcon>
             <TableView fontSize="small" />
@@ -1979,7 +1979,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
         </MenuItem>
         <MenuItem
           onClick={() => handleExport('excel')}
-          disabled={!generatedReportId && !currentReport?.id}
+          disabled={(generatedReportId === null || generatedReportId === undefined) && (currentReport?.id === undefined || currentReport?.id === null)}
         >
           <ListItemIcon>
             <TableView fontSize="small" />
@@ -2010,7 +2010,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
       )}
       
       {/* Document Preview Modal */}
-      {showPreview && previewReportId && (
+      {showPreview && (previewReportId !== null && previewReportId !== undefined) && (
         <DocumentPreview
           open={showPreview}
           onClose={handleClosePreview}

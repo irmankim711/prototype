@@ -1086,9 +1086,9 @@ class NextGenReportService {
 
       if (response?.data?.success) {
         // Handle different possible ID locations in the response
-        const reportId = response.data.reportId || response.data.id || response.data.report?.id;
+        const reportId = (response.data.reportId ?? response.data.id ?? response.data.report?.id);
 
-        if (reportId) {
+        if (reportId !== undefined && reportId !== null) {
           console.log(`✅ [${requestId}] Report saved successfully with ID: ${reportId}`);
           // Clear report cache to ensure fresh data
           this.cache.delete('reports');
@@ -1398,11 +1398,11 @@ class NextGenReportService {
       if (response?.data) {
         // Check for the fields we expect from the backend
         const reportData = response.data;
-        const reportId = reportData.reportId || reportData.id || reportData.report_id || reportData.report?.id;
+        const reportId = reportData.reportId ?? reportData.id ?? reportData.report_id ?? reportData.report?.id;
         const reportTitle = reportData.reportTitle || reportData.title || reportData.report?.title;
         const reportType = reportData.reportType || reportData.type || reportData.report_type || reportData.report?.report_type;
 
-        if (!reportId) {
+        if (reportId === undefined || reportId === null) {
           console.error(`❌ [${requestId}] Backend response missing reportId:`, reportData);
           console.error(`❌ [${requestId}] Available keys:`, Object.keys(reportData));
           throw new Error('Report generation failed: No report ID returned from backend');

@@ -268,9 +268,9 @@ const NextGenReportBuilderPage: React.FC = () => {
   // Handle report export
   const handleExportReport = async (format: 'pdf' | 'excel' | 'powerpoint' | 'html', reportId?: string | number) => {
     try {
-      const idToUse = reportId || currentReport?.id;
+      const idToUse = (reportId ?? currentReport?.id);
       
-      if (!idToUse) {
+      if (idToUse === undefined || idToUse === null) {
         setError('Please save the report first');
         return null;
       }
@@ -318,9 +318,9 @@ const NextGenReportBuilderPage: React.FC = () => {
 
       if (generatedReport) {
         // Ensure the report has a valid ID for frontend operations
-        const reportId = generatedReport.id || generatedReport.reportId || generatedReport.report?.id;
+        const reportId = (generatedReport.id ?? generatedReport.reportId ?? generatedReport.report?.id);
 
-        if (!reportId) {
+        if (reportId === undefined || reportId === null) {
           console.warn('⚠️ Generated report missing ID:', generatedReport);
           console.warn('⚠️ Available properties:', Object.keys(generatedReport || {}));
           throw new Error('Generated report is missing required ID field');

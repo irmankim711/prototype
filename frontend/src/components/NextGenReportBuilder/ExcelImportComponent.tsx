@@ -234,9 +234,9 @@ const ExcelImportComponent: React.FC<ExcelImportComponentProps> = ({
       console.log('📄 Report response:', report);
       console.log('📄 Report response keys:', Object.keys(report || {}));
       
-      // Validate report response has an ID
-      const reportId = report?.id || report?.reportId || report?.report_id || report?.report?.id;
-      if (!reportId) {
+      // Validate report response has an ID (0 is valid)
+      const reportId = (report?.id ?? report?.reportId ?? report?.report_id ?? report?.report?.id);
+      if (reportId === undefined || reportId === null) {
         console.error('❌ Report generated but missing ID in response');
         console.error('❌ Full report object:', JSON.stringify(report, null, 2));
         throw new Error('Report generated but missing ID - please check console for details');
