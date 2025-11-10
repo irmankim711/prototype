@@ -106,10 +106,11 @@ def get_all_reports():
         status = request.args.get('status')
         report_type = request.args.get('report_type')
 
-        # SECURITY FIX: Filter by user_id to show only user's own reports
-        query = Report.query.filter_by(user_id=user_id)
+        # SECURITY FIX: Filter by created_by to show only user's own reports
+        # Note: Report.user_id is a property, not a column. The actual column is created_by.
+        query = Report.query.filter_by(created_by=str(user_id))
 
-        logger.info(f"Reports query - user_id: {user_id}, filtering by user")
+        logger.info(f"Reports query - user_id: {user_id}, filtering by user (created_by={user_id})")
         
         if status:
             query = query.filter_by(status=status)
