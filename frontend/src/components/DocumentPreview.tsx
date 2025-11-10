@@ -154,8 +154,38 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         console.log('✅ Reports API preview response:', response.data);
         
         if (response.data && response.data.success) {
-          const preview = response.data.preview || response.data;
-          // Only set preview_url if explicitly provided, otherwise use data mode
+          const preview = response.data.preview_data || response.data.preview || response.data;
+
+          console.log('📄 Legacy preview data:', preview);
+          console.log('📄 Legacy preview files:', preview?.files);
+
+          // Check if we have actual file paths for PDF/DOCX (same logic as NextGen)
+          if (preview?.files) {
+            if (preview.files.pdf?.exists) {
+              const pdfUrl = preview.files.pdf.download_url || `/api/reports/${id}/download/pdf`;
+              console.log('✅ PDF file exists, using URL:', pdfUrl);
+              return {
+                success: true,
+                preview_url: pdfUrl,
+                preview_type: 'pdf' as const,
+                preview_data: preview
+              };
+            }
+
+            if (preview.files.docx?.exists) {
+              // For DOCX, use Office Web Viewer for embedding
+              console.log('✅ DOCX file exists - using Office Web Viewer');
+              const docxUrl = preview.files.docx.download_url || `/api/reports/${id}/download/docx`;
+              return {
+                success: true,
+                preview_url: buildOfficeViewerUrl(docxUrl),
+                preview_type: 'html' as const,
+                preview_data: preview
+              };
+            }
+          }
+
+          // Fallback to data preview if no files or explicit preview_url provided
           const result: PreviewResponse = {
             success: true,
             preview_type: (response.data.preview_type || 'data') as 'html' | 'pdf' | 'image' | 'data',
