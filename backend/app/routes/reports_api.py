@@ -178,7 +178,7 @@ def generate_report():
     """
     try:
         user_id = get_current_user_id()
-        user = User.query.get(user_id)
+        user = User.get_by_firebase_uid(user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
@@ -313,7 +313,7 @@ def generate_latex_report():
     """
     try:
         user_id = get_current_user_id()
-        user = User.query.get(user_id)
+        user = User.get_by_firebase_uid(user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
@@ -442,7 +442,7 @@ def get_report_status(report_id):
             return jsonify({'error': 'Report not found'}), 404
 
         # Check access - allow if user owns the report OR user is admin
-        user = User.query.get(user_id)
+        user = User.get_by_firebase_uid(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
         # Convert both to string for comparison to handle type mismatches
@@ -489,7 +489,7 @@ def preview_report(report_id):
             }), 404
 
         # Check access - allow if user owns the report OR user is admin
-        user = User.query.get(user_id)
+        user = User.get_by_firebase_uid(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
         # Get report owner - handle both created_by and user_id properties
@@ -596,7 +596,7 @@ def edit_report(report_id):
             return jsonify({'error': 'Report not found'}), 404
 
         # Check access - allow if user owns the report OR user is admin
-        user = User.query.get(user_id)
+        user = User.get_by_firebase_uid(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
         # Convert both to string for comparison to handle type mismatches
@@ -665,7 +665,7 @@ def convert_latex_report(report_id):
             return jsonify({'error': 'Report not found'}), 404
 
         # Check access - allow if user owns the report OR user is admin
-        user = User.query.get(user_id)
+        user = User.get_by_firebase_uid(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
         # Convert both to string for comparison to handle type mismatches
@@ -773,7 +773,7 @@ def download_report(report_id, file_type):
             }), 404
 
         # Check access - allow if user owns the report OR user is admin
-        user = User.query.get(user_id)
+        user = User.get_by_firebase_uid(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
         # Get report owner - handle both created_by and user_id properties
@@ -906,7 +906,7 @@ def get_report(report_id):
 
         # If user is authenticated, check access - allow if user owns the report OR user is admin
         if user_id is not None:
-            user = User.query.get(user_id)
+            user = User.get_by_firebase_uid(user_id)
             is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
             # Convert both to string for comparison to handle type mismatches
@@ -973,7 +973,7 @@ def delete_report(report_id):
             return jsonify({'error': 'Report not found'}), 404
 
         # Check access - allow if user owns the report OR user is admin
-        user = User.query.get(user_id)
+        user = User.get_by_firebase_uid(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
         # Convert both to string for comparison to handle type mismatches

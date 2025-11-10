@@ -84,6 +84,25 @@ class User(db.Model):
         """Update last login timestamp"""
         self.last_login = datetime.utcnow()
 
+    @classmethod
+    def get_by_firebase_uid(cls, firebase_uid: str):
+        """
+        Get user by Firebase UID
+
+        This is the correct way to look up users when you have a Firebase UID
+        from get_current_user_id(). Do NOT use User.query.get(firebase_uid)
+        as that expects an integer ID.
+
+        Args:
+            firebase_uid: Firebase UID string (e.g., '8hpciJvsTGd8YbTM8CUH')
+
+        Returns:
+            User instance or None
+        """
+        if not firebase_uid:
+            return None
+        return cls.query.filter_by(firebase_uid=str(firebase_uid)).first()
+
     def to_dict(self, include_sensitive=False):
         """Convert to dictionary for API responses"""
         data = {
