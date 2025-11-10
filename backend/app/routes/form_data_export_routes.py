@@ -205,10 +205,17 @@ def export_google_form_data(google_form_id: str):
 
         # Export data
         logger.info(f"Starting export of {len(responses_data.get('responses', []))} Google Form responses")
+
+        # Merge questions into form_info for export
+        form_info_with_questions = responses_data.get('form_info', {}).copy()
+        form_info_with_questions['questions'] = responses_data.get('questions', {})
+
+        logger.info(f"📋 Form has {len(form_info_with_questions.get('questions', {}))} questions for export")
+
         result = form_data_export_service.export_google_form_responses(
             google_form_id=google_form_id,
             form_responses=responses_data.get('responses', []),
-            form_info=responses_data.get('form_info', {}),
+            form_info=form_info_with_questions,
             export_format=export_format,
             options={
                 'date_range': data.get('date_range', {}),
