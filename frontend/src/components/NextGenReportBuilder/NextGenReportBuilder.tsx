@@ -1405,9 +1405,15 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
 
                 if (reportId !== undefined && reportId !== null) {
                   // Convert to string or number as needed
-                  const normalizedId = typeof reportId === 'string' || typeof reportId === 'number' 
+                  let normalizedId = typeof reportId === 'string' || typeof reportId === 'number' 
                     ? reportId 
                     : String(reportId);
+
+                  // If backend returns numeric 0 but we have a file URL, create a synthetic file-based ID
+                  if ((normalizedId === 0 || normalizedId === '0') && (report?.download_url || report?.downloadUrl || report?.fileUrl)) {
+                    const fileUrl = report?.download_url || report?.downloadUrl || report?.fileUrl;
+                    normalizedId = `file:${fileUrl}`;
+                  }
 
                   console.log('✅ Setting report state with ID:', normalizedId);
                   

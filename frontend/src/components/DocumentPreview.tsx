@@ -240,6 +240,26 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       setIsEditMode(false);
       setEditableContent(null);
       
+      // If ID is 0 or synthetic 'file:' and we have fallback URL, bypass API and render directly
+      const idString = String(reportId);
+      if ((reportId === 0 || idString.startsWith('file:')) && fallbackDownloadUrl) {
+        console.log('⚡ Bypassing preview API, using fallback file URL directly:', fallbackDownloadUrl);
+        const url = fallbackDownloadUrl;
+        setError(null);
+        setPreviewData({ fallback: true, url });
+        if (/\.(pdf)(\?|$)/i.test(url)) {
+          setPreviewType('pdf');
+          setPreviewUrl(url);
+        } else if (/\.(docx)(\?|$)/i.test(url)) {
+          setPreviewType('html');
+          setPreviewUrl(buildOfficeViewerUrl(url));
+        } else {
+          setPreviewType('data');
+          setPreviewUrl(url);
+        }
+        return;
+      }
+
       // Small delay to ensure dialog is fully rendered
       const loadPreview = () => {
         console.log('📡 Triggering preview mutation for report ID:', reportId);
