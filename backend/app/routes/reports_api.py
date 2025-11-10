@@ -560,8 +560,36 @@ def preview_report(report_id):
             'created_at': report.created_at.isoformat() if report.created_at else None,
             'storage_info': {
                 'total_size_mb': round(report.file_size / (1024 * 1024), 2) if report.file_size else 0
-            }
+            },
+            'files': {}  # Add files object for frontend compatibility
         }
+
+        # Add file information if available (similar to NextGen endpoint)
+        if hasattr(report, 'pdf_file_path') and report.pdf_file_path:
+            preview_data['files']['pdf'] = {
+                'path': report.pdf_file_path,
+                'size': getattr(report, 'pdf_file_size', None),
+                'download_url': f'/api/reports/{report.id}/download/pdf',
+                'exists': os.path.exists(report.pdf_file_path) if report.pdf_file_path else False
+            }
+
+        if hasattr(report, 'docx_file_path') and report.docx_file_path:
+            preview_data['files']['docx'] = {
+                'path': report.docx_file_path,
+                'size': getattr(report, 'docx_file_size', None),
+                'download_url': f'/api/reports/{report.id}/download/docx',
+                'exists': os.path.exists(report.docx_file_path) if report.docx_file_path else False
+            }
+
+        # Fallback: if no specific file paths, use generic file_path
+        if not preview_data['files'] and report.file_path:
+            file_ext = report.file_format or 'unknown'
+            preview_data['files'][file_ext] = {
+                'path': report.file_path,
+                'size': report.file_size,
+                'download_url': report.download_url or f'/api/reports/{report.id}/download',
+                'exists': os.path.exists(report.file_path) if report.file_path else False
+            }
 
         # Return response with both top-level fields for frontend compatibility
         # and nested preview data for backward compatibility
