@@ -209,6 +209,9 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         } else if (data.preview_data) {
           // Fallback: Handle NextGen preview data without URL
           console.log('📊 Setting preview data (no URL)');
+          console.log('📊 Preview data content:', data.preview_data);
+          console.log('📊 Preview data files:', data.preview_data?.files);
+          console.log('📊 Preview data metadata:', data.preview_data?.metadata);
           setPreviewData(data.preview_data);
           setPreviewType('data');
         }
@@ -691,6 +694,12 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     // Render based on preview type
     switch (previewType) {
       case 'data':
+        console.log('📝 Rendering data preview for:', previewData);
+        console.log('📝 Title:', previewData?.title);
+        console.log('📝 Description:', previewData?.description);
+        console.log('📝 Files:', previewData?.files);
+        console.log('📝 Has files:', previewData?.files && Object.keys(previewData.files).length > 0);
+
         return (
           <Box sx={{ p: 3, width: '100%', height: '100%', overflow: 'auto', bgcolor: 'background.paper' }}>
             <Typography variant="h6" gutterBottom>
@@ -699,7 +708,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             <Typography variant="body2" color="text.secondary" paragraph>
               {previewData?.description || 'Generated report details'}
             </Typography>
-            
+
             {previewData?.files && Object.keys(previewData.files).length > 0 && (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle1" gutterBottom>
