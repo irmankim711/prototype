@@ -328,6 +328,10 @@ class ProductionGoogleFormsService:
             logger.info(f"Retrieved {len(responses)} real responses for form {form_id}")
             
             # Parse form structure to understand questions
+            # CRITICAL: Google Forms has TWO different IDs:
+            # - itemId: The form item's ID
+            # - questionId: The ID used in response answers (nested in questionItem.question)
+            # We need to map questionId -> question data for answer lookup
             questions = {}
             items = form.get('items', [])
 
@@ -342,26 +346,30 @@ class ProductionGoogleFormsService:
 
                 # Handle questionItem format
                 if 'questionItem' in item:
-                    question_id = item['itemId']
                     question = item['questionItem']['question']
+                    # CRITICAL: Use questionId (from nested question) not itemId!
+                    # Response answers are keyed by questionId, not itemId
+                    question_id = question.get('questionId', item['itemId'])
                     # IMPORTANT: Title is at item level, not in question!
                     question_title = item.get('title', question.get('questionTitle', f'Question {idx}'))
                     questions[question_id] = {
                         'title': question_title,
                         'type': self._get_question_type(question),
-                        'required': question.get('required', False)
+                        'required': question.get('required', False),
+                        'itemId': item['itemId']  # Store itemId for reference
                     }
-                    logger.debug(f"  ✅ Added question: {questions[question_id]['title']}")
+                    logger.debug(f"  ✅ Added question (questionId={question_id}): {questions[question_id]['title']}")
                 # Handle direct question format (alternative structure)
                 elif 'question' in item:
-                    question_id = item.get('itemId', f'q_{idx}')
                     question = item['question']
+                    question_id = question.get('questionId', item.get('itemId', f'q_{idx}'))
                     questions[question_id] = {
                         'title': question.get('questionTitle', item.get('title', f'Question {idx}')),
                         'type': self._get_question_type(question),
-                        'required': question.get('required', False)
+                        'required': question.get('required', False),
+                        'itemId': item.get('itemId')
                     }
-                    logger.debug(f"  ✅ Added question (direct): {questions[question_id]['title']}")
+                    logger.debug(f"  ✅ Added question (direct, questionId={question_id}): {questions[question_id]['title']}")
                 # Handle title-only items (might be section headers)
                 elif 'title' in item and item.get('title'):
                     logger.debug(f"  ℹ️  Skipping title item: {item.get('title')}")
