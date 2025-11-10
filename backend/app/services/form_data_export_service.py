@@ -659,13 +659,27 @@ class FormDataExportService:
         ws = wb.active
         ws.title = "Responses"
 
-        # Get questions
-        questions = form_info.get('questions', [])
+        # Get questions - questions dict is keyed by itemId with title as value
+        questions_dict = form_info.get('questions', {})
+
+        # Build ordered list of question titles from the questions dict
+        question_titles = []
+        if isinstance(questions_dict, dict):
+            # Questions dict format: {itemId: {title: ..., type: ..., required: ...}}
+            for question_data in questions_dict.values():
+                if isinstance(question_data, dict):
+                    question_titles.append(question_data.get('title', 'Question'))
+        elif isinstance(questions_dict, list):
+            # Fallback: questions as list
+            for question in questions_dict:
+                question_titles.append(question.get('title', 'Question'))
+
+        logger.info(f"📊 Exporting {len(form_responses)} responses with {len(question_titles)} questions")
+        logger.debug(f"Question titles: {question_titles}")
 
         # Create headers
         headers = ['Response ID', 'Timestamp']
-        for question in questions:
-            headers.append(question.get('title', 'Question'))
+        headers.extend(question_titles)
 
         # Write headers
         for col_num, header in enumerate(headers, 1):
@@ -676,19 +690,22 @@ class FormDataExportService:
 
         # Write responses
         for row_num, response in enumerate(form_responses, 2):
-            ws.cell(row=row_num, column=1, value=response.get('responseId', ''))
-            ws.cell(row=row_num, column=2, value=response.get('createTime', ''))
+            ws.cell(row=row_num, column=1, value=response.get('response_id', ''))
+            ws.cell(row=row_num, column=2, value=response.get('create_time', ''))
 
+            # Answers are keyed by question TITLE, not ID
             answers = response.get('answers', {})
-            for col_num, question in enumerate(questions, 3):
-                question_id = question.get('questionId', '')
-                answer = answers.get(question_id, {})
+            logger.debug(f"Response {row_num-1} has {len(answers)} answers: {list(answers.keys())[:3]}...")
 
-                # Extract answer text
-                answer_text = answer.get('textAnswer', {}).get('value', '')
-                if not answer_text:
-                    # Try other answer types
-                    answer_text = str(answer.get('value', ''))
+            for col_num, question_title in enumerate(question_titles, 3):
+                # Get answer directly by question title
+                answer_value = answers.get(question_title, '')
+
+                # Convert to string if needed
+                if isinstance(answer_value, (dict, list)):
+                    answer_text = json.dumps(answer_value, ensure_ascii=False)
+                else:
+                    answer_text = str(answer_value) if answer_value else ''
 
                 # Sanitize value to prevent formula injection
                 sanitized_answer = self.sanitize_cell_value(answer_text)
@@ -739,29 +756,44 @@ class FormDataExportService:
         output = io.StringIO()
         writer = csv.writer(output)
 
-        # Get questions
-        questions = form_info.get('questions', [])
+        # Get questions - questions dict is keyed by itemId with title as value
+        questions_dict = form_info.get('questions', {})
+
+        # Build ordered list of question titles from the questions dict
+        question_titles = []
+        if isinstance(questions_dict, dict):
+            # Questions dict format: {itemId: {title: ..., type: ..., required: ...}}
+            for question_data in questions_dict.values():
+                if isinstance(question_data, dict):
+                    question_titles.append(question_data.get('title', 'Question'))
+        elif isinstance(questions_dict, list):
+            # Fallback: questions as list
+            for question in questions_dict:
+                question_titles.append(question.get('title', 'Question'))
 
         # Write headers
         headers = ['Response ID', 'Timestamp']
-        for question in questions:
-            headers.append(question.get('title', 'Question'))
+        headers.extend(question_titles)
         writer.writerow(headers)
 
         # Write responses
         for response in form_responses:
             row = [
-                response.get('responseId', ''),
-                response.get('createTime', '')
+                response.get('response_id', ''),
+                response.get('create_time', '')
             ]
 
+            # Answers are keyed by question TITLE, not ID
             answers = response.get('answers', {})
-            for question in questions:
-                question_id = question.get('questionId', '')
-                answer = answers.get(question_id, {})
-                answer_text = answer.get('textAnswer', {}).get('value', '')
-                if not answer_text:
-                    answer_text = str(answer.get('value', ''))
+            for question_title in question_titles:
+                # Get answer directly by question title
+                answer_value = answers.get(question_title, '')
+
+                # Convert to string if needed
+                if isinstance(answer_value, (dict, list)):
+                    answer_text = json.dumps(answer_value, ensure_ascii=False)
+                else:
+                    answer_text = str(answer_value) if answer_value else ''
 
                 # Sanitize value to prevent formula injection
                 sanitized_answer = self.sanitize_cell_value(answer_text)
