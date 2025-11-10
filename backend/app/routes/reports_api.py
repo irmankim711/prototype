@@ -1125,7 +1125,7 @@ def cleanup_reports():
         }), 500
 
 @reports_bp.route('/lifecycle/storage', methods=['GET'])
-@firebase_token_optional
+@firebase_auth_required  # SECURITY: Require auth for storage stats
 def get_storage_usage():
     """
     Get storage usage statistics
@@ -1135,7 +1135,7 @@ def get_storage_usage():
         user_id = get_current_user_id()
 
         # Get storage usage
-        usage = report_lifecycle_service.get_storage_usage()
+        usage = report_lifecycle_service.get_storage_usage(user_id)
 
         logger.info(f"Storage usage requested by user {user_id or 'anonymous'}")
         

@@ -193,19 +193,19 @@ class ReportLifecycleService:
             logger.error(f"Error checking file reference: {str(e)}")
             return False  # Assume referenced to be safe
     
-    def get_storage_usage(self) -> Dict[str, Any]:
-        """Get current storage usage statistics"""
-        try:
-            total_reports = Report.query.count()
-            completed_reports = Report.query.filter(Report.generation_status == 'completed').count()
-            failed_reports = Report.query.filter(Report.generation_status == 'failed').count()
-            pending_reports = Report.query.filter(Report.generation_status == 'pending').count()
+# REPLACED
+# REPLACED
+# REPLACED
+# REPLACED
+# REPLACED
+# REPLACED
+# REPLACED
             
             # Calculate total storage used
             total_storage = 0
             report_count = 0
             
-            for report in Report.query.filter(Report.generation_status == 'completed').all():
+            for report in base_query.filter(Report.generation_status == 'completed').all():
                 # Use file_size field since specific format file sizes don't exist in database
                 if report.file_size:
                     total_storage += report.file_size
