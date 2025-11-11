@@ -173,36 +173,52 @@ def create_report_template():
 
 @production_api.route('/reports/templates/<template_id>', methods=['PUT'])
 def update_report_template(template_id):
-    """Update an existing report template"""
+    """Update an existing report template (accepts both int and string IDs)"""
     try:
+        from ..services.template_service import template_service
+        from ..decorators import get_current_user_id
+
         data = request.get_json()
-        template = ReportTemplate.query.get(template_id)
-        
-        if not template:
-            return jsonify({'error': 'Template not found'}), 404
-        
+
+        # Get user ID
+        try:
+            user_id = get_current_user_id()
+        except:
+            user_id = 1  # Fallback for backwards compatibility
+
+        # Convert legacy field names to new format
+        update_data = {}
         if 'name' in data:
-            template.name = data['name']
+            update_data['name'] = data['name']
         if 'description' in data:
-            template.description = data['description']
+            update_data['description'] = data['description']
         if 'schema' in data:
-            template.schema = data['schema']
+            update_data['template_content'] = data['schema']  # Map schema to template_content
         if 'isActive' in data:
-            template.is_active = data['isActive']
-        
-        db.session.commit()
-        
+            update_data['is_active'] = data['isActive']
+        if 'is_active' in data:
+            update_data['is_active'] = data['is_active']
+
+        # Use template service to handle both string and int IDs
+        updated_template = template_service.update_template(template_id, update_data, user_id)
+
+        if not updated_template:
+            return jsonify({'error': 'Template not found or update failed'}), 404
+
+        # Return in legacy format for backwards compatibility
         return jsonify({
-            'id': str(template.id),
-            'name': template.name,
-            'description': template.description,
-            'schema': template.schema,
-            'isActive': template.is_active
+            'id': str(updated_template.get('id')),
+            'name': updated_template.get('name'),
+            'description': updated_template.get('description'),
+            'schema': updated_template.get('template_content', updated_template.get('schema')),
+            'isActive': updated_template.get('is_active')
         }), 200
-        
+
     except Exception as e:
-        logger.error(f"Error updating template: {e}")
-        return jsonify({'error': 'Failed to update template'}), 500
+        logger.error(f"Error updating template {template_id}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': f'Failed to update template: {str(e)}'}), 500
 
 # =================== REPORT GENERATION ===================
 
