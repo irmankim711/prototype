@@ -72,8 +72,23 @@ export default function ReportTemplates() {
     },
   });
 
-  // Use templates from API only
-  const displayTemplates = templates || [];
+  // Use templates from API only - filter out duplicates based on ID
+  const displayTemplates = React.useMemo(() => {
+    if (!templates) return [];
+
+    // Remove duplicates based on template ID
+    const uniqueTemplates = templates.filter((template, index, array) => {
+      const identifier = template.id || template.name;
+      return array.findIndex(t => (t.id || t.name) === identifier) === index;
+    });
+
+    // Log if duplicates were found
+    if (templates.length !== uniqueTemplates.length) {
+      console.warn(`Filtered out ${templates.length - uniqueTemplates.length} duplicate templates from display`);
+    }
+
+    return uniqueTemplates;
+  }, [templates]);
 
   const uploadTemplateMutation = useMutation({
     mutationFn: ({ file, name, description, category, templateType }: { 
