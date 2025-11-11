@@ -114,10 +114,10 @@ def get_templates():
             'message': str(e)
         }), 500
 
-@templates_api.route('/api/v1/templates/<int:template_id>', methods=['GET'])
+@templates_api.route('/api/v1/templates/<template_id>', methods=['GET'])
 @firebase_auth_required
 def get_template(template_id):
-    """Get a specific template by ID"""
+    """Get a specific template by ID (accepts both int and string IDs)"""
     try:
         template = template_service.get_template(template_id)
         
@@ -205,12 +205,12 @@ def create_template():
             'message': str(e)
         }), 500
 
-@templates_api.route('/api/v1/templates/<int:template_id>', methods=['PUT'])
+@templates_api.route('/api/v1/templates/<template_id>', methods=['PUT'])
 @firebase_auth_required
 def update_template(template_id):
     """
-    Update an existing template
-    
+    Update an existing template (accepts both int and string IDs)
+
     Request Body: Same as create_template, but all fields are optional
     """
     try:
@@ -256,10 +256,10 @@ def update_template(template_id):
             'message': str(e)
         }), 500
 
-@templates_api.route('/api/v1/templates/<int:template_id>', methods=['DELETE'])
+@templates_api.route('/api/v1/templates/<template_id>', methods=['DELETE'])
 @firebase_auth_required
 def delete_template(template_id):
-    """Delete a template (admin only)"""
+    """Delete a template (admin only, accepts both int and string IDs)"""
     try:
         user_id = get_current_user_id()
         
@@ -287,12 +287,12 @@ def delete_template(template_id):
             'message': str(e)
         }), 500
 
-@templates_api.route('/api/v1/templates/<int:template_id>/validate', methods=['POST'])
+@templates_api.route('/api/v1/templates/<template_id>/validate', methods=['POST'])
 @firebase_auth_required
 def validate_template_data(template_id):
     """
-    Validate template structure and content
-    
+    Validate template structure and content (accepts both int and string IDs)
+
     Request Body:
     {
         "template_content": "Template content to validate",
@@ -334,10 +334,10 @@ def validate_template_data(template_id):
             'message': str(e)
         }), 500
 
-@templates_api.route('/api/v1/templates/<int:template_id>/variables', methods=['GET'])
+@templates_api.route('/api/v1/templates/<template_id>/variables', methods=['GET'])
 @firebase_auth_required
 def get_template_variables(template_id):
-    """Get template variables with metadata"""
+    """Get template variables with metadata (accepts both int and string IDs)"""
     try:
         variables = template_service.get_template_variables(template_id)
         
@@ -356,12 +356,12 @@ def get_template_variables(template_id):
             'message': str(e)
         }), 500
 
-@templates_api.route('/api/v1/templates/<int:template_id>/preview', methods=['POST'])
+@templates_api.route('/api/v1/templates/<template_id>/preview', methods=['POST'])
 @firebase_auth_required
 def preview_template(template_id):
     """
-    Generate template preview with sample or provided data
-    
+    Generate template preview with sample or provided data (accepts both int and string IDs)
+
     Request Body (optional):
     {
         "sample_data": {
@@ -557,12 +557,12 @@ def upload_template_file():
             'message': str(e)
         }), 500
 
-@templates_api.route('/api/v1/templates/<int:template_id>/download', methods=['GET'])
+@templates_api.route('/api/v1/templates/<template_id>/download', methods=['GET'])
 @firebase_auth_required
 def download_template_file(template_id):
     """
-    Download a template file
-    
+    Download a template file (accepts both int and string IDs)
+
     Returns the template file if it exists
     """
     try:
@@ -618,12 +618,12 @@ def download_template_file(template_id):
             'message': str(e)
         }), 500
 
-@templates_api.route('/api/v1/templates/<int:template_id>/file', methods=['GET'])
+@templates_api.route('/api/v1/templates/<template_id>/file', methods=['GET'])
 @firebase_auth_required
 def get_template_file_info(template_id):
     """
-    Get template file information (without downloading)
-    
+    Get template file information (without downloading, accepts both int and string IDs)
+
     Returns file metadata and download URL
     """
     try:

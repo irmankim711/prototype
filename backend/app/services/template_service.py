@@ -98,37 +98,46 @@ class TemplateService:
             logger.error(f"Error retrieving templates: {e}")
             return []
     
-    def get_template(self, template_id: int) -> Optional[Dict[str, Any]]:
+    def get_template(self, template_id) -> Optional[Dict[str, Any]]:
         """
         Get a specific template by ID
-        
+
         Args:
-            template_id: Template ID
-            
+            template_id: Template ID (int or string)
+
         Returns:
             Template dictionary or None if not found
         """
         try:
-            template = Template.query.filter_by(id=template_id, is_active=True).first()
-            
-            if not template:
-                logger.warning(f"Template {template_id} not found")
-                return None
-            
-            template_dict = template.to_dict()
-            
-            # Add detailed metadata
-            template_dict['usage_count'] = self._get_template_usage_count(template.id)
-            template_dict['last_used'] = self._get_template_last_used(template.id)
-            template_dict['variables_count'] = len(template.variables or [])
-            template_dict['required_fields_count'] = len(template.required_fields or [])
-            
-            # Add template content preview (first 500 chars)
-            if template.template_content:
-                template_dict['content_preview'] = template.template_content[:500]
-            
-            logger.info(f"Retrieved template {template_id}")
-            return template_dict
+            # Try to query database if it's an integer ID
+            if isinstance(template_id, (int, str)) and str(template_id).isdigit():
+                template = Template.query.filter_by(id=int(template_id), is_active=True).first()
+                if template:
+                    template_dict = template.to_dict()
+
+                    # Add detailed metadata
+                    template_dict['usage_count'] = self._get_template_usage_count(template.id)
+                    template_dict['last_used'] = self._get_template_last_used(template.id)
+                    template_dict['variables_count'] = len(template.variables or [])
+                    template_dict['required_fields_count'] = len(template.required_fields or [])
+
+                    # Add template content preview (first 500 chars)
+                    if template.template_content:
+                        template_dict['content_preview'] = template.template_content[:500]
+
+                    logger.info(f"Retrieved template {template_id} from database")
+                    return template_dict
+
+            # If not found in database or ID is string, search file-based templates
+            logger.info(f"Template {template_id} not in database, checking file system")
+            file_templates = self._scan_file_based_templates()
+            for tmpl in file_templates:
+                if str(tmpl.get('id')) == str(template_id):
+                    logger.info(f"Found template {template_id} in file system")
+                    return tmpl
+
+            logger.warning(f"Template {template_id} not found in database or file system")
+            return None
             
         except Exception as e:
             logger.error(f"Error retrieving template {template_id}: {e}")
@@ -180,21 +189,26 @@ class TemplateService:
             logger.error(f"Error creating template: {e}")
             return None
     
-    def update_template(self, template_id: int, updates: Dict[str, Any], user_id: int) -> Optional[Dict[str, Any]]:
+    def update_template(self, template_id, updates: Dict[str, Any], user_id: int) -> Optional[Dict[str, Any]]:
         """
         Update an existing template
-        
+
         Args:
-            template_id: Template ID to update
+            template_id: Template ID to update (int or string)
             updates: Dictionary of fields to update
             user_id: User ID making the update
-            
+
         Returns:
             Updated template dictionary or None if failed
         """
         try:
-            template = Template.query.filter_by(id=template_id, is_active=True).first()
-            
+            # File-based templates (string IDs) cannot be updated via API
+            if not (isinstance(template_id, (int, str)) and str(template_id).isdigit()):
+                logger.error(f"Cannot update file-based template {template_id}. Only database templates can be updated.")
+                return None
+
+            template = Template.query.filter_by(id=int(template_id), is_active=True).first()
+
             if not template:
                 logger.warning(f"Template {template_id} not found for update")
                 return None
@@ -224,19 +238,24 @@ class TemplateService:
             logger.error(f"Error updating template {template_id}: {e}")
             return None
     
-    def delete_template(self, template_id: int, user_id: int) -> bool:
+    def delete_template(self, template_id, user_id: int) -> bool:
         """
         Soft delete a template (mark as inactive)
-        
+
         Args:
-            template_id: Template ID to delete
+            template_id: Template ID to delete (int or string)
             user_id: User ID making the deletion
-            
+
         Returns:
             True if successful, False otherwise
         """
         try:
-            template = Template.query.filter_by(id=template_id, is_active=True).first()
+            # File-based templates (string IDs) cannot be deleted via API
+            if not (isinstance(template_id, (int, str)) and str(template_id).isdigit()):
+                logger.error(f"Cannot delete file-based template {template_id}. Only database templates can be deleted.")
+                return False
+
+            template = Template.query.filter_by(id=int(template_id), is_active=True).first()
             
             if not template:
                 logger.warning(f"Template {template_id} not found for deletion")
@@ -313,24 +332,24 @@ class TemplateService:
             validation_result['errors'].append(f"Validation error: {str(e)}")
             return validation_result
     
-    def get_template_variables(self, template_id: int) -> List[Dict[str, Any]]:
+    def get_template_variables(self, template_id) -> List[Dict[str, Any]]:
         """
         Get template variables with metadata
-        
+
         Args:
-            template_id: Template ID
-            
+            template_id: Template ID (int or string)
+
         Returns:
             List of template variables
         """
         try:
-            template = Template.query.filter_by(id=template_id, is_active=True).first()
-            
-            if not template:
+            # Get the template first (handles both DB and file-based templates)
+            template_dict = self.get_template(template_id)
+            if not template_dict:
                 logger.warning(f"Template {template_id} not found")
                 return []
-            
-            variables = template.variables or []
+
+            variables = template_dict.get('variables', [])
             
             # Enhance variables with metadata
             enhanced_variables = []
@@ -353,30 +372,33 @@ class TemplateService:
             logger.error(f"Error retrieving template variables: {e}")
             return []
     
-    def generate_template_preview(self, template_id: int, sample_data: Dict[str, Any] = None) -> Dict[str, Any]:
+    def generate_template_preview(self, template_id, sample_data: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Generate a preview of the template with sample data
-        
+
         Args:
-            template_id: Template ID
+            template_id: Template ID (int or string)
             sample_data: Sample data for preview
-            
+
         Returns:
             Preview result dictionary
         """
         try:
-            template = Template.query.filter_by(id=template_id, is_active=True).first()
-            
-            if not template:
+            # Get the template first (handles both DB and file-based templates)
+            template_dict = self.get_template(template_id)
+            if not template_dict:
                 return {'error': 'Template not found'}
-            
+
+            template_content = template_dict.get('template_content', '')
+            variables = template_dict.get('variables', [])
+
             # Use provided sample data or generate default
             if not sample_data:
-                sample_data = self._generate_sample_data(template.variables or [])
-            
+                sample_data = self._generate_sample_data(variables)
+
             # Render template with sample data
             from jinja2 import Template as Jinja2Template
-            jinja_template = Jinja2Template(template.template_content)
+            jinja_template = Jinja2Template(template_content)
             rendered_content = jinja_template.render(**sample_data)
             
             return {

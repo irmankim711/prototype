@@ -192,15 +192,21 @@ class ReportLifecycleService:
         except Exception as e:
             logger.error(f"Error checking file reference: {str(e)}")
             return False  # Assume referenced to be safe
-    
-# REPLACED
-# REPLACED
-# REPLACED
-# REPLACED
-# REPLACED
-# REPLACED
-# REPLACED
-            
+
+    def get_storage_usage(self, user_id: Optional[int] = None) -> Dict[str, Any]:
+        """Get storage usage statistics for reports"""
+        try:
+            # Build base query
+            base_query = Report.query
+            if user_id:
+                base_query = base_query.filter_by(user_id=user_id)
+
+            # Get report counts by status
+            total_reports = base_query.count()
+            completed_reports = base_query.filter_by(generation_status='completed').count()
+            failed_reports = base_query.filter_by(generation_status='failed').count()
+            pending_reports = base_query.filter_by(generation_status='pending').count()
+
             # Calculate total storage used
             total_storage = 0
             report_count = 0
