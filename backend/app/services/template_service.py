@@ -86,12 +86,23 @@ class TemplateService:
 
                 result.append(template_dict)
 
-            # If no templates in database, scan file system
-            if not result:
-                logger.info("No templates in database, scanning file system")
-                result = self._scan_file_based_templates()
+            # Always scan file system for file-based templates and merge with database templates
+            logger.info("Scanning file system for file-based templates")
+            file_templates = self._scan_file_based_templates()
 
-            logger.info(f"Retrieved {len(result)} templates with filters: {filters}")
+            # Merge file-based templates with database templates
+            # Create a set of file paths that are already in database
+            db_file_paths = {t.get('file_path') for t in result if t.get('file_path')}
+
+            # Add file-based templates that don't have a database entry
+            for file_template in file_templates:
+                if file_template.get('file_path') not in db_file_paths:
+                    result.append(file_template)
+                else:
+                    # File exists in both DB and filesystem - prefer DB version (has updated metadata)
+                    logger.debug(f"Template {file_template.get('name')} has database entry, using DB version")
+
+            logger.info(f"Retrieved {len(result)} templates ({len(templates)} from DB, {len([t for t in file_templates if t.get('file_path') not in db_file_paths])} from filesystem)")
             return result
 
         except Exception as e:
