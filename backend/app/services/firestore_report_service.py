@@ -42,7 +42,8 @@ class FirestoreReportService:
         template_id: Optional[str] = None,
         program_id: Optional[str] = None,
         data_source: Optional[Dict] = None,
-        generation_config: Optional[Dict] = None
+        generation_config: Optional[Dict] = None,
+        generated_data: Optional[Dict] = None  # ✅ NEW: Support extracted data
     ) -> Optional[str]:
         """
         Create a new report in Firestore
@@ -56,6 +57,7 @@ class FirestoreReportService:
             program_id: Optional program ID
             data_source: Optional data source configuration
             generation_config: Optional generation configuration
+            generated_data: Optional structured extracted data (program info, participants, etc.)
 
         Returns:
             Report ID if successful, None otherwise
@@ -75,6 +77,7 @@ class FirestoreReportService:
                 'programId': program_id,
                 'dataSource': data_source or {},
                 'generationConfig': generation_config or {},
+                'generatedData': generated_data or {},  # ✅ NEW: Store extracted data
                 'createdAt': firestore.SERVER_TIMESTAMP,
                 'updatedAt': firestore.SERVER_TIMESTAMP,
                 'downloadCount': 0,
