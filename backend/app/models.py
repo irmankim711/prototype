@@ -140,6 +140,7 @@ class Report(db.Model):
     last_downloaded = db.Column(db.DateTime)
     data_source = db.Column(db.JSON)
     generation_config = db.Column(db.JSON)
+    generated_data = db.Column(db.JSON)  # ✅ NEW: Store structured extracted data for preview
     error_message = db.Column(db.Text)
     completeness_score = db.Column(db.Integer)
     processing_notes = db.Column(db.Text)
@@ -195,6 +196,7 @@ class Report(db.Model):
             'last_downloaded': self.last_downloaded.isoformat() if self.last_downloaded else None,
             'data_source': self.data_source,
             'generation_config': self.generation_config,
+            'generated_data': self.generated_data,  # ✅ NEW: Include structured data in API responses
             'error_message': self.error_message,
             'completeness_score': self.completeness_score,
             'processing_notes': self.processing_notes,

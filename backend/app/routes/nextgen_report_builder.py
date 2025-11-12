@@ -28,6 +28,7 @@ from app.services.export_service import ExportService
 from app.services.excel_parser import ExcelParserService
 from app.services.template_optimizer import TemplateOptimizerService
 from app.services.ai_report_service import AIReportService
+from app.services.excel_data_extractor import excel_data_extractor
 import re
 
 logger = logging.getLogger(__name__)
@@ -1701,6 +1702,42 @@ def generate_report_from_excel():
                     'suggestion': 'Please check that the Excel file has data rows (not just headers)'
                 }), 400
 
+            # ✅ NEW: Extract structured data using ExcelDataExtractor
+            logger.info(f"🆔 [{request_id}] 📊 Step 1.5: Extracting structured data with ExcelDataExtractor...")
+            structured_extraction_start = time.time()
+            try:
+                structured_data = excel_data_extractor.extract_data_from_file(excel_file_path)
+                logger.info(f"🆔 [{request_id}] ✅ Structured data extraction complete:")
+                logger.info(f"🆔 [{request_id}]    - Program info: {len(structured_data.get('program_info', {}))} fields")
+                logger.info(f"🆔 [{request_id}]    - Participants: {len(structured_data.get('participants', []))} records")
+                logger.info(f"🆔 [{request_id}]    - Attendance: {len(structured_data.get('attendance', []))} records")
+                logger.info(f"🆔 [{request_id}]    - Statistics: {structured_data.get('statistics', {})}")
+
+                # Merge structured data with excel_records for backward compatibility
+                extracted_program_info = structured_data.get('program_info', {})
+                extracted_participants = structured_data.get('participants', [])
+                extracted_attendance = structured_data.get('attendance', [])
+                extracted_statistics = structured_data.get('statistics', {})
+
+            except Exception as extraction_error:
+                logger.warning(f"🆔 [{request_id}] ⚠️ Structured extraction failed: {str(extraction_error)}")
+                logger.warning(f"🆔 [{request_id}] ⚠️ Falling back to basic excel_records only")
+                # Fallback to empty structured data
+                structured_data = {
+                    'program_info': {},
+                    'participants': [],
+                    'attendance': [],
+                    'statistics': {},
+                    'metadata': {}
+                }
+                extracted_program_info = {}
+                extracted_participants = []
+                extracted_attendance = []
+                extracted_statistics = {}
+
+            structured_extraction_time = time.time() - structured_extraction_start
+            logger.info(f"🆔 [{request_id}] ⏱️  Structured extraction: {structured_extraction_time:.2f}s")
+
         except Exception as parse_error:
             logger.error(f"🆔 [{request_id}] ❌ Exception during Excel parsing: {str(parse_error)}")
             logger.error(f"🆔 [{request_id}] Stack trace:", exc_info=True)
@@ -1997,14 +2034,34 @@ def generate_report_from_excel():
                 # Load template
                 doc = DocxTemplate(template_file)
 
-                # Prepare context data from Excel records
+                # ✅ CRITICAL FIX: Prepare comprehensive context data with structured extraction
                 context = {
+                    # Raw Excel records for backward compatibility
                     'records': excel_records,
                     'data': excel_records,
                     'items': excel_records,
                     'total_records': len(excel_records),
                     'generated_date': datetime.now().strftime('%d/%m/%Y'),
                     'generated_time': datetime.now().strftime('%H:%M'),
+
+                    # ✅ NEW: Add structured data for template placeholders
+                    'program': extracted_program_info,  # For {{program.title}}, {{program.date}}, etc.
+                    'participants': extracted_participants,  # For participant tables
+                    'attendance': extracted_attendance,  # For attendance records
+                    'statistics': extracted_statistics,  # For stats like {{statistics.total_participants}}
+
+                    # Add individual program fields at top level for simple placeholders
+                    'program_title': extracted_program_info.get('title', 'Program Report'),
+                    'program_date': extracted_program_info.get('date', datetime.now().strftime('%Y-%m-%d')),
+                    'program_time': extracted_program_info.get('time', ''),
+                    'program_location': extracted_program_info.get('location', ''),
+                    'program_organizer': extracted_program_info.get('organizer', ''),
+                    'program_facilitator': extracted_program_info.get('facilitator', ''),
+
+                    # Add statistics at top level for easy access
+                    'total_participants': extracted_statistics.get('total_participants', len(extracted_participants)),
+                    'male_count': extracted_statistics.get('male_count', 0),
+                    'female_count': extracted_statistics.get('female_count', 0),
                 }
 
                 # Log Excel column names for debugging
@@ -2024,7 +2081,11 @@ def generate_report_from_excel():
                         if clean_key != key:
                             context[clean_key] = value
 
-                logger.info(f"🆔 [{request_id}] Template context prepared with {len(context)} keys")
+                logger.info(f"🆔 [{request_id}] ✅ Template context prepared with {len(context)} keys")
+                logger.info(f"🆔 [{request_id}]    - Program fields: {len(extracted_program_info)}")
+                logger.info(f"🆔 [{request_id}]    - Participants: {len(extracted_participants)}")
+                logger.info(f"🆔 [{request_id}]    - Attendance records: {len(extracted_attendance)}")
+                logger.info(f"🆔 [{request_id}]    - Statistics: {extracted_statistics}")
 
                 # Render template with data
                 doc.render(context)
@@ -2433,6 +2494,7 @@ def generate_report_from_excel():
             'download_url': f"/static/generated/{os.path.basename(report_path or '')}",
 
             # Data and configuration - using JSON fields
+            # ✅ CRITICAL FIX: Include actual extracted data, not just metadata
             'data_source': {  # JSON field
                 'excel_source': excel_file_path,
                 'template_used': template_id,  # Keep original template name for reference
@@ -2441,7 +2503,15 @@ def generate_report_from_excel():
                 # Add Firestore ID if available
                 'template_firestore_id': firestore_template_id,
                 'file_type': 'excel',
-                'automation_type': 'excel'
+                'automation_type': 'excel',
+                # ✅ NEW: Add actual extracted data
+                'program_info': extracted_program_info,
+                'participants': extracted_participants,
+                'attendance': extracted_attendance,
+                'statistics': extracted_statistics,
+                'raw_records': excel_records[:100] if len(excel_records) > 100 else excel_records,  # Limit to 100 records to avoid data bloat
+                'columns': excel_columns,
+                'total_records': len(excel_records)
             },
             'generation_config': {  # JSON field
                 'template_id': template_id,  # Keep original template name for reference
@@ -2452,7 +2522,9 @@ def generate_report_from_excel():
                 'template_firestore_id': firestore_template_id,
                 'template_file': str(template_file),
                 'excel_file': excel_file_path,
-                'automation_method': 'form_automation_service'
+                'automation_method': 'form_automation_service',
+                # ✅ NEW: Add extraction metadata
+                'extraction_metadata': structured_data.get('metadata', {})
             },
 
             # Generation metadata
@@ -2463,6 +2535,18 @@ def generate_report_from_excel():
         # Create report with safe field mapping for development
         try:
             # Only include fields that exist in the database
+            # ✅ CRITICAL FIX: Add generated_data field with structured content for preview
+            generated_data_for_preview = {
+                'program_info': extracted_program_info,
+                'participants': extracted_participants,
+                'attendance': extracted_attendance,
+                'statistics': extracted_statistics,
+                'metadata': structured_data.get('metadata', {}),
+                'title': report_title,
+                'description': f"Automated report generated from {os.path.basename(excel_file_path)}",
+                'generation_date': datetime.utcnow().isoformat()
+            }
+
             safe_report_data = {
                 'title': report_data.get('title', 'Excel Report'),
                 'description': report_data.get('description', 'Generated from Excel data'),
@@ -2471,6 +2555,7 @@ def generate_report_from_excel():
                 'generation_status': 'completed',
                 'data_source': json.dumps(report_data.get('data_source', {})),
                 'generation_config': json.dumps(report_data.get('generation_config', {})),
+                'generated_data': json.dumps(generated_data_for_preview),  # ✅ NEW: Store structured data for preview
                 'created_at': datetime.utcnow(),
             }
 
