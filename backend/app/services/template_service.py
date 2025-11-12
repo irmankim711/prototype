@@ -236,16 +236,16 @@ class TemplateService:
                         return None
 
                     # Create database entry with metadata
+                    # Note: Using ReportTemplate model which doesn't have template_content or variables fields
                     template = Template(
                         name=updates.get('name', file_template.get('name')),
                         description=updates.get('description', file_template.get('description', '')),
                         category=updates.get('category', file_template.get('category', 'general')),
                         template_type=file_template.get('template_type', 'docx'),
                         file_path=file_template.get('file_path'),
-                        template_content='',  # File-based, no content in DB
-                        variables=[],
+                        placeholder_schema={},  # Use placeholder_schema instead of variables
                         is_active=updates.get('is_active', True),
-                        created_by=user_id
+                        created_by=str(user_id)  # created_by is String, not Integer
                     )
                     db.session.add(template)
                     db.session.commit()
@@ -264,19 +264,21 @@ class TemplateService:
                     logger.warning(f"Template {template_id} not found for update")
                     return None
             
-            # Update allowed fields
+            # Update allowed fields (only fields that exist in ReportTemplate model)
+            # ReportTemplate has: name, description, category, template_type, file_path,
+            # placeholder_schema, is_active, version, supports_charts, supports_images, max_participants
             allowed_fields = [
-                'name', 'description', 'category', 'template_content', 
-                'variables', 'template_type', 'supports_excel', 'required_fields'
+                'name', 'description', 'category', 'template_type',
+                'is_active', 'version', 'supports_charts', 'supports_images', 'max_participants'
             ]
-            
+
             for field in allowed_fields:
-                if field in updates:
+                if field in updates and hasattr(template, field):
                     setattr(template, field, updates[field])
-            
-            # Re-extract variables if template content changed
-            if 'template_content' in updates and not updates.get('variables'):
-                template.variables = self._extract_template_variables(template.template_content)
+
+            # Update placeholder_schema if provided (instead of variables)
+            if 'placeholder_schema' in updates:
+                template.placeholder_schema = updates['placeholder_schema']
             
             template.updated_at = datetime.utcnow()
             db.session.commit()
