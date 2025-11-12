@@ -2598,23 +2598,30 @@ def generate_report_from_excel():
                 safe_report_data['download_url'] = f"/static/generated/{os.path.basename(report_path)}"
                 safe_report_data['generated_at'] = datetime.utcnow()
 
-            # Build dynamic SQL query based on available fields
-            columns = list(safe_report_data.keys())
-            placeholders = [f":{col}" for col in columns]
+            # ✅ FIX: Skip PostgreSQL insert if reports table doesn't exist
+            # This system uses Firestore for report storage
+            report_id = None
+            try:
+                # Try PostgreSQL insert only if table exists
+                columns = list(safe_report_data.keys())
+                placeholders = [f":{col}" for col in columns]
 
-            insert_sql = text(f"""
-                INSERT INTO reports ({', '.join(columns)})
-                VALUES ({', '.join(placeholders)})
-            """)
+                insert_sql = text(f"""
+                    INSERT INTO reports ({', '.join(columns)})
+                    VALUES ({', '.join(placeholders)})
+                """)
 
-            logger.info(f"🔧 SQL Insert columns: {columns}")
-            logger.info(f"🔧 SQL Insert values: {list(safe_report_data.keys())}")
+                logger.info(f"🔧 Attempting SQL Insert with columns: {columns}")
 
-            result = db.session.execute(insert_sql, safe_report_data)
-            report_id = result.lastrowid
-            db.session.commit()
+                result = db.session.execute(insert_sql, safe_report_data)
+                report_id = result.lastrowid
+                db.session.commit()
 
-            logger.info(f"✅ Report created successfully with ID: {report_id}")
+                logger.info(f"✅ Report created in PostgreSQL with ID: {report_id}")
+            except Exception as sql_error:
+                logger.warning(f"⚠️ PostgreSQL insert skipped (using Firestore instead): {str(sql_error)}")
+                db.session.rollback()
+                # Will use Firestore as primary storage below
 
             # IMPORTANT: Never use MockReport or any non-SQLAlchemy models with db.session.add()
             # The report was already inserted via direct SQL above - just return response data
@@ -2642,7 +2649,8 @@ def generate_report_from_excel():
                     template_id=firestore_template_id or str(template_id),
                     program_id=str(default_program_id) if default_program_id else None,
                     data_source=json.loads(safe_report_data.get('data_source', '{}')),
-                    generation_config=json.loads(safe_report_data.get('generation_config', '{}'))
+                    generation_config=json.loads(safe_report_data.get('generation_config', '{}')),
+                    generated_data=json.loads(safe_report_data.get('generated_data', '{}'))  # ✅ NEW: Include extracted data
                 )
 
                 if firestore_report_id:
