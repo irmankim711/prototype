@@ -102,7 +102,12 @@ def create_production_app(config_name='production'):
     # Real reports generation
     from .routes.production_reports_endpoints import production_reports_bp
     app.register_blueprint(production_reports_bp)
-    
+
+    # Production API for templates and reports (legacy endpoints)
+    from .routes.production_api import production_api
+    app.register_blueprint(production_api, url_prefix='/production')
+    app.logger.info("✅ Production API blueprint registered under /production")
+
     # Next-Gen Report Builder API (production-ready, no mock data)
     # Ensure NextGen endpoints like /api/v1/nextgen/data-sources and /templates are available in production
     try:
