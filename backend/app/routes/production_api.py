@@ -186,6 +186,16 @@ def update_report_template(template_id):
         except:
             user_id = 1  # Fallback for backwards compatibility
 
+        # Check if this is a file-based template (string ID that's not a number)
+        if not (isinstance(template_id, (int, str)) and str(template_id).isdigit()):
+            logger.warning(f"Attempted to edit file-based template: {template_id}")
+            return jsonify({
+                'error': 'Cannot edit file-based template',
+                'message': 'File-based templates (with non-numeric IDs) cannot be edited via the API. Please edit the file directly in the templates directory, or upload it as a new template to create a database entry.',
+                'template_id': template_id,
+                'is_file_based': True
+            }), 400
+
         # Convert legacy field names to new format
         update_data = {}
         if 'name' in data:
@@ -203,7 +213,11 @@ def update_report_template(template_id):
         updated_template = template_service.update_template(template_id, update_data, user_id)
 
         if not updated_template:
-            return jsonify({'error': 'Template not found or update failed'}), 404
+            return jsonify({
+                'error': 'Template not found',
+                'message': f'No template found with ID: {template_id}',
+                'template_id': template_id
+            }), 404
 
         # Return in legacy format for backwards compatibility
         return jsonify({

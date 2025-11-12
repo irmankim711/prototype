@@ -134,7 +134,18 @@ export default function ReportTemplates() {
     },
     onError: (error: any) => {
       console.error("Update template error:", error);
-      setSnackbar({ open: true, message: 'Failed to update template', severity: 'error' });
+
+      // Check if it's a file-based template error
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to update template';
+      const isFileBased = error.response?.data?.is_file_based || errorMessage.includes('file-based');
+
+      setSnackbar({
+        open: true,
+        message: isFileBased
+          ? 'Cannot edit file-based templates. Please download and edit the file directly, or upload as a new template.'
+          : errorMessage,
+        severity: 'error'
+      });
     },
   });
 
@@ -353,13 +364,22 @@ export default function ReportTemplates() {
               </CardContent>
               <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
                 <Box>
-                  <Button
-                    size="small"
-                    startIcon={<EditIcon />}
-                    onClick={() => handleOpenEditDialog(template)}
-                  >
-                    Edit
-                  </Button>
+                  {/* Check if template is file-based (string ID that's not a number) */}
+                  {(() => {
+                    const isFileBasedTemplate = template.id && typeof template.id === 'string' && !/^\d+$/.test(template.id);
+
+                    return (
+                      <Button
+                        size="small"
+                        startIcon={<EditIcon />}
+                        onClick={() => handleOpenEditDialog(template)}
+                        disabled={isFileBasedTemplate}
+                        title={isFileBasedTemplate ? 'File-based templates cannot be edited via UI. Please edit the file directly or upload as a new template.' : 'Edit template'}
+                      >
+                        Edit
+                      </Button>
+                    );
+                  })()}
                   {template.file_path && (
                     <>
                       <Button
