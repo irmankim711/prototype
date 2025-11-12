@@ -187,14 +187,7 @@ def update_report_template(template_id):
             user_id = 1  # Fallback for backwards compatibility
 
         # Check if this is a file-based template (string ID that's not a number)
-        if not (isinstance(template_id, (int, str)) and str(template_id).isdigit()):
-            logger.warning(f"Attempted to edit file-based template: {template_id}")
-            return jsonify({
-                'error': 'Cannot edit file-based template',
-                'message': 'File-based templates (with non-numeric IDs) cannot be edited via the API. Please edit the file directly in the templates directory, or upload it as a new template to create a database entry.',
-                'template_id': template_id,
-                'is_file_based': True
-            }), 400
+        is_file_based = not (isinstance(template_id, (int, str)) and str(template_id).isdigit())
 
         # Convert legacy field names to new format
         update_data = {}
@@ -208,6 +201,27 @@ def update_report_template(template_id):
             update_data['is_active'] = data['isActive']
         if 'is_active' in data:
             update_data['is_active'] = data['is_active']
+        if 'category' in data:
+            update_data['category'] = data['category']
+
+        # For file-based templates, only allow metadata updates
+        if is_file_based:
+            metadata_fields = {'name', 'description', 'category', 'is_active'}
+            update_fields = set(update_data.keys())
+
+            if not update_fields.issubset(metadata_fields):
+                non_metadata = update_fields - metadata_fields
+                logger.warning(f"Attempted to edit non-metadata fields for file-based template {template_id}: {non_metadata}")
+                return jsonify({
+                    'error': 'Cannot edit template content for file-based templates',
+                    'message': f'File-based templates can only have their metadata (name, description, category) updated. Cannot update: {", ".join(non_metadata)}',
+                    'template_id': template_id,
+                    'is_file_based': True,
+                    'allowed_fields': list(metadata_fields),
+                    'rejected_fields': list(non_metadata)
+                }), 400
+
+            logger.info(f"Allowing metadata update for file-based template: {template_id} (fields: {update_fields})")
 
         # Use template service to handle both string and int IDs
         updated_template = template_service.update_template(template_id, update_data, user_id)

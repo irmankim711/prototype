@@ -202,16 +202,64 @@ class TemplateService:
             Updated template dictionary or None if failed
         """
         try:
-            # File-based templates (string IDs) cannot be updated via API
-            if not (isinstance(template_id, (int, str)) and str(template_id).isdigit()):
-                logger.error(f"Cannot update file-based template {template_id}. Only database templates can be updated.")
-                return None
+            # Check if this is a file-based template (string ID)
+            is_file_based = not (isinstance(template_id, (int, str)) and str(template_id).isdigit())
 
-            template = Template.query.filter_by(id=int(template_id), is_active=True).first()
+            if is_file_based:
+                # For file-based templates, only allow metadata updates (name, description)
+                metadata_only = all(key in ['name', 'description', 'category', 'is_active'] for key in updates.keys())
 
-            if not template:
-                logger.warning(f"Template {template_id} not found for update")
-                return None
+                if not metadata_only:
+                    logger.error(f"Cannot update template content for file-based template {template_id}. Only metadata (name, description) can be updated.")
+                    return None
+
+                # Try to find existing database entry for this file-based template
+                # Check by file_path containing the template_id
+                template = Template.query.filter(
+                    Template.file_path.like(f'%{template_id}%'),
+                    Template.is_active == True
+                ).first()
+
+                if not template:
+                    # Create a new database entry for this file-based template
+                    logger.info(f"Creating database entry for file-based template: {template_id}")
+
+                    # Get the file-based template info
+                    file_templates = self._scan_file_based_templates()
+                    file_template = next((t for t in file_templates if str(t.get('id')) == str(template_id)), None)
+
+                    if not file_template:
+                        logger.error(f"File-based template {template_id} not found in filesystem")
+                        return None
+
+                    # Create database entry with metadata
+                    template = Template(
+                        name=updates.get('name', file_template.get('name')),
+                        description=updates.get('description', file_template.get('description', '')),
+                        category=updates.get('category', file_template.get('category', 'general')),
+                        template_type=file_template.get('template_type', 'docx'),
+                        file_path=file_template.get('file_path'),
+                        template_content='',  # File-based, no content in DB
+                        variables=[],
+                        is_active=updates.get('is_active', True),
+                        created_by=user_id
+                    )
+                    db.session.add(template)
+                    db.session.commit()
+
+                    logger.info(f"Created database entry for file-based template {template_id} with ID {template.id}")
+                    return template.to_dict()
+
+                # Update existing database entry metadata
+                logger.info(f"Updating metadata for file-based template: {template_id}")
+
+            else:
+                # Database template - find by numeric ID
+                template = Template.query.filter_by(id=int(template_id), is_active=True).first()
+
+                if not template:
+                    logger.warning(f"Template {template_id} not found for update")
+                    return None
             
             # Update allowed fields
             allowed_fields = [
