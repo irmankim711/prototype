@@ -174,16 +174,21 @@ def create_report_template():
 @production_api.route('/reports/templates/<template_id>', methods=['PUT'])
 def update_report_template(template_id):
     """Update an existing report template (accepts both int and string IDs)"""
+    logger.info(f"📝 UPDATE TEMPLATE REQUEST: ID='{template_id}', Method={request.method}, Path={request.path}")
+
     try:
         from ..services.template_service import template_service
         from ..decorators import get_current_user_id
 
         data = request.get_json()
+        logger.info(f"📝 Update data received: {data}")
 
         # Get user ID
         try:
             user_id = get_current_user_id()
-        except:
+            logger.info(f"📝 User ID: {user_id}")
+        except Exception as e:
+            logger.warning(f"📝 Failed to get user ID: {e}, using fallback")
             user_id = 1  # Fallback for backwards compatibility
 
         # Check if this is a file-based template (string ID that's not a number)

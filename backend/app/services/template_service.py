@@ -201,9 +201,12 @@ class TemplateService:
         Returns:
             Updated template dictionary or None if failed
         """
+        logger.info(f"🔧 template_service.update_template called: ID='{template_id}', updates={updates}, user_id={user_id}")
+
         try:
             # Check if this is a file-based template (string ID)
             is_file_based = not (isinstance(template_id, (int, str)) and str(template_id).isdigit())
+            logger.info(f"🔧 Is file-based template: {is_file_based}")
 
             if is_file_based:
                 # For file-based templates, only allow metadata updates (name, description)
