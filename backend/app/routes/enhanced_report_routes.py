@@ -3,14 +3,15 @@ Enhanced Report Builder API Routes
 Provides endpoints for the new AI-powered report builder with live preview
 """
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, send_file
 
 import os
 import tempfile
 import json
 import logging
+import uuid
 from werkzeug.utils import secure_filename
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from ..services.gemini_content_service import gemini_content_service
 from ..decorators import get_current_user_id
@@ -328,21 +329,54 @@ def export_report():
         
         # For now, return HTML content - PDF/Word conversion would require additional libraries
         if export_format == 'html':
-            # Save HTML to temporary file
-            temp_dir = tempfile.mkdtemp()
-            filename = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+            # Get authenticated user ID
+            user_id = get_current_user_id()
+            if not user_id:
+                return jsonify({
+                    'success': False,
+                    'error': 'Authentication required'
+                }), 401
+            
+            # Generate secure token-based filename instead of predictable timestamp
+            secure_token = str(uuid.uuid4())
+            file_extension = '.html'
+            filename = f"report_{secure_token}{file_extension}"
+            
+            # Save HTML to temporary file in the system temp directory
+            temp_dir = tempfile.gettempdir()
             file_path = os.path.join(temp_dir, filename)
             
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(preview_result['html_content'])
+            
+            # Store file metadata for ownership verification
+            file_metadata = {
+                'user_id': user_id,
+                'filename': filename,
+                'token': secure_token,
+                'created_at': datetime.utcnow().isoformat(),
+                'expires_at': (datetime.utcnow() + timedelta(hours=24)).isoformat(),
+                'file_size': os.path.getsize(file_path),
+                'content_type': 'text/html'
+            }
+            
+            try:
+                from firebase_admin import firestore
+                db = firestore.client()
+                db.collection('report_downloads').document(secure_token).set(file_metadata)
+                logger.info(f"Report metadata stored for user {user_id}: {secure_token}")
+            except Exception as e:
+                logger.warning(f"Could not store metadata in Firestore: {str(e)}")
+                # Continue anyway - metadata storage is optional fallback
             
             return jsonify({
                 'success': True,
                 'message': 'Report generated successfully',
                 'format': export_format,
                 'filename': filename,
-                'download_url': f'/api/enhanced-report/download/{filename}',
-                'file_path': file_path
+                'download_url': f'/api/enhanced-report/download/{secure_token}',
+                'token': secure_token,
+                'expires_at': file_metadata['expires_at']
             })
         else:
             # For PDF/Word export, we would need additional libraries like weasyprint or python-docx
@@ -498,6 +532,135 @@ def health_check():
             'status': 'unhealthy',
             'error': str(e),
             'timestamp': datetime.now().isoformat()
+        }), 500
+
+@enhanced_report_bp.route('/download/<token>', methods=['GET'])
+def download_report(token):
+    """
+    Download a previously generated report file
+    Security: Requires authentication and ownership verification
+    """
+    try:
+        # Step 1: Verify user is authenticated
+        user_id = get_current_user_id()
+        if not user_id:
+            logger.warning(f"Unauthorized download attempt: no user_id")
+            return jsonify({
+                'success': False,
+                'error': 'Authentication required'
+            }), 401
+        
+        # Step 2: Validate token format (UUID format)
+        token = secure_filename(token)
+        if not token or len(token) < 10:
+            logger.warning(f"Invalid token format from user {user_id}: {token}")
+            return jsonify({
+                'success': False,
+                'error': 'Invalid token'
+            }), 400
+        
+        # Step 3: Verify file ownership via metadata
+        file_metadata = {}
+        filename = None
+        try:
+            from firebase_admin import firestore
+            db = firestore.client()
+            doc = db.collection('report_downloads').document(token).get()
+            
+            if doc.exists:
+                file_metadata = doc.to_dict() or {}
+                # Verify ownership: file must belong to current user
+                if file_metadata.get('user_id') != user_id:
+                    logger.warning(f"Unauthorized download attempt: user {user_id} tried to access file of user {file_metadata.get('user_id')}")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Access denied'
+                    }), 403
+                
+                # Check if file has expired
+                expires_at = file_metadata.get('expires_at')
+                if expires_at:
+                    try:
+                        expires_dt = datetime.fromisoformat(expires_at)
+                        if datetime.utcnow() > expires_dt:
+                            logger.warning(f"Download attempt for expired file: {token}")
+                            return jsonify({
+                                'success': False,
+                                'error': 'File has expired'
+                            }), 410
+                    except ValueError:
+                        logger.warning(f"Invalid expiration date format: {expires_at}")
+                
+                filename = file_metadata.get('filename')
+            else:
+                logger.warning(f"File metadata not found: {token}")
+                return jsonify({
+                    'success': False,
+                    'error': 'File not found'
+                }), 404
+        except Exception as e:
+            # If Firestore fails, fall back to filename reconstruction with validation
+            logger.warning(f"Could not verify metadata from Firestore: {str(e)}")
+            # Reconstruct filename with token
+            filename = f"report_{token}.html"
+            logger.info(f"Falling back to filename-based access for token: {token}")
+        
+        if not filename:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid file metadata'
+            }), 400
+        
+        # Step 4: Construct file path with security checks
+        temp_dir = tempfile.gettempdir()
+        file_path = os.path.join(temp_dir, filename)
+        
+        # Step 5: Verify file exists
+        if not os.path.exists(file_path):
+            logger.warning(f"Download attempt for non-existent file: {filename} (user: {user_id})")
+            return jsonify({
+                'success': False,
+                'error': 'File not found'
+            }), 404
+        
+        # Step 6: Security - verify file is within temp directory (prevent directory traversal)
+        real_path = os.path.realpath(file_path)
+        real_temp = os.path.realpath(temp_dir)
+        if not real_path.startswith(real_temp):
+            logger.warning(f"Security: Directory traversal attempt by user {user_id}: {real_path}")
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+        
+        # Step 7: Determine MIME type
+        if filename.endswith('.html'):
+            mimetype = 'text/html'
+        elif filename.endswith('.pdf'):
+            mimetype = 'application/pdf'
+        elif filename.endswith('.docx'):
+            mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        elif filename.endswith('.xlsx'):
+            mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        else:
+            mimetype = 'application/octet-stream'
+        
+        # Step 8: Log successful download
+        logger.info(f"User {user_id} downloading report: {token}")
+        
+        # Step 9: Serve file
+        return send_file(
+            file_path,
+            mimetype=mimetype,
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        logger.error(f"Error downloading report: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Download failed'
         }), 500
 
 # Error handlers
