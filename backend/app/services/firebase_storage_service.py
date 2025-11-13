@@ -215,6 +215,13 @@ class FirebaseStorageService:
 
         try:
             blob = self._bucket.blob(storage_path)
+
+            # Check if blob exists before attempting deletion
+            if not blob.exists():
+                logger.warning(f"⚠️ File does not exist in Firebase Storage: {storage_path}")
+                # Return True since the end state is correct (file doesn't exist)
+                return True
+
             blob.delete()
 
             logger.info(f"✅ Deleted file from Firebase Storage: {storage_path}")
@@ -222,6 +229,8 @@ class FirebaseStorageService:
 
         except Exception as e:
             logger.error(f"❌ Error deleting file from Firebase Storage: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
 
     def get_signed_url(

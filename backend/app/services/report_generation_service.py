@@ -1018,8 +1018,13 @@ class ReportGenerationService:
                             logger.warning("⚠️ Template loops not rendered, adding fallback participant table")
                         else:
                             logger.info("✅ Template loops appear to be rendered correctly, skipping fallback table")
-                except:
-                    # If we can't check, add the table to be safe
+                except (OSError, IOError) as e:
+                    # If we can't check file, add the table to be safe
+                    logger.warning(f"Could not check template rendering: {str(e)}")
+                    should_add_fallback_table = True
+                except Exception as e:
+                    # Log unexpected errors but still add fallback
+                    logger.error(f"Unexpected error checking template rendering: {str(e)}", exc_info=True)
                     should_add_fallback_table = True
 
             if should_add_fallback_table:
