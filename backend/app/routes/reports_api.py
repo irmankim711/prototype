@@ -13,6 +13,8 @@ from werkzeug.utils import secure_filename
 import logging
 from typing import Dict, Any
 
+from firebase_admin import firestore
+
 from .. import db
 from ..decorators import get_current_user_id, firebase_token_optional, firebase_auth_required
 from ..models import Report, Form, FormSubmission, User, UserRole, ReportTemplate
@@ -437,17 +439,108 @@ def upload_file_for_report():
             'details': str(e)
         }), 500
 
-@reports_bp.route('/<int:report_id>/status', methods=['GET'])
+def _handle_firestore_download(firestore_report: dict, user_id: str, file_type: str, report_id: str):
+    """Handle download for Firestore reports"""
+    # Check access - user must own the report or be admin
+    user = User.get_by_firebase_uid(user_id)
+    is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+    if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+        logger.warning(f"Access denied for user {user_id} attempting to download Firestore report {report_id} "
+                      f"(owned by {firestore_report.get('userId')})")
+        return jsonify({
+            'error': 'Access denied - you do not have permission to download this report',
+            'code': 'INSUFFICIENT_PERMISSIONS'
+        }), 403
+
+    # Check if report is ready
+    if firestore_report.get('generationStatus') != 'completed':
+        return jsonify({
+            'success': False,
+            'error': 'Report not ready for download',
+            'status': firestore_report.get('generationStatus')
+        }), 400
+
+    # Validate file type
+    valid_types = ['pdf', 'docx', 'excel']
+    if file_type not in valid_types:
+        return jsonify({'error': f'Invalid file type. Must be one of: {", ".join(valid_types)}'}), 400
+
+    # Get the file path from Firestore
+    file_path = None
+    filename = None
+
+    if file_type == 'pdf' and firestore_report.get('pdfPath'):
+        file_path = firestore_report.get('pdfPath')
+        filename = f"{firestore_report.get('title', 'report').replace(' ', '_')}.pdf"
+    elif file_type == 'docx' and firestore_report.get('docxPath'):
+        file_path = firestore_report.get('docxPath')
+        filename = f"{firestore_report.get('title', 'report').replace(' ', '_')}.docx"
+    elif file_type == 'excel' and firestore_report.get('excelPath'):
+        file_path = firestore_report.get('excelPath')
+        filename = f"{firestore_report.get('title', 'report').replace(' ', '_')}.xlsx"
+
+    if not file_path or not os.path.exists(file_path):
+        logger.error(f"File not found for Firestore report {report_id} type {file_type}. Checked path: {file_path}")
+        return jsonify({
+            'error': 'File not found',
+            'details': f'The {file_type} file for this report is not available. It may not have been generated yet.',
+            'report_status': firestore_report.get('generationStatus'),
+            'available_files': {
+                'pdf': bool(firestore_report.get('pdfPath')),
+                'docx': bool(firestore_report.get('docxPath')),
+                'excel': bool(firestore_report.get('excelPath'))
+            }
+        }), 404
+
+    # Update download tracking in Firestore
+    firestore_report_service.increment_download_count(str(report_id))
+
+    logger.info(f"Serving Firestore file {file_path} for report {report_id} type {file_type}")
+
+    # Send file
+    return send_file(
+        file_path,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/octet-stream'
+    )
+
+
+@reports_bp.route('/<report_id>/status', methods=['GET'])
 def get_report_status(report_id):
     """
     Get report generation status
     GET /api/reports/{report_id}/status
+    Supports both integer IDs (PostgreSQL) and string IDs (Firestore).
     """
     try:
         user_id = get_current_user_id()
 
-        # Get report
-        report = Report.query.get(report_id)
+        # Try Firestore first (for string IDs)
+        firestore_report = firestore_report_service.get_report(str(report_id))
+        
+        if firestore_report:
+            # Check access
+            user = User.get_by_firebase_uid(user_id)
+            is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+            if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+                return jsonify({'error': 'Access denied'}), 403
+            
+            return jsonify({
+                'success': True,
+                'report': firestore_report,
+                'source': 'firestore'
+            }), 200
+
+        # Fallback to PostgreSQL (for integer IDs)
+        try:
+            report_id_int = int(report_id)
+            report = Report.query.get(report_id_int)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Report not found'}), 404
+        
         if not report:
             return jsonify({'error': 'Report not found'}), 404
 
@@ -461,7 +554,8 @@ def get_report_status(report_id):
         
         return jsonify({
             'success': True,
-            'report': report.to_dict()
+            'report': report.to_dict(),
+            'source': 'postgresql'
         }), 200
         
     except Exception as e:
@@ -471,12 +565,13 @@ def get_report_status(report_id):
             'error': f'Failed to get report status: {str(e)}'
         }), 500
 
-@reports_bp.route('/<int:report_id>/preview', methods=['GET'])
+@reports_bp.route('/<report_id>/preview', methods=['GET'])
 @firebase_auth_required
 def preview_report(report_id):
     """
     Enhanced preview generated report with file information and download links
     GET /api/reports/{report_id}/preview
+    Supports both integer IDs (PostgreSQL) and string IDs (Firestore).
     """
     try:
         user_id = get_current_user_id()
@@ -489,8 +584,54 @@ def preview_report(report_id):
                 'code': 'UNAUTHORIZED'
             }), 401
 
-        # Get report
-        report = Report.query.get(report_id)
+        # Try Firestore first (for string IDs)
+        firestore_report = firestore_report_service.get_report(str(report_id))
+        
+        if firestore_report:
+            # Check access
+            user = User.get_by_firebase_uid(user_id)
+            is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+            if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+                logger.warning(f"Access denied for user {user_id} attempting to preview Firestore report {report_id}")
+                return jsonify({
+                    'error': 'Access denied - you do not have permission to view this report',
+                    'code': 'INSUFFICIENT_PERMISSIONS'
+                }), 403
+            
+            # Check if report is ready
+            if firestore_report.get('generationStatus') != 'completed':
+                return jsonify({
+                    'success': False,
+                    'error': 'Report not ready for preview',
+                    'status': firestore_report.get('generationStatus'),
+                    'progress': firestore_report.get('generationProgress', 0)
+                }), 400
+            
+            # Return Firestore report preview
+            return jsonify({
+                'success': True,
+                'reportId': firestore_report.get('id'),
+                'reportTitle': firestore_report.get('title'),
+                'reportType': firestore_report.get('reportType'),
+                'id': firestore_report.get('id'),
+                'title': firestore_report.get('title'),
+                'preview': firestore_report,
+                'preview_data': firestore_report,
+                'source': 'firestore'
+            }), 200
+
+        # Fallback to PostgreSQL (for integer IDs)
+        try:
+            report_id_int = int(report_id)
+            report = Report.query.get(report_id_int)
+        except (ValueError, TypeError):
+            logger.warning(f"Preview request for report {report_id} - invalid ID format")
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
+        
         if not report:
             logger.warning(f"Preview request for report {report_id} - report not found")
             return jsonify({
@@ -610,7 +751,8 @@ def preview_report(report_id):
             'id': report.id,                 # Also include id for consistency
             'title': report.title,           # Also include title for consistency
             'preview': preview_data,         # Keep nested structure for backward compatibility
-            'preview_data': preview_data     # Add for frontend DocumentPreview component
+            'preview_data': preview_data,    # Add for frontend DocumentPreview component
+            'source': 'postgresql'
         }), 200
         
     except Exception as e:
@@ -620,17 +762,68 @@ def preview_report(report_id):
             'error': f'Failed to preview report: {str(e)}'
         }), 500
 
-@reports_bp.route('/<int:report_id>/edit', methods=['PUT'])
+@reports_bp.route('/<report_id>/edit', methods=['PUT'])
 def edit_report(report_id):
     """
     Edit report data and regenerate
     PUT /api/reports/{report_id}/edit
+    Supports both integer IDs (PostgreSQL) and string IDs (Firestore).
     """
     try:
         user_id = get_current_user_id()
 
-        # Get report
-        report = Report.query.get(report_id)
+        # Try Firestore first (for string IDs)
+        firestore_report = firestore_report_service.get_report(str(report_id))
+        
+        if firestore_report:
+            # Check access
+            user = User.get_by_firebase_uid(user_id)
+            is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+            if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+                return jsonify({'error': 'Access denied'}), 403
+            
+            # Get updated data
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+            
+            # Update Firestore report (using direct update for metadata)
+            doc_ref = firestore_report_service._firestore_db.collection('reports').document(str(report_id))
+            update_data = {
+                'updatedAt': firestore.SERVER_TIMESTAMP
+            }
+            
+            if 'title' in data:
+                update_data['title'] = data['title']
+            if 'description' in data:
+                update_data['description'] = data['description']
+            if 'data_source' in data:
+                update_data['dataSource'] = data['data_source']
+            if 'generation_config' in data:
+                update_data['generationConfig'] = data['generation_config']
+            
+            update_data['generationStatus'] = 'pending'
+            
+            doc_ref.update(update_data)
+            
+            logger.info(f"Firestore report {report_id} edited and regeneration started")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Report updated and regeneration started',
+                'report_id': report_id,
+                'status': 'pending',
+                'source': 'firestore'
+            }), 200
+
+        # Fallback to PostgreSQL (for integer IDs)
+        try:
+            report_id_int = int(report_id)
+            report = Report.query.get(report_id_int)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Report not found'}), 404
+        
         if not report:
             return jsonify({'error': 'Report not found'}), 404
 
@@ -673,13 +866,14 @@ def edit_report(report_id):
         # Start regeneration
         generate_comprehensive_report_task.delay(report.id, report.data_source, report.generation_config)
         
-        logger.info(f"Report {report_id} edited and regeneration started")
+        logger.info(f"PostgreSQL report {report_id} edited and regeneration started")
         
         return jsonify({
             'success': True,
             'message': 'Report updated and regeneration started',
             'report_id': report.id,
-            'status': 'pending'
+            'status': 'pending',
+            'source': 'postgresql'
         }), 200
         
     except Exception as e:
@@ -689,17 +883,99 @@ def edit_report(report_id):
             'error': f'Failed to edit report: {str(e)}'
         }), 500
 
-@reports_bp.route('/<int:report_id>/convert/latex', methods=['POST'])
+@reports_bp.route('/<report_id>/convert/latex', methods=['POST'])
 def convert_latex_report(report_id):
     """
     Convert existing LaTeX file to PDF/DOCX for a report
     POST /api/reports/{report_id}/convert/latex
+    Supports both integer IDs (PostgreSQL) and string IDs (Firestore).
     """
     try:
         user_id = get_current_user_id()
 
-        # Get report
-        report = Report.query.get(report_id)
+        # Try Firestore first (for string IDs)
+        firestore_report = firestore_report_service.get_report(str(report_id))
+        
+        if firestore_report:
+            # Check access
+            user = User.get_by_firebase_uid(user_id)
+            is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+            if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+                return jsonify({'error': 'Access denied'}), 403
+            
+            # Get LaTeX file path from request
+            data = request.get_json()
+            if not data or 'latex_file_path' not in data:
+                return jsonify({'error': 'LaTeX file path required'}), 400
+            
+            latex_file_path = data['latex_file_path']
+            if not os.path.exists(latex_file_path):
+                return jsonify({'error': 'LaTeX file not found'}), 404
+            
+            # Update report status in Firestore
+            doc_ref = firestore_report_service._firestore_db.collection('reports').document(str(report_id))
+            doc_ref.update({'generationStatus': 'generating'})
+
+            try:
+                # Convert LaTeX to PDF
+                pdf_filename = f"{os.path.splitext(os.path.basename(latex_file_path))[0]}.pdf"
+                pdf_path, pdf_size = latex_conversion_service.convert_latex_to_pdf(
+                    latex_file_path, pdf_filename
+                )
+
+                # Convert LaTeX to DOCX
+                docx_filename = f"{os.path.splitext(os.path.basename(latex_file_path))[0]}.docx"
+                docx_path, docx_size = latex_conversion_service.convert_latex_to_docx(
+                    latex_file_path, docx_filename
+                )
+
+                # Update report with new files in Firestore
+                base_url = data.get('base_url', 'http://localhost:5000')
+                doc_ref.update({
+                    'pdfPath': pdf_path,
+                    'docxPath': docx_path,
+                    'fileSize': pdf_size,
+                    'fileFormat': 'pdf',
+                    'downloadUrl': f"{base_url}/api/reports/{report_id}/download/pdf",
+                    'generationStatus': 'completed',
+                    'updatedAt': firestore.SERVER_TIMESTAMP
+                })
+
+                logger.info(f"LaTeX conversion completed for Firestore report {report_id}")
+
+                return jsonify({
+                    'success': True,
+                    'message': 'LaTeX conversion completed successfully',
+                    'report_id': report_id,
+                    'pdf_file_path': pdf_path,
+                    'docx_file_path': docx_path,
+                    'file_sizes': {
+                        'pdf': pdf_size,
+                        'docx': docx_size
+                    },
+                    'download_urls': {
+                        'pdf': f"{base_url}/api/reports/{report_id}/download/pdf",
+                        'docx': f"{base_url}/api/reports/{report_id}/download/docx"
+                    },
+                    'source': 'firestore'
+                }), 200
+                
+            except Exception as e:
+                doc_ref.update({
+                    'generationStatus': 'failed',
+                    'errorMessage': str(e),
+                    'updatedAt': firestore.SERVER_TIMESTAMP
+                })
+                raise
+
+        # Fallback to PostgreSQL (for integer IDs)
+        try:
+            report_id_int = int(report_id)
+            report = Report.query.get(report_id_int)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Report not found'}), 404
+        
         if not report:
             return jsonify({'error': 'Report not found'}), 404
 
@@ -750,7 +1026,7 @@ def convert_latex_report(report_id):
             report.update_status('completed')
             db.session.commit()
 
-            logger.info(f"LaTeX conversion completed for report {report_id}")
+            logger.info(f"LaTeX conversion completed for PostgreSQL report {report_id}")
 
             return jsonify({
                 'success': True,
@@ -765,7 +1041,8 @@ def convert_latex_report(report_id):
                 'download_urls': {
                     'pdf': f"{base_url}/api/reports/{report_id}/download/pdf",
                     'docx': f"{base_url}/api/reports/{report_id}/download/docx"
-                }
+                },
+                'source': 'postgresql'
             }), 200
             
         except Exception as e:
@@ -780,7 +1057,7 @@ def convert_latex_report(report_id):
             'error': f'Failed to convert LaTeX: {str(e)}'
         }), 500
 
-@reports_bp.route('/<int:report_id>/download/<file_type>', methods=['GET'])
+@reports_bp.route('/<report_id>/download/<file_type>', methods=['GET'])
 @firebase_auth_required
 def download_report(report_id, file_type):
     """
@@ -790,6 +1067,8 @@ def download_report(report_id, file_type):
     Uses the generic file_path field and constructs format-specific paths
     based on the requested file_type since the Report model uses a single
     file_path field rather than format-specific fields.
+    
+    Supports both integer IDs (PostgreSQL) and string IDs (Firestore).
     """
     try:
         user_id = get_current_user_id()
@@ -802,8 +1081,25 @@ def download_report(report_id, file_type):
                 'code': 'UNAUTHORIZED'
             }), 401
 
-        # Get report
-        report = Report.query.get(report_id)
+        # Try Firestore first (for string IDs like "138Jz6L4P02QySHobSwq")
+        firestore_report = firestore_report_service.get_report(str(report_id))
+        
+        if firestore_report:
+            # Handle Firestore report download
+            return _handle_firestore_download(firestore_report, user_id, file_type, report_id)
+        
+        # Fallback to PostgreSQL (for integer IDs)
+        try:
+            report_id_int = int(report_id)
+            report = Report.query.get(report_id_int)
+        except (ValueError, TypeError):
+            # Invalid ID format
+            logger.warning(f"Download request with invalid report_id format: {report_id}")
+            return jsonify({
+                'error': 'Invalid report ID format',
+                'code': 'BAD_REQUEST'
+            }), 400
+        
         if not report:
             logger.warning(f"Download request for report {report_id} - report not found")
             return jsonify({
@@ -811,6 +1107,7 @@ def download_report(report_id, file_type):
                 'code': 'NOT_FOUND'
             }), 404
 
+        # Continue with PostgreSQL report handling
         # Check access - allow if user owns the report OR user is admin
         user = User.get_by_firebase_uid(user_id)
         is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
@@ -929,17 +1226,49 @@ def download_report(report_id, file_type):
             'error': f'Failed to download report: {str(e)}'
         }), 500
 
-@reports_bp.route('/<int:report_id>', methods=['GET'])
+@reports_bp.route('/<report_id>', methods=['GET'])
 def get_report(report_id):
     """
     Get a single report by ID
     GET /api/reports/{report_id}
+    Supports both integer IDs (PostgreSQL) and string IDs (Firestore).
     """
     try:
         user_id = get_current_user_id()
 
-        # Get report with user info
-        report = Report.query.get(report_id)
+        # Try Firestore first (for string IDs)
+        firestore_report = firestore_report_service.get_report(str(report_id))
+        
+        if firestore_report:
+            # If user is authenticated, check access
+            if user_id is not None:
+                user = User.get_by_firebase_uid(user_id)
+                is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+                if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+                    return jsonify({'error': 'Access denied'}), 403
+            else:
+                # Unauthenticated users cannot access reports
+                logger.warning(f"Unauthenticated user attempted to access Firestore report {report_id}")
+                return jsonify({
+                    'error': 'Authentication required',
+                    'code': 'UNAUTHORIZED'
+                }), 401
+
+            logger.info(f"Firestore report {report_id} retrieved successfully")
+            return jsonify({
+                'success': True,
+                'report': firestore_report,
+                'source': 'firestore'
+            }), 200
+
+        # Fallback to PostgreSQL (for integer IDs)
+        try:
+            report_id_int = int(report_id)
+            report = Report.query.get(report_id_int)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Report not found'}), 404
+        
         if not report:
             return jsonify({'error': 'Report not found'}), 404
 
@@ -953,7 +1282,7 @@ def get_report(report_id):
                 return jsonify({'error': 'Access denied'}), 403
         else:
             # Unauthenticated users cannot access reports
-            logger.warning(f"Unauthenticated user attempted to access report {report_id}")
+            logger.warning(f"Unauthenticated user attempted to access PostgreSQL report {report_id}")
             return jsonify({
                 'error': 'Authentication required',
                 'code': 'UNAUTHORIZED'
@@ -974,10 +1303,11 @@ def get_report(report_id):
             'download_url': report.download_url
         }
 
-        logger.info(f"Report {report_id} retrieved successfully")
+        logger.info(f"PostgreSQL report {report_id} retrieved successfully")
         return jsonify({
             'success': True,
-            'report': report_data
+            'report': report_data,
+            'source': 'postgresql'
         }), 200
 
     except Exception as e:
