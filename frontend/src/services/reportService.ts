@@ -93,14 +93,18 @@ class ReportService {
       console.log(`📥 Downloading report ${reportId} via proxy endpoint`);
 
       // Check if token exists and is valid
+      // Try both firebaseToken (new auth) and accessToken (legacy auth)
+      const firebaseToken = localStorage.getItem("firebaseToken");
       const accessToken = localStorage.getItem("accessToken");
-      if (!accessToken) {
+      const token = firebaseToken || accessToken;
+
+      if (!token) {
         throw new Error('Authentication required. Please log in again.');
       }
 
       // Check if token is expired
       try {
-        const decoded = JSON.parse(atob(accessToken.split(".")[1]));
+        const decoded = JSON.parse(atob(token.split(".")[1]));
         const currentTime = Math.floor(Date.now() / 1000);
         if (decoded.exp && decoded.exp <= currentTime) {
           console.warn("⚠️ Token expired, attempting to refresh...");
