@@ -514,15 +514,24 @@ def upload_file_for_report():
 
 def _handle_firestore_download(firestore_report: dict, user_id: str, file_type: str, report_id: str, firebase_uid: Optional[str] = None):
     """Handle download for Firestore reports"""
-    # Resolve and validate user identity. This enforces that when both a SQL
-    # user_id and a firebase_uid are provided they refer to the same canonical
-    # user. It also returns a canonical identifier to compare with Firestore
-    # ownership (which may be a string Firestore id).
-    validated_user, canonical_identifier, err_resp, err_status = _resolve_and_validate_user(user_id, firebase_uid)
-    if err_resp:
-        return err_resp, err_status
+    # For Firestore reports, we don't need SQL User lookup - just verify the report owner matches the authenticated user
+    # The firebase_uid from the auth token is the source of truth
+    if not firebase_uid and not user_id:
+        return jsonify({'error': 'Authentication required', 'code': 'UNAUTHORIZED'}), 401
 
-    is_admin = validated_user and validated_user.role == UserRole.ADMIN
+    # Use firebase_uid as the canonical identifier for Firestore reports
+    canonical_identifier = firebase_uid if firebase_uid else user_id
+
+    # Check admin status if we have a User record in SQL
+    is_admin = False
+    try:
+        if firebase_uid:
+            user = User.get_by_firebase_uid(firebase_uid)
+            is_admin = user and user.role == UserRole.ADMIN
+    except Exception as e:
+        # SQL connection errors are non-fatal for Firestore-only operations
+        logger.warning(f"Could not check admin status from SQL (non-fatal): {e}")
+        is_admin = False
 
     # canonical_identifier is the identifier we should compare against the
     # Firestore report's userId (it may be the original Firestore id string or
