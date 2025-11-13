@@ -21,6 +21,7 @@ from ..services.excel_export_service import excel_export_service
 from ..services.latex_conversion_service import latex_conversion_service
 from ..services.report_lifecycle_service import report_lifecycle_service
 from ..services.firestore_template_service import firestore_template_service
+from ..services.firestore_report_service import firestore_report_service
 from ..tasks.enhanced_report_tasks import (
     generate_comprehensive_report_task,
     export_form_to_excel_task,
@@ -106,66 +107,73 @@ def get_all_reports():
         status = request.args.get('status')
         report_type = request.args.get('report_type')
 
-        # SECURITY FIX: Filter by created_by to show only user's own reports
-        # Note: Report.user_id is a property, not a column. The actual column is created_by.
-        query = Report.query.filter_by(created_by=str(user_id))
-
         logger.info(f"Reports query - user_id: {user_id}, filtering by user (created_by={user_id})")
-        
-        if status:
-            query = query.filter_by(status=status)
-        if report_type:
-            query = query.filter_by(report_type=report_type)
-        
-        # Order by most recent first
-        query = query.order_by(Report.created_at.desc())
-        
-        # Paginate
-        reports = query.paginate(
-            page=page, 
-            per_page=per_page, 
-            error_out=False
+
+        # ✅ FIX: Query Firestore instead of PostgreSQL
+        # Get reports from Firestore
+        firestore_reports = firestore_report_service.get_user_reports(
+            user_id=str(user_id),
+            limit=per_page * 10,  # Get more than needed for filtering
+            status_filter=status
         )
-        
-        # Convert to dict
-        reports_data = []
-        for report in reports.items:
-            try:
-                report_dict = report.to_dict() if hasattr(report, 'to_dict') else {
-                    'id': report.id,
-                    'uuid': str(report.id),  # Use ID as uuid fallback
-                    'title': report.title,
-                    'description': report.description,
-                    'status': getattr(report, 'generation_status', 'unknown'),
-                    'report_type': report.report_type,
-                    'file_path': report.file_path,
-                    'file_format': report.file_format,
-                    'created_at': report.created_at.isoformat() if report.created_at else None,
-                    'updated_at': report.created_at.isoformat() if report.created_at else None,
-                    'download_count': report.download_count or 0
-                }
-                reports_data.append(report_dict)
-            except Exception as e:
-                logger.error(f"Error serializing report {report.id}: {str(e)}")
-                # Skip this report if it can't be serialized
+
+        # Apply additional filters if needed
+        filtered_reports = []
+        for report in firestore_reports:
+            # Filter by report_type if specified
+            if report_type and report.get('reportType') != report_type:
                 continue
-        
+
+            # Convert Firestore format to API format
+            report_dict = {
+                'id': report.get('id'),
+                'uuid': report.get('id'),
+                'title': report.get('title', 'Untitled Report'),
+                'description': report.get('description', ''),
+                'status': report.get('generationStatus', 'unknown'),
+                'generation_status': report.get('generationStatus', 'unknown'),
+                'report_type': report.get('reportType', 'automated'),
+                'file_path': report.get('storagePath'),
+                'file_format': report.get('reportType', 'docx').split('_')[-1] if '_' in report.get('reportType', '') else 'docx',
+                'created_at': report.get('createdAt').isoformat() if hasattr(report.get('createdAt'), 'isoformat') else str(report.get('createdAt', '')),
+                'updated_at': report.get('updatedAt').isoformat() if hasattr(report.get('updatedAt'), 'isoformat') else str(report.get('updatedAt', '')),
+                'generated_at': report.get('generatedAt').isoformat() if hasattr(report.get('generatedAt'), 'isoformat') else None,
+                'download_count': report.get('downloadCount', 0),
+                'download_url': report.get('downloadUrl'),
+                'file_size': report.get('fileSize'),
+                'template_id': report.get('templateId'),
+                'program_id': report.get('programId'),
+                'data_source': report.get('dataSource'),
+                'generation_config': report.get('generationConfig'),
+                'error_message': report.get('errorMessage')
+            }
+            filtered_reports.append(report_dict)
+
+        # Manual pagination
+        total = len(filtered_reports)
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_reports = filtered_reports[start_idx:end_idx]
+        total_pages = (total + per_page - 1) // per_page  # Ceiling division
+
         return jsonify({
             'success': True,
-            'reports': reports_data,
+            'reports': paginated_reports,
             'pagination': {
-                'page': reports.page,
-                'pages': reports.pages,
-                'per_page': reports.per_page,
-                'total': reports.total,
-                'has_next': reports.has_next,
-                'has_prev': reports.has_prev
+                'page': page,
+                'pages': total_pages,
+                'per_page': per_page,
+                'total': total,
+                'has_next': page < total_pages,
+                'has_prev': page > 1
             },
-            'total': reports.total
+            'total': total
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error fetching reports: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({
             'success': False,
             'error': f'Failed to fetch reports: {str(e)}'
