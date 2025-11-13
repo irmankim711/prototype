@@ -53,6 +53,7 @@ interface FormDataExporterProps {
 
 interface ExportOptions {
   include_analytics: boolean;
+  use_ai_enhancement: boolean;
   date_range: { start?: string; end?: string; };
   filters: { status: string; submitter_email: string; };
   excel_options: {
@@ -73,6 +74,7 @@ interface ExportResult {
   responses_count?: number; // For Google Forms
   generation_time?: number;
   data_quality_score?: number;
+  ai_enhanced?: boolean;
 }
 
 const FormDataExporter: React.FC<FormDataExporterProps> = ({ 
@@ -83,6 +85,7 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
 }) => {
   const [exportOptions, setExportOptions] = useState<ExportOptions>({
     include_analytics: true,
+    use_ai_enhancement: false,
     date_range: {
       start: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
       end: format(new Date(), 'yyyy-MM-dd'),
@@ -209,6 +212,7 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
     try {
       const exportParams: any = {
         include_analytics: exportOptions.include_analytics,
+        use_ai_enhancement: exportOptions.use_ai_enhancement,
         excel_options: exportOptions.excel_options,
       };
 
@@ -453,6 +457,75 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
                 Excel Options
               </Typography>
               <Grid container spacing={3}>
+                <Grid item xs={12}>
+                  <Box sx={{
+                    p: 2,
+                    borderRadius: '12px',
+                    bgcolor: exportOptions.use_ai_enhancement ? '#EEF2FF' : '#F8FAFC',
+                    border: '2px solid',
+                    borderColor: exportOptions.use_ai_enhancement ? '#6366F1' : '#E2E8F0',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={exportOptions.use_ai_enhancement}
+                          onChange={(e) => handleExportOptionChange('use_ai_enhancement', '', e.target.checked)}
+                          sx={{
+                            color: '#6366F1',
+                            '&.Mui-checked': { color: '#6366F1' }
+                          }}
+                        />
+                      }
+                      label={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography sx={{ fontWeight: 600, color: '#1E293B' }}>
+                            🤖 AI-Enhanced Excel Export
+                          </Typography>
+                          <Chip
+                            label="BETA"
+                            size="small"
+                            sx={{
+                              bgcolor: '#6366F1',
+                              color: 'white',
+                              fontWeight: 700,
+                              fontSize: '0.7rem'
+                            }}
+                          />
+                        </Box>
+                      }
+                    />
+                    <Typography variant="body2" sx={{ color: '#64748B', ml: 4, mt: 0.5 }}>
+                      Use Claude AI to analyze your data and create professional Excel reports with intelligent formatting,
+                      dynamic charts, AI-generated insights, and data visualizations.
+                    </Typography>
+                    {exportOptions.use_ai_enhancement && (
+                      <Box sx={{ ml: 4, mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Chip
+                          icon={<CheckCircleOutlineIcon sx={{ fontSize: '1rem' }} />}
+                          label="Smart Formatting"
+                          size="small"
+                          variant="outlined"
+                          sx={{ borderColor: '#6366F1', color: '#6366F1' }}
+                        />
+                        <Chip
+                          icon={<BarChartIcon sx={{ fontSize: '1rem' }} />}
+                          label="Auto Charts"
+                          size="small"
+                          variant="outlined"
+                          sx={{ borderColor: '#6366F1', color: '#6366F1' }}
+                        />
+                        <Chip
+                          icon={<AssessmentOutlinedIcon sx={{ fontSize: '1rem' }} />}
+                          label="AI Insights"
+                          size="small"
+                          variant="outlined"
+                          sx={{ borderColor: '#6366F1', color: '#6366F1' }}
+                        />
+                      </Box>
+                    )}
+                  </Box>
+                </Grid>
                 <Grid item xs={12} md={6}>
                   <FormControlLabel
                     control={
@@ -592,6 +665,18 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
                       <Typography sx={{ fontWeight: 600, color: '#166534' }}>
                         Export completed successfully!
                       </Typography>
+                      {exportResult.ai_enhanced && (
+                        <Chip
+                          label="AI Enhanced"
+                          size="small"
+                          sx={{
+                            bgcolor: '#6366F1',
+                            color: 'white',
+                            fontWeight: 700,
+                            fontSize: '0.7rem'
+                          }}
+                        />
+                      )}
                     </Box>
                     <Grid container spacing={2} sx={{ mb: 2 }}>
                       <Grid item xs={6} sm={3}>

@@ -28,6 +28,7 @@ import io
 import base64
 from collections import Counter
 from sqlalchemy import func, desc
+from firebase_admin import firestore
 
 logger = logging.getLogger(__name__)
 
@@ -1262,38 +1263,125 @@ class AutomatedReportSystem:
         doc.build(story)
         return file_path
 
-    def _save_google_forms_report_record(self, report_data: Dict[str, Any], file_path: str, 
+    def _save_google_forms_report_record(self, report_data: Dict[str, Any], file_path: str,
                                        user_id: int, form_id: str) -> Any:
-        """Save Google Forms report record to database"""
+        """Save Google Forms report record to database and Firestore"""
         try:
-            # Create new report record
-            report = Report(
+            from ..services.firestore_report_service import firestore_report_service
+
+            # Determine file format from extension
+            file_ext = os.path.splitext(file_path)[1].lower().replace('.', '')
+            file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+
+            # Create report in Firestore first for better cloud integration
+            report_id = firestore_report_service.create_report(
+                user_id=str(user_id),
                 title=report_data['title'],
-                user_id=user_id,
                 description=f"Automated report for Google Form: {report_data['form_title']}",
+                report_type='google_forms_automated',
                 template_id='google_forms_automated',
-                data={
+                data_source={
+                    'form_id': form_id,
+                    'form_title': report_data['form_title'],
+                    'total_responses': report_data['total_responses'],
+                },
+                generation_config={
+                    'source': 'google_forms',
+                    'form_id': form_id
+                },
+                generated_data={
                     'form_id': form_id,
                     'form_title': report_data['form_title'],
                     'total_responses': report_data['total_responses'],
                     'analysis_summary': report_data['response_analysis'],
                     'insights_count': len(report_data['insights']),
                     'charts_count': len(report_data['charts'])
-                },
-                status='completed',
-                output_url=file_path
+                }
             )
-            
-            db.session.add(report)
-            db.session.commit()
-            
-            logger.info(f"Saved Google Forms report record: {report.id}")
-            return report
-            
+
+            if not report_id:
+                logger.error("Failed to create report in Firestore, falling back to PostgreSQL only")
+                # Fallback to PostgreSQL only
+                report = Report(
+                    title=report_data['title'],
+                    user_id=user_id,
+                    description=f"Automated report for Google Form: {report_data['form_title']}",
+                    template_id='google_forms_automated',
+                    data={
+                        'form_id': form_id,
+                        'form_title': report_data['form_title'],
+                        'total_responses': report_data['total_responses'],
+                        'analysis_summary': report_data['response_analysis'],
+                        'insights_count': len(report_data['insights']),
+                        'charts_count': len(report_data['charts'])
+                    },
+                    status='completed',
+                    output_url=file_path
+                )
+                db.session.add(report)
+                db.session.commit()
+                logger.info(f"Saved Google Forms report record to PostgreSQL: {report.id}")
+                return report
+
+            # Update Firestore report with file paths (format-specific)
+            doc_ref = firestore_report_service._firestore_db.collection('reports').document(report_id)
+            update_data = {
+                'generationStatus': 'completed',
+                'generatedAt': firestore.SERVER_TIMESTAMP,
+                'fileSize': file_size,
+                'fileFormat': file_ext,
+                'filePath': file_path,  # Generic path
+            }
+
+            # Set format-specific path based on file extension
+            if file_ext == 'pdf':
+                update_data['pdfPath'] = file_path
+            elif file_ext == 'docx':
+                update_data['docxPath'] = file_path
+            elif file_ext in ['xlsx', 'xls']:
+                update_data['excelPath'] = file_path
+
+            doc_ref.update(update_data)
+
+            logger.info(f"Saved Google Forms report to Firestore: {report_id} with {file_ext} file")
+
+            # Create a minimal Report object for return compatibility
+            class FirestoreReportProxy:
+                def __init__(self, report_id):
+                    self.id = report_id
+
+            return FirestoreReportProxy(report_id)
+
         except Exception as e:
             logger.error(f"Error saving Google Forms report record: {e}")
-            db.session.rollback()
-            raise
+            import traceback
+            logger.error(traceback.format_exc())
+            # Try PostgreSQL fallback
+            try:
+                report = Report(
+                    title=report_data['title'],
+                    user_id=user_id,
+                    description=f"Automated report for Google Form: {report_data['form_title']}",
+                    template_id='google_forms_automated',
+                    data={
+                        'form_id': form_id,
+                        'form_title': report_data['form_title'],
+                        'total_responses': report_data['total_responses'],
+                        'analysis_summary': report_data['response_analysis'],
+                        'insights_count': len(report_data['insights']),
+                        'charts_count': len(report_data['charts'])
+                    },
+                    status='completed',
+                    output_url=file_path
+                )
+                db.session.add(report)
+                db.session.commit()
+                logger.info(f"Fallback: Saved Google Forms report to PostgreSQL: {report.id}")
+                return report
+            except Exception as fallback_error:
+                logger.error(f"Fallback also failed: {fallback_error}")
+                db.session.rollback()
+                raise
 
 # Create global instance
 automated_report_system = AutomatedReportSystem()

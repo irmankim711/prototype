@@ -552,6 +552,7 @@ def _handle_firestore_download(firestore_report: dict, user_id: str, file_type: 
     file_path = None
     filename = None
 
+    # Try format-specific path first
     if file_type == 'pdf' and firestore_report.get('pdfPath'):
         file_path = firestore_report.get('pdfPath')
         filename = f"{firestore_report.get('title', 'report').replace(' ', '_')}.pdf"
@@ -561,6 +562,19 @@ def _handle_firestore_download(firestore_report: dict, user_id: str, file_type: 
     elif file_type == 'excel' and firestore_report.get('excelPath'):
         file_path = firestore_report.get('excelPath')
         filename = f"{firestore_report.get('title', 'report').replace(' ', '_')}.xlsx"
+
+    # Fallback: Check generic filePath for legacy reports
+    if not file_path:
+        generic_path = firestore_report.get('filePath') or firestore_report.get('storagePath')
+        if generic_path:
+            # Check if the file extension matches what was requested
+            file_ext = os.path.splitext(generic_path)[1].lower().replace('.', '')
+            if (file_type == 'pdf' and file_ext == 'pdf') or \
+               (file_type == 'docx' and file_ext == 'docx') or \
+               (file_type == 'excel' and file_ext in ['xlsx', 'xls']):
+                file_path = generic_path
+                filename = f"{firestore_report.get('title', 'report').replace(' ', '_')}.{file_ext}"
+                logger.info(f"Using generic filePath for legacy report {report_id}: {file_path}")
 
     if not file_path or not os.path.exists(file_path):
         logger.error(f"File not found for Firestore report {report_id} type {file_type}. Checked path: {file_path}")

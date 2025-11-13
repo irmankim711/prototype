@@ -58,8 +58,9 @@ class GoogleFormsExcelService:
             include_analytics = options.get('include_analytics', True)
             excel_options = options.get('excel_options', {})
             max_responses = options.get('max_responses', 1000)
+            use_ai_enhancement = options.get('use_ai_enhancement', False)
 
-            logger.info(f"Starting Google Forms export for form {form_id} by user {user_id}")
+            logger.info(f"Starting Google Forms export for form {form_id} by user {user_id} (AI Enhanced: {use_ai_enhancement})")
 
             # Get form responses with analysis
             form_data = google_forms_service.get_form_responses_for_automated_report(
@@ -78,6 +79,19 @@ class GoogleFormsExcelService:
                 responses = responses[:max_responses]
                 logger.warning(f"Limited export to {max_responses} responses out of {len(form_data.get('responses', []))}")
 
+            # Use AI-enhanced export if requested
+            if use_ai_enhancement:
+                try:
+                    return self._export_with_ai_enhancement(
+                        user_id, form_id, responses, form_info, analysis,
+                        excel_options, include_analytics, start_time
+                    )
+                except ExportError as e:
+                    # Log the AI enhancement failure and fall back to standard export
+                    logger.warning(f"AI enhancement failed, falling back to standard export: {str(e)}")
+                    # Continue with standard export below
+
+            # Standard export (existing code)
             # Generate filename and create workbook
             filename = self.generate_timestamp_filename("google_forms_export", form_info.get('title'))
             file_path = os.path.join(self.upload_folder, filename)
@@ -126,7 +140,8 @@ class GoogleFormsExcelService:
                 'responses_count': len(responses),
                 'generation_time': generation_time,
                 'form_info': form_info,
-                'data_quality_score': self._calculate_data_quality_score(responses)
+                'data_quality_score': self._calculate_data_quality_score(responses),
+                'ai_enhanced': False
             }
 
         except Exception as e:
@@ -463,6 +478,121 @@ class GoogleFormsExcelService:
 
         quality_score = answered_questions / total_questions
         return min(quality_score, 1.0)
+
+    def _export_with_ai_enhancement(
+        self,
+        user_id: str,
+        form_id: str,
+        responses: List[Dict],
+        form_info: Dict,
+        analysis: Dict,
+        excel_options: Dict,
+        include_analytics: bool,
+        start_time: float
+    ) -> Dict[str, Any]:
+        """
+        Export Google Form with AI-enhanced Excel formatting
+
+        Args:
+            user_id: User identifier (for logging and tracking)
+            form_id: Google Form ID being exported
+            responses: List of form responses
+            form_info: Form metadata
+            analysis: Pre-computed analysis from Google Forms service (available for future use)
+            excel_options: Export configuration options
+            include_analytics: Whether to include analytics sheet
+            start_time: Export start timestamp
+
+        Returns:
+            Dict containing export result with file paths and metadata
+        """
+        try:
+            # Import AI Excel service
+            from app.services.ai_enhanced_excel_service import ai_excel_service
+
+            logger.info(f"User {user_id} initiating AI-enhanced Excel generation for form {form_id}")
+
+            # Note: The 'analysis' parameter contains pre-computed insights from Google Forms service
+            # It's kept for potential future enhancements where we can pass existing analysis to AI
+            # Currently, the AI service performs its own analysis via Claude API
+
+            # Convert Google Forms responses to flat data structure for AI service
+            data = []
+            for response in responses:
+                flat_response = {
+                    'Response ID': response.get('response_id', ''),
+                    'Submission Time': response.get('create_time', ''),
+                    'Last Modified': response.get('last_submitted_time', ''),
+                }
+
+                # Add all answer fields
+                answers = response.get('answers', {})
+                for question, answer in answers.items():
+                    # Convert lists/dicts to strings
+                    if isinstance(answer, list):
+                        flat_response[question] = ', '.join([str(item) for item in answer if item])
+                    elif isinstance(answer, dict):
+                        flat_response[question] = json.dumps(answer, ensure_ascii=False)
+                    else:
+                        flat_response[question] = str(answer) if answer else ''
+
+                data.append(flat_response)
+
+            # Prepare title with form info
+            title = form_info.get('title', 'Google Form Responses')
+
+            # Prepare AI enhancement options
+            ai_options = {
+                'include_summary': include_analytics,
+                'include_charts': excel_options.get('include_charts', True),
+                'include_pivot': excel_options.get('include_pivot', False),
+            }
+
+            # Generate AI-enhanced Excel
+            file_path, file_size = ai_excel_service.generate_enhanced_excel(
+                data=data,
+                title=title,
+                options=ai_options
+            )
+
+            # Calculate metrics
+            generation_time = time.time() - start_time
+
+            # Extract filename from path
+            filename = os.path.basename(file_path)
+
+            # Move file to export directory if needed
+            target_path = os.path.join(self.upload_folder, filename)
+            if file_path != target_path:
+                import shutil
+                shutil.move(file_path, target_path)
+                file_path = target_path
+
+            # Generate download URL
+            download_url = f"/api/forms/google-forms/{form_id}/download-excel/{filename}"
+
+            logger.info(f"AI-enhanced Google Forms Excel export completed: {file_path} ({file_size} bytes)")
+
+            return {
+                'success': True,
+                'file_path': file_path,
+                'filename': filename,
+                'download_url': download_url,
+                'file_size': file_size,
+                'responses_count': len(responses),
+                'generation_time': generation_time,
+                'form_info': form_info,
+                'data_quality_score': self._calculate_data_quality_score(responses),
+                'ai_enhanced': True
+            }
+
+        except ImportError as e:
+            logger.exception(f"AI Excel service not available for user {user_id}, form {form_id}: {str(e)}")
+            raise ExportError("AI enhancement service not available")
+        except Exception as e:
+            logger.exception(f"Error in AI-enhanced export for user {user_id}, form {form_id}")
+            # Re-raise to allow caller to handle fallback
+            raise ExportError(f"AI-enhanced export failed: {str(e)}")
 
 # Global instance
 google_forms_excel_service = GoogleFormsExcelService()

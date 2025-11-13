@@ -452,9 +452,12 @@ def export_google_form_to_excel(form_id: str):
         export_options = {
             'include_analytics': data.get('include_analytics', True),
             'date_range': data.get('date_range', {}),
+            'use_ai_enhancement': data.get('use_ai_enhancement', False),
             'excel_options': data.get('excel_options', {
                 'include_form_schema': True,
                 'include_submission_metadata': True,
+                'include_charts': data.get('include_charts', True),
+                'include_pivot': data.get('include_pivot', False),
                 'formatting': 'professional',
                 'compression': True
             }),
@@ -491,11 +494,12 @@ def export_google_form_to_excel(form_id: str):
             'file_size': export_result.get('file_size', 0),
             'responses_count': export_result.get('responses_count', 0),
             'generation_time': export_result.get('generation_time', 0),
-            'form_info': export_result.get('form_info', {})
+            'form_info': export_result.get('form_info', {}),
+            'ai_enhanced': export_result.get('ai_enhanced', False)
         })
 
     except Exception as e:
-        logger.error(f"Error exporting Google Form {form_id} to Excel: {e}")
+        logger.exception(f"Error exporting Google Form {form_id} to Excel")
         return jsonify({
             'success': False,
             'error': 'Internal server error'
