@@ -4233,7 +4233,7 @@ def update_report(report_id):
 
         # Check access - allow if user owns the report OR user is admin
         user = User.query.get(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
 
         # Support both created_by and user_id fields for compatibility
         report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
@@ -4306,7 +4306,7 @@ def get_report(report_id):
 
         # Check access - allow if user owns the report OR user is admin
         user = User.query.get(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
 
         # Support both created_by and user_id fields for compatibility
         report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
@@ -4439,7 +4439,7 @@ def delete_report(report_id):
 
         # Check access - allow if user owns the report OR user is admin
         user = User.query.get(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
 
         # Support both created_by and user_id fields for compatibility
         report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
@@ -4490,7 +4490,7 @@ def preview_report(report_id):
 
         # Check access - allow if user owns the report OR user is admin
         user = User.query.get(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
 
         # Support both created_by and user_id fields for compatibility
         report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
@@ -4572,30 +4572,42 @@ def download_report_pdf(report_id):
                 'code': 'NOT_FOUND'
             }), 404
 
+        logger.info(f"📋 Report details: created_by={report.created_by}, user_id property={report.user_id}")
+
         # Check access - allow if user owns the report OR user is admin
         user = User.query.get(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
-
-        # Support both created_by and user_id fields for compatibility
-        report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+        is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
         
-        # Normalize IDs for comparison (handle both int and string)
-        try:
-            normalized_owner = int(report_owner) if report_owner else None
-            normalized_user = int(user_id) if user_id else None
-        except (ValueError, TypeError):
-            normalized_owner = str(report_owner) if report_owner else None
-            normalized_user = str(user_id) if user_id else None
-        
-        logger.info(f"📋 Access check: report_owner={report_owner} (normalized={normalized_owner}), user_id={user_id} (normalized={normalized_user}), is_admin={is_admin}")
+        logger.info(f"📋 Current user: {user_id}, is_admin={is_admin}, role={user.role if user else 'user_not_found'}")
 
-        if normalized_owner != normalized_user and not is_admin:
-            logger.warning(f"❌ Access denied: User {user_id} trying to download report owned by {report_owner}")
-            return jsonify({
-                'error': 'Access denied - you do not have permission to download this report',
-                'code': 'INSUFFICIENT_PERMISSIONS',
-                'details': f'Report owner: {report_owner}, Current user: {user_id}'
-            }), 403
+        # Get report owner - use created_by field directly
+        report_owner = report.created_by
+        
+        logger.info(f"📋 Comparing report_owner={report_owner} with user_id={user_id}")
+        
+        # If report_owner is None or empty, allow download for now (backwards compat)
+        if not report_owner:
+            logger.warning(f"⚠️ Report {report_id} has no owner set, allowing download")
+        else:
+            # Normalize IDs for comparison (handle both int and string)
+            try:
+                normalized_owner = int(report_owner) if report_owner else None
+                normalized_user = int(user_id) if user_id else None
+            except (ValueError, TypeError):
+                normalized_owner = str(report_owner) if report_owner else None
+                normalized_user = str(user_id) if user_id else None
+            
+            logger.info(f"📋 Normalized: owner={normalized_owner}, user={normalized_user}")
+
+            if normalized_owner != normalized_user and not is_admin:
+                logger.warning(f"❌ Access denied: User {user_id} trying to download report owned by {report_owner}")
+                return jsonify({
+                    'error': 'Access denied - you do not have permission to download this report',
+                    'code': 'INSUFFICIENT_PERMISSIONS',
+                    'details': f'Report owner: {report_owner}, Current user: {user_id}'
+                }), 403
+            else:
+                logger.info(f"✅ Access granted for user {user_id} to download report")
 
         # Check if PDF file exists
         if not report.pdf_file_path:
@@ -4723,26 +4735,34 @@ def download_report_docx(report_id):
         user = User.query.get(user_id)
         is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
 
-        # Support both created_by and user_id fields for compatibility
-        report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+        # Get report owner - use created_by field directly
+        report_owner = report.created_by
         
-        # Normalize IDs for comparison (handle both int and string)
-        try:
-            normalized_owner = int(report_owner) if report_owner else None
-            normalized_user = int(user_id) if user_id else None
-        except (ValueError, TypeError):
-            normalized_owner = str(report_owner) if report_owner else None
-            normalized_user = str(user_id) if user_id else None
+        logger.info(f"📋 Report owner check: report_owner={report_owner}, user_id={user_id}")
         
-        logger.info(f"📋 PostgreSQL access check: report_owner={report_owner} (normalized={normalized_owner}), user_id={user_id} (normalized={normalized_user}), is_admin={is_admin}")
+        # If report_owner is None or empty, allow download for now (backwards compat)
+        if not report_owner:
+            logger.warning(f"⚠️ Report {report_id} has no owner set, allowing download")
+        else:
+            # Normalize IDs for comparison (handle both int and string)
+            try:
+                normalized_owner = int(report_owner) if report_owner else None
+                normalized_user = int(user_id) if user_id else None
+            except (ValueError, TypeError):
+                normalized_owner = str(report_owner) if report_owner else None
+                normalized_user = str(user_id) if user_id else None
+            
+            logger.info(f"📋 Normalized: owner={normalized_owner}, user={normalized_user}")
 
-        if normalized_owner != normalized_user and not is_admin:
-            logger.warning(f"❌ Access denied: User {user_id} trying to download report owned by {report_owner}")
-            return jsonify({
-                'error': 'Access denied - you do not have permission to download this report',
-                'code': 'INSUFFICIENT_PERMISSIONS',
-                'details': f'Report owner: {report_owner}, Current user: {user_id}'
-            }), 403
+            if normalized_owner != normalized_user and not is_admin:
+                logger.warning(f"❌ Access denied: User {user_id} trying to download report owned by {report_owner}")
+                return jsonify({
+                    'error': 'Access denied - you do not have permission to download this report',
+                    'code': 'INSUFFICIENT_PERMISSIONS',
+                    'details': f'Report owner: {report_owner}, Current user: {user_id}'
+                }), 403
+            else:
+                logger.info(f"✅ Access granted for user {user_id}")
 
         # Check if DOCX file exists
         if not report.docx_file_path:
@@ -4797,26 +4817,34 @@ def download_report_excel(report_id):
         user = User.query.get(user_id)
         is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
 
-        # Support both created_by and user_id fields for compatibility
-        report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+        # Get report owner - use created_by field directly
+        report_owner = report.created_by
         
-        # Normalize IDs for comparison (handle both int and string)
-        try:
-            normalized_owner = int(report_owner) if report_owner else None
-            normalized_user = int(user_id) if user_id else None
-        except (ValueError, TypeError):
-            normalized_owner = str(report_owner) if report_owner else None
-            normalized_user = str(user_id) if user_id else None
+        logger.info(f"📋 Report owner check: report_owner={report_owner}, user_id={user_id}")
         
-        logger.info(f"📋 Access check: report_owner={report_owner} (normalized={normalized_owner}), user_id={user_id} (normalized={normalized_user}), is_admin={is_admin}")
+        # If report_owner is None or empty, allow download for now (backwards compat)
+        if not report_owner:
+            logger.warning(f"⚠️ Report {report_id} has no owner set, allowing download")
+        else:
+            # Normalize IDs for comparison (handle both int and string)
+            try:
+                normalized_owner = int(report_owner) if report_owner else None
+                normalized_user = int(user_id) if user_id else None
+            except (ValueError, TypeError):
+                normalized_owner = str(report_owner) if report_owner else None
+                normalized_user = str(user_id) if user_id else None
+            
+            logger.info(f"📋 Normalized: owner={normalized_owner}, user={normalized_user}")
 
-        if normalized_owner != normalized_user and not is_admin:
-            logger.warning(f"❌ Access denied: User {user_id} trying to download report owned by {report_owner}")
-            return jsonify({
-                'error': 'Access denied - you do not have permission to download this report',
-                'code': 'INSUFFICIENT_PERMISSIONS',
-                'details': f'Report owner: {report_owner}, Current user: {user_id}'
-            }), 403
+            if normalized_owner != normalized_user and not is_admin:
+                logger.warning(f"❌ Access denied: User {user_id} trying to download report owned by {report_owner}")
+                return jsonify({
+                    'error': 'Access denied - you do not have permission to download this report',
+                    'code': 'INSUFFICIENT_PERMISSIONS',
+                    'details': f'Report owner: {report_owner}, Current user: {user_id}'
+                }), 403
+            else:
+                logger.info(f"✅ Access granted for user {user_id}")
 
         # Check if Excel file exists
         if not report.excel_file_path:
@@ -5074,7 +5102,7 @@ def get_report_content(report_id):
 
         # Check access - allow if user owns the report OR user is admin
         user = User.query.get(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
 
         # Support both created_by and user_id fields for compatibility
         report_owner = report_obj.created_by if hasattr(report_obj, 'created_by') and report_obj.created_by else report_obj.user_id
@@ -5155,7 +5183,7 @@ def update_report_content(report_id):
 
         # Check access - allow if user owns the report OR user is admin
         user = User.query.get(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
 
         # Support both created_by and user_id fields for compatibility
         report_owner = report_obj.created_by if hasattr(report_obj, 'created_by') and report_obj.created_by else report_obj.user_id
