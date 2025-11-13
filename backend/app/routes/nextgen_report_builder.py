@@ -1030,7 +1030,8 @@ def upload_excel_file():
                     data_types=table.get('data_types', []),
                     table_range=table.get('range', ''),
                     data=table_data  # Persist full dataset for downstream consumers
-                )                db.session.add(excel_table)
+                )
+                db.session.add(excel_table)
                 tables_added += 1
 
             # Commit all changes (both ParsedExcelFile and ExcelTable records)

@@ -22,6 +22,9 @@ class SimpleLimiter:
 
 limiter = SimpleLimiter()
 
+# Global flag to track if app initialization is complete
+_app_initialized = False
+
 def create_app(config=None):
     """
     Application factory function that creates and configures the Flask app
@@ -32,6 +35,8 @@ def create_app(config=None):
     Returns:
         Configured Flask application instance
     """
+    global _app_initialized
+    
     app = Flask(__name__)
 
     # Enable CORS for development and production
@@ -73,9 +78,33 @@ def create_app(config=None):
             response.headers.add("Access-Control-Max-Age", "3600")
             return response, 200
 
-    # Register blueprints
+    # Add simple health check endpoint BEFORE registering other blueprints
+    @app.route('/api/health', methods=['GET'])
+    def simple_health():
+        """Lightweight health check endpoint - always responds immediately"""
+        return {'status': 'ok', 'message': 'Server is running'}, 200
+
+    @app.route('/health', methods=['GET'])
+    def health_check():
+        """Health check endpoint without /api prefix"""
+        return {'status': 'ok', 'message': 'Server is running'}, 200
+
+    @app.route('/api/ready', methods=['GET'])
+    def readiness_check():
+        """Readiness check endpoint - only returns ok after full initialization"""
+        global _app_initialized
+        if _app_initialized:
+            return {'status': 'ok', 'message': 'Application is ready'}, 200
+        else:
+            return {'status': 'initializing', 'message': 'Application is starting up'}, 503
+
+    # Register blueprints AFTER health check
     from app.routes import register_blueprints
     register_blueprints(app)
+    
+    # Mark as initialized after blueprints are registered
+    _app_initialized = True
+    app.logger.info("✅ Application initialization complete")
 
     return app
 

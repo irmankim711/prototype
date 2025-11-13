@@ -27,13 +27,14 @@ logger = logging.getLogger(__name__)
 class FirebaseAuthManager:
     """Firebase Authentication Manager with robust initialization and error handling"""
     
-    def __init__(self):
+    def __init__(self, skip_startup_retry=True):
         self._initialized = False
         self._initialization_error = None
         self._initialization_attempts = 0
         self._max_attempts = 3
         self._app = None
         self._firestore_db = None  # Firestore client
+        self._skip_startup_retry = skip_startup_retry  # Skip retries during initial load
 
         # Circuit breaker pattern variables
         self._circuit_breaker_open = False
@@ -88,14 +89,20 @@ class FirebaseAuthManager:
             self._log_configuration_status()
             self._initialization_error = error_msg
             self._record_failed_initialization(attempt_start_time, error_msg)
-            
-            # Retry logic for transient failures
+
+            # Skip retries during startup to allow app to start quickly
+            if self._skip_startup_retry:
+                logger.warning("⚠️ Skipping retry during startup - app will start without Firebase")
+                self._initialization_attempts = 0  # Reset for later retry attempts
+                return False
+
+            # Retry logic for transient failures (only when not during startup)
             if self._initialization_attempts < self._max_attempts:
                 retry_delay = 2 ** self._initialization_attempts  # Exponential backoff
                 logger.info(f"🔄 Retrying Firebase initialization in {retry_delay} seconds...")
                 time.sleep(retry_delay)
                 return self._initialize_firebase()
-            
+
             # Max attempts reached - trigger circuit breaker
             self._trigger_circuit_breaker()
             return False
@@ -106,14 +113,21 @@ class FirebaseAuthManager:
             logger.error(f"📋 Stack trace: {traceback.format_exc()}")
             self._initialization_error = error_msg
             self._record_failed_initialization(attempt_start_time, error_msg)
-            
-            # Retry logic for transient failures
+
+            # Skip retries during startup to allow app to start quickly
+            if self._skip_startup_retry:
+                logger.warning("⚠️ Skipping retry during startup - app will start without Firebase")
+                self._initialization_attempts = 0  # Reset for later retry attempts
+                self._initialized = False
+                return False
+
+            # Retry logic for transient failures (only when not during startup)
             if self._initialization_attempts < self._max_attempts and self._is_retryable_error(e):
                 retry_delay = 2 ** self._initialization_attempts  # Exponential backoff
                 logger.info(f"🔄 Retrying Firebase initialization in {retry_delay} seconds...")
                 time.sleep(retry_delay)
                 return self._initialize_firebase()
-            
+
             # Max attempts reached or non-retryable error - trigger circuit breaker
             self._trigger_circuit_breaker()
             self._initialized = False

@@ -2,6 +2,7 @@
 Routes module initialization
 Registers all blueprint modules with the Flask application
 """
+import traceback
 
 def register_blueprints(app):
     """
@@ -246,7 +247,9 @@ def register_blueprints(app):
     except Exception as e:
         app.logger.warning(f"Could not import dashboard: {e}")
 
-    # Health check routes (simple)
+    # Health check routes (simple) - REMOVED (now in app/__init__.py for faster startup)
+    # The /api/health endpoint is registered directly in the Flask app factory
+    # This ensures it's available immediately without waiting for blueprint registration
     try:
         from flask import Blueprint, jsonify
         simple_health_bp = Blueprint('simple_health', __name__)
@@ -266,19 +269,11 @@ def register_blueprints(app):
                 }
             })
 
-        @simple_health_bp.route('/api/health', methods=['GET'])
-        def simple_health():
-            return jsonify({'status': 'ok', 'message': 'Server is running'})
-
-        @simple_health_bp.route('/health', methods=['GET'])
-        def health_check():
-            """Health check endpoint without /api prefix"""
-            return jsonify({'status': 'ok', 'message': 'Server is running'})
-
         @simple_health_bp.route('/api/debug/routes', methods=['GET'])
         def debug_routes():
             """Debug endpoint to show all registered routes - restricted to development"""
             import os
+            from flask import current_app
             
             # Only allow in development environment
             if current_app.config.get('ENV') != 'development' and os.environ.get('FLASK_ENV') != 'development':

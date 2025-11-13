@@ -27,7 +27,7 @@ class FirestoreTemplateService:
     def _initialize_firestore(self):
         """Initialize Firestore client"""
         try:
-            if firebase_auth_manager.is_initialized():
+            if firebase_auth_manager._initialized:
                 self._firestore_db = firebase_auth_manager.get_firestore_db()
                 self._initialized = True
                 logger.info("✅ Firestore Template Service initialized")
