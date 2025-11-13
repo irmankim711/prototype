@@ -194,33 +194,40 @@ class ReportLifecycleService:
             return False  # Assume referenced to be safe
 
     def get_storage_usage(self, user_id: Optional[int] = None) -> Dict[str, Any]:
-        """Get storage usage statistics for reports"""
+        """Get storage usage statistics for reports (from Firestore)"""
         try:
-            # Build base query
-            base_query = Report.query
-            if user_id:
-                base_query = base_query.filter_by(user_id=user_id)
+            # ✅ FIX: Get reports from Firestore instead of PostgreSQL
+            from .firestore_report_service import firestore_report_service
 
-            # Get report counts by status
-            total_reports = base_query.count()
-            completed_reports = base_query.filter_by(generation_status='completed').count()
-            failed_reports = base_query.filter_by(generation_status='failed').count()
-            pending_reports = base_query.filter_by(generation_status='pending').count()
+            # Get all reports for user from Firestore
+            if user_id:
+                firestore_reports = firestore_report_service.get_user_reports(
+                    user_id=str(user_id),
+                    limit=1000  # Get all reports
+                )
+            else:
+                # Get all reports (admin view) - not typically used
+                firestore_reports = []
+
+            # Count reports by status
+            total_reports = len(firestore_reports)
+            completed_reports = sum(1 for r in firestore_reports if r.get('generationStatus') == 'completed')
+            failed_reports = sum(1 for r in firestore_reports if r.get('generationStatus') == 'failed')
+            pending_reports = sum(1 for r in firestore_reports if r.get('generationStatus') == 'pending')
 
             # Calculate total storage used
             total_storage = 0
             report_count = 0
-            
-            for report in base_query.filter(Report.generation_status == 'completed').all():
-                # Use file_size field since specific format file sizes don't exist in database
-                if report.file_size:
-                    total_storage += report.file_size
-                report_count += 1
-            
-            # Get directory sizes
+
+            for report in firestore_reports:
+                if report.get('generationStatus') == 'completed' and report.get('fileSize'):
+                    total_storage += report.get('fileSize', 0)
+                    report_count += 1
+
+            # Get directory sizes (still useful for local file tracking)
             static_dir_size = self._get_directory_size(self.static_dir)
             temp_dir_size = self._get_directory_size(self.temp_dir)
-            
+
             return {
                 'total_reports': total_reports,
                 'completed_reports': completed_reports,
@@ -235,9 +242,11 @@ class ReportLifecycleService:
                 'retention_days': self.retention_days,
                 'next_cleanup_due': self._get_next_cleanup_time()
             }
-            
+
         except Exception as e:
             logger.error(f"Error getting storage usage: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {
                 'error': str(e),
                 'status': 'error'

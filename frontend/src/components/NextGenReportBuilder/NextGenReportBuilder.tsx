@@ -1387,12 +1387,10 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
 
                 // Handle successful report generation from Excel
                 // Check multiple possible ID fields from the backend response
-                const reportId = report?.id 
-                  ?? report?.reportId 
-                  ?? report?.report_id
-                  ?? report?.report?.id
+                const reportId = report?.id
                   ?? report?.reportId
-                  ?? (report?.report && (report.report.id ?? report.report.reportId));
+                  ?? report?.report_id
+                  ?? report?.report?.id;
 
                 // Also check for title
                 const title = report?.title 
@@ -1451,7 +1449,6 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
                   const errorMsg = 'Report generated but preview unavailable - missing report ID';
                   setDataError(errorMsg);
                   setPreviewError(errorMsg);
-                  alert(errorMsg + '\n\nPlease check the browser console for details.');
                 }
               }}
             />

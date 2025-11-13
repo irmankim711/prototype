@@ -986,18 +986,17 @@ def get_report(report_id):
             'error': f'Failed to retrieve report: {str(e)}'
         }), 500
 
-@reports_bp.route('/<int:report_id>', methods=['DELETE'])
+@reports_bp.route('/<report_id>', methods=['DELETE'])
 @firebase_auth_required
 def delete_report(report_id):
     """
-    Delete a report and its files
+    Delete a report and its files (works with both Firestore string IDs and PostgreSQL integer IDs)
     DELETE /api/reports/{report_id}
     """
     try:
         user_id = get_current_user_id()
 
         # Authentication is guaranteed by @firebase_auth_required decorator
-        # This check provides an additional safety layer
         if user_id is None:
             logger.error(f"Authentication failed for delete_report {report_id} - user_id is None despite decorator")
             return jsonify({
@@ -1005,62 +1004,97 @@ def delete_report(report_id):
                 'code': 'UNAUTHORIZED'
             }), 401
 
-        # Get report
-        report = Report.query.get(report_id)
-        if not report:
-            return jsonify({'error': 'Report not found'}), 404
+        # ✅ FIX: Try Firestore first (for string IDs like "TaRUnFkNQfF0m1tFjmvy")
+        firestore_report = firestore_report_service.get_report(str(report_id))
 
-        # Check access - allow if user owns the report OR user is admin
-        user = User.get_by_firebase_uid(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        if firestore_report:
+            # Check access - user must own the report or be admin
+            user = User.get_by_firebase_uid(user_id)
+            is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
-        # Convert both to string for comparison to handle type mismatches
-        if str(report.user_id) != str(user_id) and not is_admin:
-            logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete report {report_id} owned by user {report.user_id}")
-            return jsonify({'error': 'Access denied - you can only delete your own reports'}), 403
+            if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+                logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete Firestore report {report_id} owned by user {firestore_report.get('userId')}")
+                return jsonify({'error': 'Access denied - you can only delete your own reports'}), 403
 
-        # Remove files - try all possible formats based on the base file_path
-        if report.file_path:
-            base_path_without_ext = os.path.splitext(report.file_path)[0]
-            report_dir = os.path.dirname(report.file_path)
+            # Delete from Firestore (this also deletes the file from Firebase Storage)
+            success = firestore_report_service.delete_report(str(report_id), delete_file=True)
 
-            # Try to delete all format variants
-            for ext in ['pdf', 'docx', 'xlsx']:
-                file_path = f"{base_path_without_ext}.{ext}"
-                if os.path.exists(file_path):
-                    try:
-                        os.remove(file_path)
-                        logger.info(f"Deleted file: {file_path}")
-                    except Exception as e:
-                        logger.warning(f"Failed to remove file {file_path}: {str(e)}")
+            if success:
+                logger.info(f"Firestore report {report_id} deleted successfully")
+                return jsonify({
+                    'success': True,
+                    'message': 'Report deleted successfully'
+                }), 200
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to delete report from Firestore'
+                }), 500
 
-            # Also try to find files using glob patterns
-            import glob
-            patterns = [
-                os.path.join(report_dir, f"*{report.id}*"),
-                os.path.join(report_dir, f"*{report.title.replace(' ', '_')}*")
-            ]
-            for pattern in patterns:
-                for file_path in glob.glob(pattern):
-                    try:
-                        os.remove(file_path)
-                        logger.info(f"Deleted file: {file_path}")
-                    except Exception as e:
-                        logger.warning(f"Failed to remove file {file_path}: {str(e)}")
-        
-        # Delete from database
-        db.session.delete(report)
-        db.session.commit()
-        
-        logger.info(f"Report {report_id} deleted successfully")
-        
-        return jsonify({
-            'success': True,
-            'message': 'Report deleted successfully'
-        }), 200
-        
+        # Fallback: Try PostgreSQL (for backward compatibility with integer IDs)
+        try:
+            report_id_int = int(report_id)
+            report = Report.query.get(report_id_int)
+
+            if report:
+                # Check access
+                user = User.get_by_firebase_uid(user_id)
+                is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+                if str(report.user_id) != str(user_id) and not is_admin:
+                    logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete PostgreSQL report {report_id} owned by user {report.user_id}")
+                    return jsonify({'error': 'Access denied - you can only delete your own reports'}), 403
+
+                # Remove files
+                if report.file_path:
+                    base_path_without_ext = os.path.splitext(report.file_path)[0]
+                    report_dir = os.path.dirname(report.file_path)
+
+                    # Try to delete all format variants
+                    for ext in ['pdf', 'docx', 'xlsx']:
+                        file_path = f"{base_path_without_ext}.{ext}"
+                        if os.path.exists(file_path):
+                            try:
+                                os.remove(file_path)
+                                logger.info(f"Deleted file: {file_path}")
+                            except Exception as e:
+                                logger.warning(f"Failed to remove file {file_path}: {str(e)}")
+
+                    # Also try to find files using glob patterns
+                    import glob
+                    patterns = [
+                        os.path.join(report_dir, f"*{report.id}*"),
+                        os.path.join(report_dir, f"*{report.title.replace(' ', '_')}*")
+                    ]
+                    for pattern in patterns:
+                        for file_path in glob.glob(pattern):
+                            try:
+                                os.remove(file_path)
+                                logger.info(f"Deleted file: {file_path}")
+                            except Exception as e:
+                                logger.warning(f"Failed to remove file {file_path}: {str(e)}")
+
+                # Delete from database
+                db.session.delete(report)
+                db.session.commit()
+
+                logger.info(f"PostgreSQL report {report_id} deleted successfully")
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Report deleted successfully'
+                }), 200
+        except ValueError:
+            # Not a valid integer, and not in Firestore either
+            pass
+
+        # Report not found in either Firestore or PostgreSQL
+        return jsonify({'error': 'Report not found'}), 404
+
     except Exception as e:
         logger.error(f"Error deleting report {report_id}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({
             'success': False,
             'error': f'Failed to delete report: {str(e)}'
