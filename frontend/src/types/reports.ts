@@ -5,12 +5,23 @@ export interface Report {
   formId: string;
   formTitle: string;
   title: string;
+  description?: string;
   status: ReportStatus;
+  report_type?: string;
   submissionCount: number;
   createdAt: string;
+  created_at?: string;
   updatedAt: string;
   completedAt?: string;
   filePath?: string;
+  // Multi-format file paths
+  pdf_file_path?: string;
+  docx_file_path?: string;
+  excel_file_path?: string;
+  // File sizes
+  pdf_file_size?: number;
+  docx_file_size?: number;
+  excel_file_size?: number;
   aiInsights?: {
     summary: string;
     trends: string[];
