@@ -68,7 +68,10 @@ class FirestoreReportService:
 
         try:
             report_data = {
-                'userId': user_id,
+                'createdBy': {
+                    'userId': user_id,
+                    'createdAt': firestore.SERVER_TIMESTAMP
+                },
                 'title': title,
                 'description': description,
                 'reportType': report_type,
@@ -214,7 +217,7 @@ class FirestoreReportService:
 
         try:
             query = self._firestore_db.collection('reports')\
-                .where('userId', '==', user_id)\
+                .where('createdBy.userId', '==', user_id)\
                 .where('isActive', '==', True)\
                 .order_by('createdAt', direction=firestore.Query.DESCENDING)\
                 .limit(limit)
