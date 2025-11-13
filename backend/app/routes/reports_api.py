@@ -16,7 +16,7 @@ from typing import Dict, Any
 from firebase_admin import firestore
 
 from .. import db
-from ..decorators import get_current_user_id, firebase_token_optional, firebase_auth_required
+from ..decorators import get_current_user_id, firebase_token_optional, firebase_auth_required, get_firebase_uid
 from ..models import Report, Form, FormSubmission, User, UserRole, ReportTemplate
 from ..services.report_generation_service import report_generation_service
 from ..services.excel_export_service import excel_export_service
@@ -1326,6 +1326,7 @@ def delete_report(report_id):
     """
     try:
         user_id = get_current_user_id()
+        firebase_uid = get_firebase_uid()
 
         # Authentication is guaranteed by @firebase_auth_required decorator
         if user_id is None:
@@ -1340,8 +1341,9 @@ def delete_report(report_id):
 
         if firestore_report:
             # Check access - user must own the report or be admin
-            user = User.get_by_firebase_uid(user_id)
-            is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+            # Use firebase_uid instead of user_id for database lookup
+            user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+            is_admin = user and user.role == UserRole.ADMIN
 
             if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
                 logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete Firestore report {report_id} owned by user {firestore_report.get('userId')}")
@@ -1369,8 +1371,9 @@ def delete_report(report_id):
 
             if report:
                 # Check access
-                user = User.get_by_firebase_uid(user_id)
-                is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+                # Use firebase_uid instead of user_id for database lookup
+                user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+                is_admin = user and user.role == UserRole.ADMIN
 
                 if str(report.user_id) != str(user_id) and not is_admin:
                     logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete PostgreSQL report {report_id} owned by user {report.user_id}")
