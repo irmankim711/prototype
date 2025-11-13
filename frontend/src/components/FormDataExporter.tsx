@@ -111,6 +111,7 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
 
   // Handle export options changes
   const handleExportOptionChange = (section: keyof ExportOptions, key: string, value: any) => {
+    console.log('handleExportOptionChange called:', { section, key, value });
     setExportOptions(prev => {
       const newOptions = { ...prev };
       if (section === 'date_range' && key in prev.date_range) {
@@ -124,6 +125,7 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
       } else if (section === 'use_ai_enhancement') {
         newOptions.use_ai_enhancement = value;
       }
+      console.log('New export options:', newOptions);
       return newOptions;
     });
   };
@@ -472,7 +474,10 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
                       control={
                         <Checkbox
                           checked={exportOptions.use_ai_enhancement}
-                          onChange={(e) => handleExportOptionChange('use_ai_enhancement', '', e.target.checked)}
+                          onChange={(e) => {
+                            console.log('AI Checkbox clicked:', e.target.checked);
+                            handleExportOptionChange('use_ai_enhancement', '', e.target.checked);
+                          }}
                           sx={{
                             color: '#6366F1',
                             '&.Mui-checked': { color: '#6366F1' }
