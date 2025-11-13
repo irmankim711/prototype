@@ -201,10 +201,11 @@ class ReportLifecycleService:
 
             # Get all reports for user from Firestore
             if user_id:
-                firestore_reports = firestore_report_service.get_user_reports(
+                result = firestore_report_service.get_user_reports(
                     user_id=str(user_id),
                     limit=1000  # Get all reports
                 )
+                firestore_reports = result.get('reports', []) if result else []
             else:
                 # Get all reports (admin view) - not typically used
                 firestore_reports = []
