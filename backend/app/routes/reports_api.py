@@ -1226,30 +1226,51 @@ def download_report(report_id, file_type):
 
         # Continue with PostgreSQL report handling
         # Check access - allow if user owns the report OR user is admin
-        user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
-        is_admin = user and user.role == UserRole.ADMIN
+        # Try to resolve a SQL User from the Firebase UID if present. This helps
+        # when the incoming request authenticated via Firestore/ Firebase (user
+        # stored in Firestore) but the report was created and stored in
+        # PostgreSQL using a numeric SQL user id.
+        sql_user = None
+        if firebase_uid:
+            try:
+                sql_user = User.get_by_firebase_uid(firebase_uid)
+            except Exception:
+                sql_user = None
+
+        is_admin = sql_user and sql_user.role == UserRole.ADMIN
 
         # Get report owner - handle both created_by and user_id properties
         report_owner_id = report.user_id  # This uses the property that extracts from created_by
         report_created_by = report.created_by  # Direct field access
 
+        # Determine canonical identifier(s) to compare against report ownership
+        canonical_ids = set()
+        if sql_user:
+            canonical_ids.add(str(sql_user.id))
+        # g.current_user may be a Firestore dict with its own document id
+        current_user_obj = getattr(__import__('flask').g, 'current_user', None)
+        if current_user_obj:
+            if isinstance(current_user_obj, dict):
+                canonical_ids.add(str(current_user_obj.get('id')))
+            else:
+                canonical_ids.add(str(getattr(current_user_obj, 'id', '')))
+        # Also include firebase_uid for comparisons where reports store firebase UIDs
+        if firebase_uid:
+            canonical_ids.add(str(firebase_uid))
+        # Include get_current_user_id() as a last-resort identifier
+        if user_id is not None:
+            canonical_ids.add(str(user_id))
+
         # Check authorization: user must own the report OR be an admin
-        # Handle None values properly
         user_owns_report = False
-        if report_owner_id is not None and user_id is not None:
-            # Both are not None, compare them
-            user_owns_report = str(report_owner_id) == str(user_id)
-        elif report_created_by is not None and user_id is not None:
-            # Fallback: check created_by directly if user_id property returned None
-            # created_by might be a string representation of user_id
-            try:
-                # Try to convert created_by to int for comparison
-                created_by_int = int(report_created_by) if report_created_by.isdigit() else None
-                if created_by_int is not None:
-                    user_owns_report = created_by_int == int(user_id)
-            except (ValueError, TypeError):
-                # If conversion fails, compare as strings
-                user_owns_report = str(report_created_by) == str(user_id)
+        try:
+            if report_owner_id is not None:
+                user_owns_report = str(report_owner_id) in canonical_ids
+            if not user_owns_report and report_created_by is not None:
+                # created_by might be numeric, string id, or firebase UID
+                user_owns_report = str(report_created_by) in canonical_ids
+        except Exception:
+            user_owns_report = False
 
         if not user_owns_report and not is_admin:
             logger.warning(f"Access denied for user {user_id} attempting to download report {report_id} "

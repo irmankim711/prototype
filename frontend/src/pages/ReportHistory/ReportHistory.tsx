@@ -546,35 +546,50 @@ export default function ReportHistory() {
                   Download Options
                 </Typography>
                 <Box sx={{ display: "flex", gap: 1 }}>
-                  {selectedReport.pdf_file_path && (
-                    <Button
-                      startIcon={<PdfIcon />}
-                      onClick={() => handleDownloadReport(selectedReport, 'pdf')}
-                      variant="outlined"
-                      color="error"
-                    >
-                      Download PDF
-                    </Button>
-                  )}
-                  {selectedReport.docx_file_path && (
+                  {/* Google Forms reports only support DOCX */}
+                  {selectedReport.report_type === 'google_forms_automated' ? (
                     <Button
                       startIcon={<DocxIcon />}
                       onClick={() => handleDownloadReport(selectedReport, 'docx')}
-                      variant="outlined"
+                      variant="contained"
                       color="primary"
                     >
                       Download DOCX
                     </Button>
-                  )}
-                  {selectedReport.excel_file_path && (
-                    <Button
-                      startIcon={<ExcelIcon />}
-                      onClick={() => handleDownloadReport(selectedReport, 'excel')}
-                      variant="outlined"
-                      color="success"
-                    >
-                      Download Excel
-                    </Button>
+                  ) : (
+                    <>
+                      {/* Regular reports support multiple formats */}
+                      {selectedReport.pdf_file_path && (
+                        <Button
+                          startIcon={<PdfIcon />}
+                          onClick={() => handleDownloadReport(selectedReport, 'pdf')}
+                          variant="outlined"
+                          color="error"
+                        >
+                          Download PDF
+                        </Button>
+                      )}
+                      {selectedReport.docx_file_path && (
+                        <Button
+                          startIcon={<DocxIcon />}
+                          onClick={() => handleDownloadReport(selectedReport, 'docx')}
+                          variant="outlined"
+                          color="primary"
+                        >
+                          Download DOCX
+                        </Button>
+                      )}
+                      {selectedReport.excel_file_path && (
+                        <Button
+                          startIcon={<ExcelIcon />}
+                          onClick={() => handleDownloadReport(selectedReport, 'excel')}
+                          variant="outlined"
+                          color="success"
+                        >
+                          Download Excel
+                        </Button>
+                      )}
+                    </>
                   )}
                 </Box>
               </Box>

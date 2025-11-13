@@ -442,4 +442,12 @@ def register_blueprints(app):
     except Exception as e:
         app.logger.warning(f"Could not import railway_diagnostics: {e}")
 
+    # Migration routes (admin only)
+    try:
+        from app.routes.migration_routes import migration_bp
+        app.register_blueprint(migration_bp)  # Already has prefix /api/migration
+        app.logger.info("✅ Migration routes registered")
+    except Exception as e:
+        app.logger.warning(f"Could not import migration_routes: {e}")
+
     app.logger.info("🎯 Blueprint registration completed - added missing API routes")
