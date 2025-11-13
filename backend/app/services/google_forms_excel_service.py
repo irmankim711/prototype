@@ -80,6 +80,7 @@ class GoogleFormsExcelService:
                 logger.warning(f"Limited export to {max_responses} responses out of {len(form_data.get('responses', []))}")
 
             # Use AI-enhanced export if requested
+            ai_fallback_reason = None
             if use_ai_enhancement:
                 try:
                     return self._export_with_ai_enhancement(
@@ -88,7 +89,13 @@ class GoogleFormsExcelService:
                     )
                 except ExportError as e:
                     # Log the AI enhancement failure and fall back to standard export
-                    logger.warning(f"AI enhancement failed, falling back to standard export: {str(e)}")
+                    ai_fallback_reason = str(e)
+                    logger.warning(f"AI enhancement failed, falling back to standard export: {ai_fallback_reason}")
+                    # Continue with standard export below
+                except Exception as e:
+                    # Catch any other errors and fall back
+                    ai_fallback_reason = f"Unexpected error: {str(e)}"
+                    logger.error(f"Unexpected AI enhancement error: {ai_fallback_reason}", exc_info=True)
                     # Continue with standard export below
 
             # Standard export (existing code)
@@ -131,7 +138,7 @@ class GoogleFormsExcelService:
 
             logger.info(f"Google Forms Excel export completed: {file_path} ({file_size} bytes)")
 
-            return {
+            result = {
                 'success': True,
                 'file_path': file_path,
                 'filename': filename,
@@ -143,6 +150,14 @@ class GoogleFormsExcelService:
                 'data_quality_score': self._calculate_data_quality_score(responses),
                 'ai_enhanced': False
             }
+
+            # Add warning if AI enhancement was requested but failed
+            if ai_fallback_reason:
+                result['warning'] = f"AI enhancement failed: {ai_fallback_reason}. Standard export generated instead."
+                result['ai_requested_but_failed'] = True
+                logger.warning(f"Returning standard export with AI fallback warning: {ai_fallback_reason}")
+
+            return result
 
         except Exception as e:
             logger.error(f"Error exporting Google Form {form_id} to Excel: {str(e)}")

@@ -667,7 +667,7 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
                     bgcolor: '#F0FDF4',
                     border: '1px solid #BBF7D0'
                   }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
                       <CheckCircleOutlineIcon sx={{ color: '#16A34A' }} />
                       <Typography sx={{ fontWeight: 600, color: '#166534' }}>
                         Export completed successfully!
@@ -685,6 +685,12 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
                         />
                       )}
                     </Box>
+                    {/* Show warning if AI was requested but failed */}
+                    {exportResult.warning && (
+                      <Alert severity="warning" sx={{ mb: 2, borderRadius: '12px' }}>
+                        {exportResult.warning}
+                      </Alert>
+                    )}
                     <Grid container spacing={2} sx={{ mb: 2 }}>
                       <Grid item xs={6} sm={3}>
                         <Typography variant="caption" sx={{ color: '#64748B' }}>
