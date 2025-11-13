@@ -85,6 +85,7 @@ export default function ReportHistory() {
   const [storageUsage, setStorageUsage] = useState<any>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewReportId, setPreviewReportId] = useState<string | null>(null);
+  const [previewReport, setPreviewReport] = useState<Report | null>(null);
 
   const queryClient = useQueryClient();
   const { user, loading: authLoading } = useAuth();
@@ -452,6 +453,7 @@ export default function ReportHistory() {
                               const reportIdString = report.id?.toString() || '0';
                               console.log('👁️ Setting preview report ID:', reportIdString);
                               setPreviewReportId(reportIdString);
+                              setPreviewReport(report); // Store the full report object
                               setPreviewOpen(true);
                             }}
                             disabled={report.status !== 'completed'}
@@ -680,11 +682,15 @@ export default function ReportHistory() {
           onClose={() => {
             setPreviewOpen(false);
             setPreviewReportId(null);
+            setPreviewReport(null);
           }}
           reportId={previewReportId}
           title="Report Preview"
           onDownload={() => {
-            // Handle download if needed
+            // Download the report - default to DOCX format
+            if (previewReport) {
+              handleDownloadReport(previewReport, 'docx');
+            }
           }}
         />
       )}
