@@ -2765,6 +2765,11 @@ def generate_report_from_excel():
                             logger.info(f"✅ File uploaded to Firebase Storage: {download_url}")
                             # Add Firestore info to response
                             report_response['firestore_id'] = firestore_report_id
+                            # If SQL insert did not produce a numeric ID, map the Firestore ID
+                            # into the response `id`/`reportId` so frontend can continue.
+                            if not report_response.get('id'):
+                                report_response['id'] = firestore_report_id
+                                logger.info(f"ℹ️ Mapped Firestore report ID to response.id: {firestore_report_id}")
                             report_response['firebase_download_url'] = download_url
                         else:
                             logger.warning("⚠️ Failed to upload file to Firebase Storage")
@@ -2775,6 +2780,9 @@ def generate_report_from_excel():
                             status='completed'
                         )
                         report_response['firestore_id'] = firestore_report_id
+                        if not report_response.get('id'):
+                            report_response['id'] = firestore_report_id
+                            logger.info(f"ℹ️ Mapped Firestore report ID to response.id: {firestore_report_id}")
                 else:
                     logger.warning("⚠️ Failed to save report to Firestore")
 
