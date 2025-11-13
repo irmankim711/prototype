@@ -4612,7 +4612,10 @@ def download_report_docx(report_id):
                 user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else User.query.get(user_id)
                 is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
-                if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+                # Firestore reports store userId in createdBy.userId
+                report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
+
+                if str(report_owner_id) != str(user_id) and not is_admin:
                     logger.warning(f"Access denied for user {user_id} attempting to download Firestore report {report_id}")
                     return jsonify({
                         'error': 'Access denied - you do not have permission to download this report',
