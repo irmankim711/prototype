@@ -108,7 +108,9 @@ def upload_report_file(report_id):
                 'error': 'Report not found'
             }), 404
 
-        if report.get('userId') != user_id:
+        # Check if user owns the report (support both old and new schema)
+        report_user_id = report.get('userId') or report.get('createdBy', {}).get('userId')
+        if report_user_id != user_id:
             return jsonify({
                 'success': False,
                 'error': 'Unauthorized'
@@ -262,7 +264,9 @@ def get_report_details(report_id):
                 'error': 'Report not found'
             }), 404
 
-        if report.get('userId') != user_id:
+        # Check if user owns the report (support both old and new schema)
+        report_user_id = report.get('userId') or report.get('createdBy', {}).get('userId')
+        if report_user_id != user_id:
             return jsonify({
                 'success': False,
                 'error': 'Unauthorized'
@@ -317,7 +321,9 @@ def download_report(report_id):
                 'error': 'Report not found'
             }), 404
 
-        if report.get('userId') != user_id:
+        # Check if user owns the report (support both old and new schema)
+        report_user_id = report.get('userId') or report.get('createdBy', {}).get('userId')
+        if report_user_id != user_id:
             return jsonify({
                 'success': False,
                 'error': 'Unauthorized'
@@ -395,7 +401,9 @@ def download_report_proxy(report_id):
                 'error': 'Report not found'
             }), 404
 
-        if report.get('userId') != user_id:
+        # Check if user owns the report (support both old and new schema)
+        report_user_id = report.get('userId') or report.get('createdBy', {}).get('userId')
+        if report_user_id != user_id:
             return jsonify({
                 'success': False,
                 'error': 'Unauthorized'
@@ -486,7 +494,9 @@ def delete_report(report_id):
                 'error': 'Report not found'
             }), 404
 
-        if report.get('userId') != user_id:
+        # Check if user owns the report (support both old and new schema)
+        report_user_id = report.get('userId') or report.get('createdBy', {}).get('userId')
+        if report_user_id != user_id:
             return jsonify({
                 'success': False,
                 'error': 'Unauthorized'
