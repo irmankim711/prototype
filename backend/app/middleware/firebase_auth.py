@@ -16,6 +16,7 @@ from pathlib import Path
 from flask import request, jsonify, g, current_app
 import firebase_admin
 from firebase_admin import auth, credentials, firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 from sqlalchemy.exc import IntegrityError
 
 from .. import db
@@ -657,7 +658,7 @@ class FirebaseAuthManager:
         try:
             # Check if user exists by Firebase UID
             users_ref = self._firestore_db.collection('users')
-            query = users_ref.where('firebaseUid', '==', firebase_uid).where('isActive', '==', True).limit(1)
+            query = users_ref.where(filter=FieldFilter('firebaseUid', '==', firebase_uid)).where(filter=FieldFilter('isActive', '==', True)).limit(1)
             docs = list(query.stream())
 
             if docs:

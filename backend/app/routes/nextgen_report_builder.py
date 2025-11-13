@@ -7,6 +7,7 @@ template management, Excel automation, and report generation
 from flask import Blueprint, request, jsonify, send_file, current_app
 from ..decorators import get_current_user_id, get_current_user, firebase_auth_required, get_firebase_uid
 from ..middleware.firebase_auth import firebase_auth_manager
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 from flask_cors import cross_origin
 from datetime import datetime, timedelta
@@ -1874,7 +1875,7 @@ def generate_report_from_excel():
 
                     # Search Firestore by name
                     logger.info(f"🔍 Searching Firestore for template: {template_name}")
-                    firestore_templates = templates_collection.where('name', '==', template_name).where('is_active', '==', True).limit(1).stream()
+                    firestore_templates = templates_collection.where(filter=FieldFilter('name', '==', template_name)).where(filter=FieldFilter('is_active', '==', True)).limit(1).stream()
 
                     for firestore_template in firestore_templates:
                         template_data = firestore_template.to_dict()

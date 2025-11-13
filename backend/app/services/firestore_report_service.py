@@ -10,6 +10,7 @@ from datetime import datetime
 
 from firebase_admin import firestore
 from google.cloud.firestore_v1 import DocumentSnapshot
+from google.cloud.firestore_v1.base_query import FieldFilter
 from .firebase_storage_service import firebase_storage_service
 
 logger = logging.getLogger(__name__)
@@ -325,16 +326,16 @@ class FirestoreReportService:
         try:
             # Build base query with required filters
             query = self._firestore_db.collection('reports')\
-                .where('createdBy.userId', '==', user_id)\
-                .where('isActive', '==', True)
+                .where(filter=FieldFilter('createdBy.userId', '==', user_id))\
+                .where(filter=FieldFilter('isActive', '==', True))
 
             # Add optional status filter
             if status_filter:
-                query = query.where('generationStatus', '==', status_filter)
+                query = query.where(filter=FieldFilter('generationStatus', '==', status_filter))
 
             # Add optional report type filter
             if report_type_filter:
-                query = query.where('reportType', '==', report_type_filter)
+                query = query.where(filter=FieldFilter('reportType', '==', report_type_filter))
 
             # Order by createdAt descending
             query = query.order_by('createdAt', direction=firestore.Query.DESCENDING)

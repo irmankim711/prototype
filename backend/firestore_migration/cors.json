@@ -1,0 +1,14 @@
+[
+  {
+    "origin": ["https://stratosys.com.my", "https://www.stratosys.com.my"],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": [
+      "Content-Type",
+      "Content-Disposition",
+      "Content-Length",
+      "Authorization",
+      "X-Firebase-Storage-Version"
+    ]
+  }
+]

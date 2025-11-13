@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from firebase_admin import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 from ..middleware.firebase_auth import firebase_auth_manager
 
 logger = logging.getLogger(__name__)
@@ -90,7 +91,7 @@ class FirestoreTemplateService:
 
             # Fallback: search by name patterns
             templates_ref = self._firestore_db.collection('templates')
-            query = templates_ref.where('is_active', '==', True)
+            query = templates_ref.where(filter=FieldFilter('is_active', '==', True))
 
             templates = []
             for doc in query.stream():
@@ -151,7 +152,7 @@ class FirestoreTemplateService:
             templates_ref = self._firestore_db.collection('templates')
 
             if active_only:
-                query = templates_ref.where('is_active', '==', True)
+                query = templates_ref.where(filter=FieldFilter('is_active', '==', True))
             else:
                 query = templates_ref
 

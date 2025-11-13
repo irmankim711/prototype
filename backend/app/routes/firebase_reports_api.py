@@ -302,7 +302,9 @@ def get_report_details(report_id):
 def download_report(report_id):
     """
     Download a report file
-    Returns a redirect to the signed URL
+    Returns a redirect to the signed URL (requires CORS configured on Firebase Storage)
+
+    For CORS-free download, use /<report_id>/download-proxy endpoint instead
     """
     try:
         user_id = get_current_user_id()
@@ -359,6 +361,110 @@ def download_report(report_id):
 
     except Exception as e:
         logger.error(f"Error downloading report: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to download report'
+        }), 500
+
+
+@firebase_reports_bp.route('/<report_id>/download-proxy', methods=['GET'])
+@require_auth
+def download_report_proxy(report_id):
+    """
+    Download a report file via backend proxy
+    Use this endpoint if CORS is not configured on Firebase Storage
+
+    This endpoint:
+    1. Downloads the file from Firebase Storage on the backend
+    2. Streams it to the frontend
+    3. Avoids CORS issues since the request stays within same-origin
+
+    Trade-offs:
+    - No CORS issues
+    - Higher backend load and bandwidth usage
+    - Slightly slower than direct download
+    """
+    try:
+        user_id = get_current_user_id()
+
+        report = firestore_report_service.get_report(report_id)
+
+        if not report:
+            return jsonify({
+                'success': False,
+                'error': 'Report not found'
+            }), 404
+
+        if report.get('userId') != user_id:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized'
+            }), 403
+
+        if report.get('generationStatus') != 'completed':
+            return jsonify({
+                'success': False,
+                'error': 'Report not ready for download'
+            }), 400
+
+        storage_path = report.get('storagePath')
+        if not storage_path:
+            return jsonify({
+                'success': False,
+                'error': 'Report file not found'
+            }), 404
+
+        # Download file from Firebase Storage to temporary location
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{storage_path.split('.')[-1]}")
+
+        try:
+            # Download from Firebase Storage
+            success = firebase_storage_service.download_file(
+                storage_path=storage_path,
+                destination_path=temp_file.name
+            )
+
+            if not success:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to download file from storage'
+                }), 500
+
+            # Increment download count
+            firestore_report_service.increment_download_count(report_id)
+
+            # Determine MIME type based on file extension
+            extension = storage_path.split('.')[-1].lower()
+            mime_types = {
+                'pdf': 'application/pdf',
+                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'txt': 'text/plain',
+                'csv': 'text/csv'
+            }
+            mime_type = mime_types.get(extension, 'application/octet-stream')
+
+            # Generate filename
+            filename = f"{report.get('title', 'report')}.{extension}"
+
+            logger.info(f"✅ Report proxied for download: {report_id}")
+
+            # Stream file to frontend
+            return send_file(
+                temp_file.name,
+                mimetype=mime_type,
+                as_attachment=True,
+                download_name=filename
+            )
+
+        except Exception as e:
+            # Clean up temp file on error
+            if os.path.exists(temp_file.name):
+                os.unlink(temp_file.name)
+            raise e
+
+    except Exception as e:
+        logger.error(f"Error proxying report download: {e}")
         return jsonify({
             'success': False,
             'error': 'Failed to download report'
