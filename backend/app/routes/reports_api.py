@@ -527,9 +527,12 @@ def _handle_firestore_download(firestore_report: dict, user_id: str, file_type: 
     # canonical_identifier is the identifier we should compare against the
     # Firestore report's userId (it may be the original Firestore id string or
     # the numeric SQL id depending on the authenticated context)
-    if str(firestore_report.get('userId')) != str(canonical_identifier) and not is_admin:
+    # Firestore reports store userId in createdBy.userId
+    report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
+
+    if str(report_owner_id) != str(canonical_identifier) and not is_admin:
         logger.warning(f"Access denied for user {canonical_identifier} attempting to download Firestore report {report_id} "
-                      f"(owned by {firestore_report.get('userId')})")
+                      f"(owned by {report_owner_id})")
         return jsonify({
             'error': 'Access denied - you do not have permission to download this report',
             'code': 'INSUFFICIENT_PERMISSIONS'
@@ -616,13 +619,16 @@ def get_report_status(report_id):
 
         # Try Firestore first (for string IDs)
         firestore_report = firestore_report_service.get_report(str(report_id))
-        
+
         if firestore_report:
             # Check access
             user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
             is_admin = user and user.role == UserRole.ADMIN
 
-            if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+            # Firestore reports store userId in createdBy.userId
+            report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
+
+            if str(report_owner_id) != str(user_id) and not is_admin:
                 return jsonify({'error': 'Access denied'}), 403
             
             return jsonify({
@@ -690,7 +696,10 @@ def preview_report(report_id):
             user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
             is_admin = user and user.role == UserRole.ADMIN
 
-            if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+            # Firestore reports store userId in createdBy.userId
+            report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
+
+            if str(report_owner_id) != str(user_id) and not is_admin:
                 logger.warning(f"Access denied for user {user_id} attempting to preview Firestore report {report_id}")
                 return jsonify({
                     'error': 'Access denied - you do not have permission to view this report',
@@ -879,9 +888,12 @@ def edit_report(report_id):
             user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
             is_admin = user and user.role == UserRole.ADMIN
 
-            if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+            # Firestore reports store userId in createdBy.userId
+            report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
+
+            if str(report_owner_id) != str(user_id) and not is_admin:
                 return jsonify({'error': 'Access denied'}), 403
-            
+
             # Get updated data
             data = request.get_json()
             if not data:
@@ -1001,9 +1013,12 @@ def convert_latex_report(report_id):
             user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
             is_admin = user and user.role == UserRole.ADMIN
 
-            if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+            # Firestore reports store userId in createdBy.userId
+            report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
+
+            if str(report_owner_id) != str(user_id) and not is_admin:
                 return jsonify({'error': 'Access denied'}), 403
-            
+
             # Get LaTeX file path from request
             data = request.get_json()
             if not data or 'latex_file_path' not in data:
@@ -1347,7 +1362,10 @@ def get_report(report_id):
                 user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
                 is_admin = user and user.role == UserRole.ADMIN
 
-                if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+                # Firestore reports store userId in createdBy.userId
+                report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
+
+                if str(report_owner_id) != str(user_id) and not is_admin:
                     return jsonify({'error': 'Access denied'}), 403
             else:
                 # Unauthenticated users cannot access reports
@@ -1455,8 +1473,11 @@ def delete_report(report_id):
             else:
                 is_admin = current_user and hasattr(current_user, 'role') and current_user.role == UserRole.ADMIN
 
-            if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
-                logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete Firestore report {report_id} owned by user {firestore_report.get('userId')}")
+            # Firestore reports store userId in createdBy.userId
+            report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
+
+            if str(report_owner_id) != str(user_id) and not is_admin:
+                logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete Firestore report {report_id} owned by user {report_owner_id}")
                 return jsonify({'error': 'Access denied - you can only delete your own reports'}), 403
 
             # Delete from Firestore (this also deletes the file from Firebase Storage)
