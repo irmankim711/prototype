@@ -86,38 +86,51 @@ class ReportService {
 
   async downloadReport(reportId: string, fileType: 'pdf' | 'docx' | 'excel' = 'pdf'): Promise<Blob> {
     // For Firestore reports, the backend redirects to Firebase Storage signed URLs
-    // Use a hidden iframe or new tab to avoid navigating away from current page
+    // We need to get the signed URL with auth, then open it directly
     const downloadUrl = `${this.baseURL}/${reportId}/download/${fileType}`;
 
     try {
-      // Make request to get the download URL or blob
+      // Make authenticated request with maxRedirects: 0 to get the redirect URL
       const response = await axiosInstance.get(downloadUrl, {
         maxRedirects: 0,
-        validateStatus: (status) => status >= 200 && status < 400,
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 302,
       });
 
-      // If we got a blob response (SQL database report), return it normally
-      if (response.headers['content-type']?.includes('application')) {
-        return response.data;
-      }
-
-      // If it's a redirect (Firestore report), open in new tab to avoid navigation
-      window.open(downloadUrl, '_blank');
-      return new Blob();
-    } catch (error: any) {
-      // If axios throws on redirect, extract the location header
-      if (error.response?.status === 302) {
-        const redirectUrl = error.response?.headers?.location || error.response?.headers?.Location;
+      // Check if it's a redirect (Firestore report)
+      if (response.status === 302) {
+        const redirectUrl = response.headers.location || response.headers.Location;
         if (redirectUrl) {
-          // Open Firebase Storage signed URL in new tab
+          // Open the signed URL directly (doesn't need auth)
           window.open(redirectUrl, '_blank');
           return new Blob();
         }
       }
 
-      // Fallback: open in new tab
+      // If we got a blob response (SQL database report), return it normally
+      if (response.status === 200 && response.headers['content-type']?.includes('application')) {
+        return response.data;
+      }
+
+      // Fallback: Try to open URL in new tab
+      console.warn('Unexpected response from download endpoint', response);
       window.open(downloadUrl, '_blank');
       return new Blob();
+
+    } catch (error: any) {
+      console.error('Download error:', error);
+
+      // If axios throws on redirect (some versions do), extract the location header
+      if (error.response?.status === 302) {
+        const redirectUrl = error.response?.headers?.location || error.response?.headers?.Location;
+        if (redirectUrl) {
+          // Open Firebase Storage signed URL directly
+          window.open(redirectUrl, '_blank');
+          return new Blob();
+        }
+      }
+
+      // If all else fails, throw the error to show user
+      throw new Error(`Download failed: ${error.message || 'Unknown error'}`);
     }
   }
 
