@@ -85,13 +85,45 @@ class ReportService {
   }
 
   async downloadReport(reportId: string, fileType: 'pdf' | 'docx' | 'excel' = 'pdf'): Promise<Blob> {
-    const response = await axiosInstance.get(
-      `${this.baseURL}/${reportId}/download/${fileType}`,
-      {
-        responseType: "blob",
+    // For Firestore reports, the backend redirects to Firebase Storage signed URLs
+    // We need to get the redirect URL first, then navigate to it directly
+    const downloadUrl = `${this.baseURL}/${reportId}/download/${fileType}`;
+
+    try {
+      // First, make a request to get the redirect URL without following it
+      const response = await axiosInstance.get(downloadUrl, {
+        maxRedirects: 0,
+        validateStatus: (status) => status >= 200 && status < 400, // Accept redirects
+      });
+
+      // If we got a blob response (SQL database report), return it
+      if (response.headers['content-type']?.includes('application')) {
+        return response.data;
       }
-    );
-    return response.data;
+
+      // Otherwise, open the URL directly to trigger the download
+      // The backend will handle the redirect to Firebase Storage
+      window.location.href = downloadUrl;
+      return new Blob();
+    } catch (error: any) {
+      // If axios throws on redirect, try to extract the location header
+      if (error.response?.status === 302 && error.response?.headers?.location) {
+        window.open(error.response.headers.location, '_blank');
+        return new Blob();
+      }
+
+      // For other errors, fall back to direct navigation with auth headers
+      // Create a form and submit it to preserve authentication
+      const form = document.createElement('form');
+      form.method = 'GET';
+      form.action = downloadUrl;
+      form.style.display = 'none';
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+
+      return new Blob();
+    }
   }
 
   async emailReport(reportId: string, emails: string[]): Promise<void> {
