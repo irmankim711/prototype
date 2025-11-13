@@ -534,10 +534,10 @@ class AutomatedReportSystem:
         
         return charts
 
-    def generate_google_forms_automated_report(self, form_id: str, report_config: Dict[str, Any], user_id: int) -> Dict[str, Any]:
+    def generate_google_forms_automated_report(self, form_id: str, report_config: Dict[str, Any], user_id: str) -> Dict[str, Any]:
         """
         Generate automated report from Google Forms responses
-        
+
         Args:
             form_id: Google Forms ID
             report_config: Configuration for report generation

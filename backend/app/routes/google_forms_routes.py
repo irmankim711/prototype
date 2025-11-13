@@ -270,9 +270,19 @@ def get_form_responses(form_id: str):
 def generate_automated_report(form_id: str):
     """Generate automated report from Google Form responses"""
     try:
-        user_id = get_current_user_id()
+        # CRITICAL: For Firestore reports, use Firebase UID as the user identifier
+        # This ensures createdBy.userId matches the authentication token's firebase_uid
+        from ..decorators import get_firebase_uid
+        firebase_uid = get_firebase_uid()
+
+        if not firebase_uid:
+            return jsonify({
+                'success': False,
+                'error': 'Firebase authentication required'
+            }), 401
+
         data = request.get_json() or {}
-        
+
         # Report configuration
         report_config = {
             'format': data.get('format', 'pdf'),  # pdf, docx
@@ -282,17 +292,17 @@ def generate_automated_report(form_id: str):
             'title': data.get('title', ''),
             'description': data.get('description', '')
         }
-        
+
         # Validate format
         if report_config['format'] not in ['pdf', 'docx']:
             return jsonify({
                 'success': False,
                 'error': 'Invalid format. Must be pdf or docx'
             }), 400
-        
-        # Generate the automated report
+
+        # Generate the automated report with Firebase UID
         result = _get_automated_report_system().generate_google_forms_automated_report(
-            form_id, report_config, user_id
+            form_id, report_config, firebase_uid
         )
         
         if not result['success']:
