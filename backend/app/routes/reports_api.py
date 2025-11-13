@@ -11,7 +11,7 @@ import os
 import uuid
 from werkzeug.utils import secure_filename
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from firebase_admin import firestore
 
@@ -78,6 +78,74 @@ def resolve_template_id(generation_config: Dict[str, Any]) -> int:
     
     # Default fallback
     return 1
+
+
+def _resolve_and_validate_user(user_id: Optional[str], firebase_uid: Optional[str]):
+    """
+    Resolve a single canonical User object and a canonical user identifier to use
+    for resource ownership checks.
+
+    Rules:
+    - If `user_id` can be interpreted as an integer, prefer fetching the SQL User by id.
+      If `firebase_uid` is provided, verify it matches the fetched user's `firebase_uid`.
+      If mismatch -> return (None, response, status_code).
+    - If `user_id` is non-numeric (e.g. Firestore string id), and `firebase_uid` is
+      provided, fetch by `firebase_uid` and return that User object while keeping
+      the original string `user_id` for Firestore ownership comparisons.
+    - If only `firebase_uid` is provided, fetch User by `firebase_uid`.
+
+    Returns: (validated_user_or_None, canonical_user_identifier, error_response_or_None, status_code_or_None)
+    """
+    # Try to prefer SQL user lookup when user_id looks like an integer
+    if user_id is not None:
+        try:
+            db_id = int(user_id)
+        except (TypeError, ValueError):
+            db_id = None
+
+        if db_id is not None:
+            # Attempt to load SQL user by numeric id
+            user = User.query.get(db_id)
+            if not user:
+                # No such SQL user
+                # If firebase_uid is present, try to resolve by firebase_uid instead
+                if firebase_uid:
+                    user_by_firebase = User.get_by_firebase_uid(firebase_uid)
+                    if user_by_firebase:
+                        # If firebase resolved to a different SQL id than provided db_id,
+                        # treat as mismatch (possible tampering)
+                        if user_by_firebase.id != db_id:
+                            return None, None, jsonify({'error': 'Unauthorized - identity mismatch', 'code': 'IDENTITY_MISMATCH'}), 403
+                        return user_by_firebase, db_id, None, None
+                    return None, None, jsonify({'error': 'User not found'}), 404
+                return None, None, jsonify({'error': 'User not found'}), 404
+
+            # If a firebase_uid is provided, ensure it matches the SQL user's firebase_uid
+            if firebase_uid and str(user.firebase_uid) != str(firebase_uid):
+                return None, None, jsonify({'error': 'Unauthorized - identity mismatch', 'code': 'IDENTITY_MISMATCH'}), 403
+
+            # Validated SQL user; canonical identifier for resource checks is its numeric id
+            return user, db_id, None, None
+
+        # user_id exists but is non-numeric (likely Firestore user id)
+        if firebase_uid:
+            user = User.get_by_firebase_uid(firebase_uid)
+            if not user:
+                return None, None, jsonify({'error': 'User not found'}), 404
+            # Keep the original string user_id for Firestore ownership comparisons
+            return user, user_id, None, None
+
+        # No firebase_uid to validate; cannot resolve SQL user for a Firestore id
+        return None, None, jsonify({'error': 'User not found'}), 404
+
+    # No user_id provided, fall back to firebase_uid
+    if firebase_uid:
+        user = User.get_by_firebase_uid(firebase_uid)
+        if not user:
+            return None, None, jsonify({'error': 'User not found'}), 404
+        return user, user.id, None, None
+
+    return None, None, jsonify({'error': 'Authentication required'}), 401
 
 # Create blueprint
 reports_bp = Blueprint('reports', __name__, url_prefix='/api/reports')
@@ -190,9 +258,11 @@ def generate_report():
     """
     try:
         user_id = get_current_user_id()
-        user = User.get_by_firebase_uid(user_id)
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
+        firebase_uid = get_firebase_uid()
+        validated_user, _, err_resp, err_status = _resolve_and_validate_user(user_id, firebase_uid)
+        if err_resp:
+            return err_resp, err_status
+        user = validated_user
         
         # Get request data
         data = request.get_json()
@@ -273,7 +343,7 @@ def generate_report():
             program_id=1,  # Default program
             generation_config=data['config'],
             data_source=data['data'],
-            user_id=user_id,  # This sets created_by via the property setter
+            user_id=user.id,  # Use validated user's SQL id
             organization_id=None,  # Set to None to avoid foreign key constraint
             download_count=0,
             view_count=0
@@ -293,7 +363,7 @@ def generate_report():
         # Start background report generation
         generate_comprehensive_report_task.delay(report.id, data['data'], data['config'])
         
-        logger.info(f"Report generation initiated for user {user_id}, report {report.id}")
+        logger.info(f"Report generation initiated for user {user.id}, report {report.id}")
         
         return jsonify({
             'success': True,
@@ -325,9 +395,11 @@ def generate_latex_report():
     """
     try:
         user_id = get_current_user_id()
-        user = User.get_by_firebase_uid(user_id)
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
+        firebase_uid = get_firebase_uid()
+        validated_user, canonical_user_identifier, err_resp, err_status = _resolve_and_validate_user(user_id, firebase_uid)
+        if err_resp:
+            return err_resp, err_status
+        user = validated_user
         
         # Get request data
         data = request.get_json()
@@ -348,7 +420,7 @@ def generate_latex_report():
         # Resolve template_id from generation_config
         template_id = resolve_template_id(data['config'])
         
-        # Create report record
+        # Create report record (associate with validated SQL user if available)
         report = Report(
             title=data['title'],
             description=data.get('description', ''),
@@ -357,7 +429,8 @@ def generate_latex_report():
             template_id=template_id,
             program_id=1,  # Default program
             generation_config=data['config'],
-            data_source=data.get('data', {})
+            data_source=data.get('data', {}),
+            user_id=user.id if user else None
         )
         
         db.session.add(report)
@@ -439,14 +512,23 @@ def upload_file_for_report():
             'details': str(e)
         }), 500
 
-def _handle_firestore_download(firestore_report: dict, user_id: str, file_type: str, report_id: str):
+def _handle_firestore_download(firestore_report: dict, user_id: str, file_type: str, report_id: str, firebase_uid: Optional[str] = None):
     """Handle download for Firestore reports"""
-    # Check access - user must own the report or be admin
-    user = User.get_by_firebase_uid(user_id)
-    is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+    # Resolve and validate user identity. This enforces that when both a SQL
+    # user_id and a firebase_uid are provided they refer to the same canonical
+    # user. It also returns a canonical identifier to compare with Firestore
+    # ownership (which may be a string Firestore id).
+    validated_user, canonical_identifier, err_resp, err_status = _resolve_and_validate_user(user_id, firebase_uid)
+    if err_resp:
+        return err_resp, err_status
 
-    if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
-        logger.warning(f"Access denied for user {user_id} attempting to download Firestore report {report_id} "
+    is_admin = validated_user and validated_user.role == UserRole.ADMIN
+
+    # canonical_identifier is the identifier we should compare against the
+    # Firestore report's userId (it may be the original Firestore id string or
+    # the numeric SQL id depending on the authenticated context)
+    if str(firestore_report.get('userId')) != str(canonical_identifier) and not is_admin:
+        logger.warning(f"Access denied for user {canonical_identifier} attempting to download Firestore report {report_id} "
                       f"(owned by {firestore_report.get('userId')})")
         return jsonify({
             'error': 'Access denied - you do not have permission to download this report',
@@ -516,14 +598,15 @@ def get_report_status(report_id):
     """
     try:
         user_id = get_current_user_id()
+        firebase_uid = get_firebase_uid()
 
         # Try Firestore first (for string IDs)
         firestore_report = firestore_report_service.get_report(str(report_id))
         
         if firestore_report:
             # Check access
-            user = User.get_by_firebase_uid(user_id)
-            is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+            user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+            is_admin = user and user.role == UserRole.ADMIN
 
             if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
                 return jsonify({'error': 'Access denied'}), 403
@@ -545,8 +628,8 @@ def get_report_status(report_id):
             return jsonify({'error': 'Report not found'}), 404
 
         # Check access - allow if user owns the report OR user is admin
-        user = User.get_by_firebase_uid(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+        is_admin = user and user.role == UserRole.ADMIN
 
         # Convert both to string for comparison to handle type mismatches
         if str(report.user_id) != str(user_id) and not is_admin:
@@ -575,6 +658,7 @@ def preview_report(report_id):
     """
     try:
         user_id = get_current_user_id()
+        firebase_uid = get_firebase_uid()
 
         # Ensure user is authenticated (should not be None due to @firebase_auth_required)
         if user_id is None:
@@ -589,8 +673,8 @@ def preview_report(report_id):
         
         if firestore_report:
             # Check access
-            user = User.get_by_firebase_uid(user_id)
-            is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+            user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+            is_admin = user and user.role == UserRole.ADMIN
 
             if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
                 logger.warning(f"Access denied for user {user_id} attempting to preview Firestore report {report_id}")
@@ -640,8 +724,8 @@ def preview_report(report_id):
             }), 404
 
         # Check access - allow if user owns the report OR user is admin
-        user = User.get_by_firebase_uid(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+        is_admin = user and user.role == UserRole.ADMIN
 
         # Get report owner - handle both created_by and user_id properties
         report_owner_id = report.user_id  # This uses the property that extracts from created_by
@@ -771,14 +855,15 @@ def edit_report(report_id):
     """
     try:
         user_id = get_current_user_id()
+        firebase_uid = get_firebase_uid()
 
         # Try Firestore first (for string IDs)
         firestore_report = firestore_report_service.get_report(str(report_id))
         
         if firestore_report:
             # Check access
-            user = User.get_by_firebase_uid(user_id)
-            is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+            user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+            is_admin = user and user.role == UserRole.ADMIN
 
             if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
                 return jsonify({'error': 'Access denied'}), 403
@@ -828,8 +913,8 @@ def edit_report(report_id):
             return jsonify({'error': 'Report not found'}), 404
 
         # Check access - allow if user owns the report OR user is admin
-        user = User.get_by_firebase_uid(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+        is_admin = user and user.role == UserRole.ADMIN
 
         # Convert both to string for comparison to handle type mismatches
         if str(report.user_id) != str(user_id) and not is_admin:
@@ -892,14 +977,15 @@ def convert_latex_report(report_id):
     """
     try:
         user_id = get_current_user_id()
+        firebase_uid = get_firebase_uid()
 
         # Try Firestore first (for string IDs)
         firestore_report = firestore_report_service.get_report(str(report_id))
         
         if firestore_report:
             # Check access
-            user = User.get_by_firebase_uid(user_id)
-            is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+            user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+            is_admin = user and user.role == UserRole.ADMIN
 
             if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
                 return jsonify({'error': 'Access denied'}), 403
@@ -980,8 +1066,8 @@ def convert_latex_report(report_id):
             return jsonify({'error': 'Report not found'}), 404
 
         # Check access - allow if user owns the report OR user is admin
-        user = User.get_by_firebase_uid(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+        is_admin = user and user.role == UserRole.ADMIN
 
         # Convert both to string for comparison to handle type mismatches
         if str(report.user_id) != str(user_id) and not is_admin:
@@ -1072,6 +1158,7 @@ def download_report(report_id, file_type):
     """
     try:
         user_id = get_current_user_id()
+        firebase_uid = get_firebase_uid()
 
         # Ensure user is authenticated (should not be None due to @firebase_auth_required)
         if user_id is None:
@@ -1086,7 +1173,7 @@ def download_report(report_id, file_type):
         
         if firestore_report:
             # Handle Firestore report download
-            return _handle_firestore_download(firestore_report, user_id, file_type, report_id)
+            return _handle_firestore_download(firestore_report, user_id, file_type, report_id, get_firebase_uid())
         
         # Fallback to PostgreSQL (for integer IDs)
         try:
@@ -1109,8 +1196,8 @@ def download_report(report_id, file_type):
 
         # Continue with PostgreSQL report handling
         # Check access - allow if user owns the report OR user is admin
-        user = User.get_by_firebase_uid(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+        is_admin = user and user.role == UserRole.ADMIN
 
         # Get report owner - handle both created_by and user_id properties
         report_owner_id = report.user_id  # This uses the property that extracts from created_by
@@ -1235,6 +1322,7 @@ def get_report(report_id):
     """
     try:
         user_id = get_current_user_id()
+        firebase_uid = get_firebase_uid()
 
         # Try Firestore first (for string IDs)
         firestore_report = firestore_report_service.get_report(str(report_id))
@@ -1242,8 +1330,8 @@ def get_report(report_id):
         if firestore_report:
             # If user is authenticated, check access
             if user_id is not None:
-                user = User.get_by_firebase_uid(user_id)
-                is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+                user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+                is_admin = user and user.role == UserRole.ADMIN
 
                 if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
                     return jsonify({'error': 'Access denied'}), 403
@@ -1274,8 +1362,8 @@ def get_report(report_id):
 
         # If user is authenticated, check access - allow if user owns the report OR user is admin
         if user_id is not None:
-            user = User.get_by_firebase_uid(user_id)
-            is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+            user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+            is_admin = user and user.role == UserRole.ADMIN
 
             # Convert both to string for comparison to handle type mismatches
             if str(report.user_id) != str(user_id) and not is_admin:
