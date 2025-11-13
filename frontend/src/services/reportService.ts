@@ -85,52 +85,62 @@ class ReportService {
   }
 
   async downloadReport(reportId: string, fileType: 'pdf' | 'docx' | 'excel' = 'pdf'): Promise<Blob> {
-    // For Firestore reports, the backend redirects to Firebase Storage signed URLs
-    // We need to get the signed URL with auth, then open it directly
-    const downloadUrl = `${this.baseURL}/${reportId}/download/${fileType}`;
+    // Use the proxy endpoint to avoid CORS issues with Firebase Storage
+    // The backend will fetch from Firebase Storage and stream to frontend
+    const downloadUrl = `${API_BASE_URL}/api/firebase-reports/${reportId}/download-proxy`;
 
     try {
-      // Make authenticated request with maxRedirects: 0 to get the redirect URL
+      console.log(`📥 Downloading report ${reportId} via proxy endpoint`);
+
       const response = await axiosInstance.get(downloadUrl, {
-        maxRedirects: 0,
-        validateStatus: (status) => (status >= 200 && status < 300) || status === 302,
+        responseType: 'blob',
+        headers: {
+          'Accept': 'application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream'
+        }
       });
 
-      // Check if it's a redirect (Firestore report)
-      if (response.status === 302) {
-        const redirectUrl = response.headers.location || response.headers.Location;
-        if (redirectUrl) {
-          // Open the signed URL directly (doesn't need auth)
-          window.open(redirectUrl, '_blank');
-          return new Blob();
+      // Extract filename from Content-Disposition header
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `report-${reportId}.${fileType}`;
+
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
         }
       }
 
-      // If we got a blob response (SQL database report), return it normally
-      if (response.status === 200 && response.headers['content-type']?.includes('application')) {
-        return response.data;
-      }
+      // Create blob URL and trigger download
+      const blob = new Blob([response.data], { type: response.headers['content-type'] });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
 
-      // Fallback: Try to open URL in new tab
-      console.warn('Unexpected response from download endpoint', response);
-      window.open(downloadUrl, '_blank');
-      return new Blob();
+      // Cleanup
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+      }, 100);
+
+      console.log(`✅ Report ${reportId} downloaded successfully as ${filename}`);
+      return blob;
 
     } catch (error: any) {
       console.error('Download error:', error);
 
-      // If axios throws on redirect (some versions do), extract the location header
-      if (error.response?.status === 302) {
-        const redirectUrl = error.response?.headers?.location || error.response?.headers?.Location;
-        if (redirectUrl) {
-          // Open Firebase Storage signed URL directly
-          window.open(redirectUrl, '_blank');
-          return new Blob();
-        }
+      // Provide more detailed error message
+      if (error.response?.status === 404) {
+        throw new Error('Report not found or has been deleted');
+      } else if (error.response?.status === 403) {
+        throw new Error('You do not have permission to download this report');
+      } else if (error.response?.status === 400) {
+        throw new Error('Report is not ready for download yet');
+      } else {
+        throw new Error(`Download failed: ${error.response?.data?.error || error.message || 'Unknown error'}`);
       }
-
-      // If all else fails, throw the error to show user
-      throw new Error(`Download failed: ${error.message || 'Unknown error'}`);
     }
   }
 
