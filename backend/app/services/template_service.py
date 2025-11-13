@@ -228,9 +228,14 @@ class TemplateService:
                     return None
 
                 # Try to find existing database entry for this file-based template
-                # Check by file_path containing the template_id
+                # Check by file_path containing the template_id (with proper escaping)
+                # Escape SQL LIKE wildcard characters to prevent injection
+                escape_char = '\\'
+                escaped_template_id = str(template_id).replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+                pattern = f'%{escaped_template_id}%'
+                
                 template = Template.query.filter(
-                    Template.file_path.like(f'%{template_id}%'),
+                    Template.file_path.like(pattern, escape=escape_char),
                     Template.is_active == True
                 ).first()
 

@@ -80,7 +80,7 @@ class ExcelDataExtractor:
             return extracted_data
 
         except Exception as e:
-            logger.error(f"❌ Error extracting data from Excel: {str(e)}")
+            logger.exception("Error extracting data from Excel")
             raise
 
     def _identify_main_sheet(self, sheets: Dict[str, pd.DataFrame]) -> str:

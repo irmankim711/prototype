@@ -27,15 +27,15 @@ class FirestoreTemplateService:
     def _initialize_firestore(self):
         """Initialize Firestore client"""
         try:
-            if firebase_auth_manager._initialized:
-                self._firestore_db = firebase_auth_manager._firestore_db
+            if firebase_auth_manager.is_initialized():
+                self._firestore_db = firebase_auth_manager.get_firestore_db()
                 self._initialized = True
                 logger.info("✅ Firestore Template Service initialized")
             else:
                 logger.warning("⚠️ Firebase not initialized, Firestore Template Service unavailable")
                 self._initialized = False
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Firestore Template Service: {e}")
+            logger.exception("Failed to initialize Firestore Template Service")
             self._initialized = False
 
     def get_template_by_id(self, template_id: str) -> Optional[Dict[str, Any]]:
@@ -108,10 +108,18 @@ class FirestoreTemplateService:
                 logger.warning("No Puncak Alam templates found")
                 return None
 
+            # Helper function to safely parse version
+            def safe_version_float(version_str):
+                """Safely convert version string to float, returns 0.0 on error"""
+                try:
+                    return float(version_str)
+                except (ValueError, TypeError):
+                    return 0.0
+
             # Sort by version (descending) and updated_at
             templates.sort(
                 key=lambda t: (
-                    float(t.get('version', '0.0')),
+                    safe_version_float(t.get('version', '0.0')),
                     t.get('updated_at', datetime.min)
                 ),
                 reverse=True

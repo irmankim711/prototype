@@ -418,40 +418,41 @@ exports_bp = Blueprint('exports', __name__, url_prefix='/api/exports')
 
 
 @exports_bp.route('/debug/<filename>', methods=['GET'])
+@require_auth  # SECURITY: Require authentication
+@admin_required  # SECURITY: Admin only
 def debug_export_file(filename: str):
     """
-    Debug endpoint to check export file status
+    Debug endpoint to check export file status (admin only, development only)
     GET /api/exports/debug/{filename}
     """
     try:
+        import os as os_module
+        
+        # Only allow in development
+        if current_app.config.get('ENV') != 'development' and os_module.environ.get('FLASK_ENV') != 'development':
+            return jsonify({'error': 'Not Found'}), 404
+        
         export_folder = form_data_export_service.export_folder
         file_path = os.path.join(export_folder, filename)
 
+        # Sanitize response - no absolute paths or directory listings
         debug_info = {
             'filename': filename,
-            'export_folder': export_folder,
-            'file_path': file_path,
-            'absolute_path': os.path.abspath(file_path),
-            'folder_exists': os.path.exists(export_folder),
             'file_exists': os.path.exists(file_path),
-            'cwd': os.getcwd(),
+            'status': 'ok' if os.path.exists(file_path) else 'not_found'
         }
-
-        if os.path.exists(export_folder):
-            debug_info['folder_contents'] = os.listdir(export_folder)
-            debug_info['folder_writable'] = os.access(export_folder, os.W_OK)
 
         if os.path.exists(file_path):
             debug_info['file_size'] = os.path.getsize(file_path)
-            debug_info['file_readable'] = os.access(file_path, os.R_OK)
             debug_info['file_mtime'] = datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat()
 
         return jsonify(debug_info), 200
 
     except Exception as e:
+        logger.error(f"Error in debug_export_file: {str(e)}", exc_info=True)
         return jsonify({
-            'error': str(e),
-            'trace': str(e.__class__.__name__)
+            'error': 'Failed to check file status',
+            'status': 'error'
         }), 500
 
 

@@ -277,7 +277,13 @@ def register_blueprints(app):
 
         @simple_health_bp.route('/api/debug/routes', methods=['GET'])
         def debug_routes():
-            """Debug endpoint to show all registered routes"""
+            """Debug endpoint to show all registered routes - restricted to development"""
+            import os
+            
+            # Only allow in development environment
+            if current_app.config.get('ENV') != 'development' and os.environ.get('FLASK_ENV') != 'development':
+                return jsonify({'error': 'Not Found'}), 404
+            
             routes = []
             for rule in app.url_map.iter_rules():
                 routes.append({
@@ -288,9 +294,7 @@ def register_blueprints(app):
             return jsonify({
                 'total_routes': len(routes),
                 'routes': sorted(routes, key=lambda x: x['path']),
-                'nextgen_routes': [r for r in routes if 'nextgen' in r['path'].lower()],
-                'deployed_commit': 'f58d7582',  # Latest commit hash
-                'debug_endpoints_active': True
+                'nextgen_routes': [r for r in routes if 'nextgen' in r['path'].lower()]
             })
 
         app.register_blueprint(simple_health_bp)
@@ -353,13 +357,11 @@ def register_blueprints(app):
             for route in nextgen_routes[:5]:  # Log first 5 routes
                 app.logger.info(f"  - {route}")
     except Exception as e:
-        import traceback
         nextgen_import_error = {
             'error': str(e),
             'traceback': traceback.format_exc()
         }
-        app.logger.error(f"❌ Could not import nextgen_report_builder: {e}")
-        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        app.logger.exception("Could not import nextgen_report_builder")
 
     # Add error endpoint for debugging
     if nextgen_import_error:

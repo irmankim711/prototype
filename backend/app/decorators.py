@@ -95,12 +95,18 @@ def firebase_auth_required(f):
             return f(*args, **kwargs)
 
         except Exception as e:
-            import traceback
             from datetime import datetime
 
-            tb = traceback.format_exc()
+            # Redact sensitive headers
+            safe_headers = {}
+            sensitive_keys = {'authorization', 'cookie', 'set-cookie', 'proxy-authorization'}
+            for key, value in request.headers.items():
+                if key.lower() in sensitive_keys:
+                    safe_headers[key] = '<REDACTED>'
+                else:
+                    safe_headers[key] = value
 
-            # Log comprehensive error details for production debugging
+            # Log comprehensive error details for production debugging with automatic traceback
             current_app.logger.error("=" * 80)
             current_app.logger.error("AUTHENTICATION ERROR DETAILS")
             current_app.logger.error("=" * 80)
@@ -109,11 +115,11 @@ def firebase_auth_required(f):
             current_app.logger.error(f"Request URL: {request.url}")
             current_app.logger.error(f"Request Method: {request.method}")
             current_app.logger.error(f"Request Path: {request.path}")
-            current_app.logger.error(f"Request Headers: {dict(request.headers)}")
+            current_app.logger.error(f"Request Headers (redacted): {safe_headers}")
             current_app.logger.error(f"Has Authorization Header: {bool(request.headers.get('Authorization'))}")
             current_app.logger.error(f"Firebase Initialized: {firebase_auth_manager._initialized}")
             current_app.logger.error(f"Timestamp: {datetime.now().isoformat()}")
-            current_app.logger.error(f"Full Traceback:\n{tb}")
+            current_app.logger.exception("Full Traceback")
             current_app.logger.error("=" * 80)
 
             return jsonify({

@@ -6,6 +6,7 @@ template management, Excel automation, and report generation
 
 from flask import Blueprint, request, jsonify, send_file, current_app
 from ..decorators import get_current_user_id, get_current_user, firebase_auth_required
+from ..middleware.firebase_auth import firebase_auth_manager
 
 from flask_cors import cross_origin
 from datetime import datetime, timedelta
@@ -1028,9 +1029,8 @@ def upload_excel_file():
                     headers=table.get('headers', []),
                     data_types=table.get('data_types', []),
                     table_range=table.get('range', ''),
-                    data=preview_data  # Store only preview (first 10 rows)
-                )
-                db.session.add(excel_table)
+                    data=table_data  # Persist full dataset for downstream consumers
+                )                db.session.add(excel_table)
                 tables_added += 1
 
             # Commit all changes (both ParsedExcelFile and ExcelTable records)
@@ -1415,6 +1415,8 @@ def get_excel_file_data(file_id):
     """
     Get full data from an Excel file by file ID (for report generation).
     Returns records and columns extracted from the file's tables.
+
+    ⚡ IMPORTANT: Reads full data from disk file, not from database preview.
     """
     try:
         user_id = get_current_user_id()
@@ -1431,41 +1433,88 @@ def get_excel_file_data(file_id):
         if not parsed_file:
             return jsonify({'error': 'Excel file not found or access denied'}), 404
 
-        # Get first table with data
+        # Get first table metadata (for headers info)
         table = ExcelTable.query.filter_by(parsed_file_id=file_id).first()
 
-        if not table or not table.data:
-            return jsonify({'error': 'No data available for this file'}), 404
+        if not table:
+            return jsonify({'error': 'No table metadata available for this file'}), 404
 
-        # Convert table data to records format
-        table_data = table.data
-        headers = table.headers if table.headers else (table_data[0] if table_data else [])
+        # ✅ FIX: Read full data from the Excel file on disk
+        # Database only stores preview (10 rows) to prevent timeouts
+        excel_file_path = parsed_file.file_path
 
-        records = []
-        data_start_idx = 0 if table.headers else 1  # Skip header row if not already extracted
+        if not os.path.exists(excel_file_path):
+            logger.error(f"Excel file not found on disk: {excel_file_path}")
+            return jsonify({'error': 'Excel file not found on disk'}), 404
 
-        for row in table_data[data_start_idx:]:
-            if row and any(cell for cell in row):
-                record = {headers[i]: row[i] for i in range(min(len(headers), len(row)))}
-                records.append(record)
+        # Re-parse the Excel file to get full data
+        try:
+            import pandas as pd
 
-        return jsonify({
-            'success': True,
-            'fileId': file_id,
-            'filePath': parsed_file.file_path,
-            'originalFilename': parsed_file.original_filename,
-            'records': records,
-            'columns': headers,
-            'totalRecords': len(records),
-            'metadata': {
-                'tablesCount': parsed_file.tables_count,
-                'totalRows': parsed_file.total_rows,
-                'totalColumns': parsed_file.total_columns
-            }
-        }), 200
+            # Read the specific sheet if we know it
+            if table.sheet_name:
+                df = pd.read_excel(excel_file_path, sheet_name=table.sheet_name)
+            else:
+                # Read first sheet
+                df = pd.read_excel(excel_file_path)
+
+            # Convert to records format
+            headers = table.headers if table.headers else df.columns.tolist()
+            records = df.to_dict('records')
+
+            logger.info(f"✅ Loaded {len(records)} records from Excel file: {excel_file_path}")
+
+            return jsonify({
+                'success': True,
+                'fileId': file_id,
+                'filePath': parsed_file.file_path,
+                'originalFilename': parsed_file.original_filename,
+                'records': records,
+                'columns': headers,
+                'totalRecords': len(records),
+                'metadata': {
+                    'tablesCount': parsed_file.tables_count,
+                    'totalRows': len(records),
+                    'totalColumns': len(headers)
+                }
+            }), 200
+
+        except Exception as parse_error:
+            logger.error(f"Error re-parsing Excel file: {parse_error}")
+            # Fallback to database preview data
+            logger.warning("⚠️ Falling back to database preview data (limited to 10 rows)")
+
+            table_data = table.data
+            headers = table.headers if table.headers else (table_data[0] if table_data else [])
+
+            records = []
+            data_start_idx = 0 if table.headers else 1
+
+            for row in table_data[data_start_idx:]:
+                if row and any(cell for cell in row):
+                    record = {headers[i]: row[i] for i in range(min(len(headers), len(row)))}
+                    records.append(record)
+
+            return jsonify({
+                'success': True,
+                'fileId': file_id,
+                'filePath': parsed_file.file_path,
+                'originalFilename': parsed_file.original_filename,
+                'records': records,
+                'columns': headers,
+                'totalRecords': len(records),
+                'warning': 'Using preview data only (first 10 rows)',
+                'metadata': {
+                    'tablesCount': parsed_file.tables_count,
+                    'totalRows': parsed_file.total_rows,
+                    'totalColumns': parsed_file.total_columns
+                }
+            }), 200
 
     except Exception as e:
         logger.error(f"Error fetching Excel file data: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': 'Failed to fetch file data', 'details': str(e)}), 500
 
 
@@ -1575,35 +1624,80 @@ def generate_report_from_excel():
                         logger.warning(f"🆔 [{request_id}] ⚠️ File not found or access denied: {fid}")
                         continue
 
-                    # Get first table with data
+                    # Get first table metadata
                     table = ExcelTable.query.filter_by(parsed_file_id=fid).first()
 
-                    if not table or not table.data:
-                        logger.warning(f"🆔 [{request_id}] ⚠️ No data available for file: {fid}")
+                    if not table:
+                        logger.warning(f"🆔 [{request_id}] ⚠️ No table metadata available for file: {fid}")
                         continue
 
-                    # Extract records from table
-                    table_data = table.data
-                    headers = table.headers if table.headers else (table_data[0] if table_data else [])
+                    # ✅ FIX: Read full data from Excel file on disk instead of database preview
+                    # Database only stores 10-row preview to prevent timeouts
+                    excel_file_path_current = parsed_file.file_path
 
-                    # Update columns list (merge unique columns from all files)
-                    for header in headers:
-                        if header not in excel_columns:
-                            excel_columns.append(header)
+                    if not os.path.exists(excel_file_path_current):
+                        logger.warning(f"🆔 [{request_id}] ⚠️ Excel file not found on disk: {excel_file_path_current}")
+                        continue
 
-                    # Skip header row if not already extracted
-                    data_start_idx = 0 if table.headers else 1
+                    try:
+                        import pandas as pd
 
-                    for row in table_data[data_start_idx:]:
-                        if row and any(cell for cell in row):
-                            record = {headers[i]: row[i] for i in range(min(len(headers), len(row)))}
+                        # Read the specific sheet if we know it
+                        if table.sheet_name:
+                            df = pd.read_excel(excel_file_path_current, sheet_name=table.sheet_name)
+                        else:
+                            # Read first sheet
+                            df = pd.read_excel(excel_file_path_current)
+
+                        # Get headers and convert to records
+                        headers = table.headers if table.headers else df.columns.tolist()
+                        file_records = df.to_dict('records')
+
+                        # Update columns list (merge unique columns from all files)
+                        for header in headers:
+                            if header not in excel_columns:
+                                excel_columns.append(header)
+
+                        # Add source file metadata to each record
+                        for record in file_records:
                             record['_source_file'] = parsed_file.original_filename
                             record['_source_file_id'] = fid
                             excel_records.append(record)
 
-                    file_size += parsed_file.file_size or 0
-                    source_files.append(parsed_file.original_filename)
-                    logger.info(f"🆔 [{request_id}] ✅ Loaded {len(excel_records)} records from {parsed_file.original_filename}")
+                        file_size += parsed_file.file_size or 0
+                        source_files.append(parsed_file.original_filename)
+                        logger.info(f"🆔 [{request_id}] ✅ Loaded {len(file_records)} records from {parsed_file.original_filename}")
+
+                    except Exception as parse_error:
+                        logger.error(f"🆔 [{request_id}] ❌ Error reading Excel file {excel_file_path_current}: {parse_error}")
+                        # Fallback to database preview data
+                        logger.warning(f"🆔 [{request_id}] ⚠️ Falling back to database preview data (limited to 10 rows)")
+
+                        table_data = table.data
+                        if not table_data:
+                            logger.warning(f"🆔 [{request_id}] ⚠️ No preview data available for file: {fid}")
+                            continue
+
+                        headers = table.headers if table.headers else (table_data[0] if table_data else [])
+
+                        # Update columns list
+                        for header in headers:
+                            if header not in excel_columns:
+                                excel_columns.append(header)
+
+                        # Skip header row if not already extracted
+                        data_start_idx = 0 if table.headers else 1
+
+                        for row in table_data[data_start_idx:]:
+                            if row and any(cell for cell in row):
+                                record = {headers[i]: row[i] for i in range(min(len(headers), len(row)))}
+                                record['_source_file'] = parsed_file.original_filename
+                                record['_source_file_id'] = fid
+                                excel_records.append(record)
+
+                        file_size += parsed_file.file_size or 0
+                        source_files.append(parsed_file.original_filename)
+                        logger.info(f"🆔 [{request_id}] ⚠️ Loaded {len(excel_records)} preview records from {parsed_file.original_filename}")
 
                 if not excel_records:
                     return jsonify({

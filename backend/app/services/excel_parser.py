@@ -76,8 +76,8 @@ class ExcelTableDetector:
             if self.workbook:
                 try:
                     self.workbook.close()
-                except:
-                    pass
+                except Exception as e:
+                    logger.error("Failed to close workbook", exc_info=True)
     
     def _detect_tables_xlrd(self) -> List[Dict[str, Any]]:
         """Detect tables using xlrd for .xls files."""

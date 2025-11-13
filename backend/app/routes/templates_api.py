@@ -550,7 +550,7 @@ def upload_template_file():
         }), 201
         
     except Exception as e:
-        logger.error(f"Error uploading template file: {e}")
+        logger.exception("Error uploading template file")
         return jsonify({
             'success': False,
             'error': 'Failed to upload template file',
@@ -611,7 +611,7 @@ def download_template_file(template_id):
         )
         
     except Exception as e:
-        logger.error(f"Error downloading template file {template_id}: {e}")
+        logger.exception("Error downloading template file")
         return jsonify({
             'success': False,
             'error': 'Failed to download template file',
@@ -664,7 +664,7 @@ def get_template_file_info(template_id):
         }), 200
         
     except Exception as e:
-        logger.error(f"Error getting template file info {template_id}: {e}")
+        logger.exception("Error getting template file info")
         return jsonify({
             'success': False,
             'error': 'Failed to get template file info',

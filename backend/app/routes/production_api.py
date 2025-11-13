@@ -188,8 +188,9 @@ def update_report_template(template_id):
             user_id = get_current_user_id()
             logger.info(f"📝 User ID: {user_id}")
         except Exception as e:
-            logger.warning(f"📝 Failed to get user ID: {e}, using fallback")
-            user_id = 1  # Fallback for backwards compatibility
+            logger.error(f"❌ Failed to get user ID: {e}")
+            from flask import abort
+            abort(401)
 
         # Check if this is a file-based template (string ID that's not a number)
         is_file_based = not (isinstance(template_id, (int, str)) and str(template_id).isdigit())

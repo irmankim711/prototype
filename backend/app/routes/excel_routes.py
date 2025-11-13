@@ -105,7 +105,7 @@ def upload_and_parse_excel():
                         file_size=file_size,
                         status='completed',
                         tables_count=result['tables_count'],
-                        uploaded_at=datetime.utcnow(),
+                        parsed_at=datetime.utcnow(),
                         metadata=result['metadata']
                     )
                     db.session.add(parsed_file)

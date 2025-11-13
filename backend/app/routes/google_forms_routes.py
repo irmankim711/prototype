@@ -95,12 +95,10 @@ def get_service_status():
         # User is authenticated - check Google Forms authorization
         is_authorized = False
         forms_count = 0
-        has_valid_token = False
 
         try:
             credentials = google_forms_service._get_user_credentials(str(user_id))
             is_authorized = credentials is not None
-            has_valid_token = credentials is not None
 
             if is_authorized:
                 # Try to get forms count, but don't fail authorization if this fails

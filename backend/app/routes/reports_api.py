@@ -107,67 +107,68 @@ def get_all_reports():
         status = request.args.get('status')
         report_type = request.args.get('report_type')
 
-        logger.info(f"Reports query - user_id: {user_id}, filtering by user (created_by={user_id})")
+        logger.info(f"Reports query - user_id: {user_id}, page: {page}, per_page: {per_page}, status: {status}, report_type: {report_type}")
 
-        # ✅ FIX: Query Firestore instead of PostgreSQL
-        # Get reports from Firestore
-        firestore_reports = firestore_report_service.get_user_reports(
-            user_id=str(user_id),
-            limit=per_page * 10,  # Get more than needed for filtering
-            status_filter=status
-        )
+        # ✅ IMPROVED: Use Firestore-native filtering and pagination
+        # Note: Current implementation over-fetches per_page * page documents
+        # LIMITATION: Counts are capped at documents fetched and may be inaccurate for >1000 documents
+        # RECOMMENDATION: Use Firestore aggregation count() or cursor-based pagination for production
+        # This is a temporary solution - consider implementing cursor tokens for better performance
 
-        # Apply additional filters if needed
-        filtered_reports = []
-        for report in firestore_reports:
-            # Filter by report_type if specified
-            if report_type and report.get('reportType') != report_type:
-                continue
+        if page == 1:
+            # First page - no cursor needed
+            result = firestore_report_service.get_user_reports(
+                user_id=str(user_id),
+                limit=per_page,
+                status_filter=status,
+                report_type_filter=report_type,
+                start_after_doc=None
+            )
+        else:
+            # For subsequent pages, we need to skip (page-1) * per_page documents
+            # This is a limitation of Firestore - we fetch and skip client-side
+            # For better performance, consider using cursor tokens in production
+            skip_count = (page - 1) * per_page
 
-            # Convert Firestore format to API format
-            report_dict = {
-                'id': report.get('id'),
-                'uuid': report.get('id'),
-                'title': report.get('title', 'Untitled Report'),
-                'description': report.get('description', ''),
-                'status': report.get('generationStatus', 'unknown'),
-                'generation_status': report.get('generationStatus', 'unknown'),
-                'report_type': report.get('reportType', 'automated'),
-                'file_path': report.get('storagePath'),
-                'file_format': report.get('reportType', 'docx').split('_')[-1] if '_' in report.get('reportType', '') else 'docx',
-                'created_at': report.get('createdAt').isoformat() if hasattr(report.get('createdAt'), 'isoformat') else str(report.get('createdAt', '')),
-                'updated_at': report.get('updatedAt').isoformat() if hasattr(report.get('updatedAt'), 'isoformat') else str(report.get('updatedAt', '')),
-                'generated_at': report.get('generatedAt').isoformat() if hasattr(report.get('generatedAt'), 'isoformat') else None,
-                'download_count': report.get('downloadCount', 0),
-                'download_url': report.get('downloadUrl'),
-                'file_size': report.get('fileSize'),
-                'template_id': report.get('templateId'),
-                'program_id': report.get('programId'),
-                'data_source': report.get('dataSource'),
-                'generation_config': report.get('generationConfig'),
-                'error_message': report.get('errorMessage')
+            # Fetch all documents up to the requested page
+            result = firestore_report_service.get_user_reports(
+                user_id=str(user_id),
+                limit=skip_count + per_page,
+                status_filter=status,
+                report_type_filter=report_type,
+                start_after_doc=None
+            )
+            logger.warning(f"⚠️ Over-fetching {skip_count + per_page} documents for pagination (page {page})")
+
+            # Manually skip to the requested page
+            all_reports = result['reports'][skip_count:]
+            has_more = result['has_more'] or len(result['reports']) > skip_count + per_page
+
+            result = {
+                'reports': all_reports[:per_page],
+                'has_more': has_more,
+                'last_doc': result['last_doc']
             }
-            filtered_reports.append(report_dict)
 
-        # Manual pagination
-        total = len(filtered_reports)
-        start_idx = (page - 1) * per_page
-        end_idx = start_idx + per_page
-        paginated_reports = filtered_reports[start_idx:end_idx]
-        total_pages = (total + per_page - 1) // per_page  # Ceiling division
+        # Convert to API format
+        api_reports = [
+            firestore_report_service.convert_report_to_api_format(report)
+            for report in result['reports']
+        ]
 
+        # Calculate pagination metadata
+        # Note: We can't accurately determine total count without fetching all documents
+        # For better UX, we use has_more flag instead
         return jsonify({
             'success': True,
-            'reports': paginated_reports,
+            'reports': api_reports,
             'pagination': {
                 'page': page,
-                'pages': total_pages,
                 'per_page': per_page,
-                'total': total,
-                'has_next': page < total_pages,
-                'has_prev': page > 1
-            },
-            'total': total
+                'has_next': result['has_more'],
+                'has_prev': page > 1,
+                'count': len(api_reports)
+            }
         }), 200
 
     except Exception as e:
@@ -1045,22 +1046,22 @@ def delete_report(report_id):
                     logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete PostgreSQL report {report_id} owned by user {report.user_id}")
                     return jsonify({'error': 'Access denied - you can only delete your own reports'}), 403
 
-                # Remove files
+                # Track file deletion results
+                file_deletion_errors = []
+                files_to_delete = []
+
+                # Collect all files to delete
                 if report.file_path:
                     base_path_without_ext = os.path.splitext(report.file_path)[0]
                     report_dir = os.path.dirname(report.file_path)
 
-                    # Try to delete all format variants
+                    # Collect all format variants
                     for ext in ['pdf', 'docx', 'xlsx']:
                         file_path = f"{base_path_without_ext}.{ext}"
                         if os.path.exists(file_path):
-                            try:
-                                os.remove(file_path)
-                                logger.info(f"Deleted file: {file_path}")
-                            except Exception as e:
-                                logger.warning(f"Failed to remove file {file_path}: {str(e)}")
+                            files_to_delete.append(file_path)
 
-                    # Also try to find files using glob patterns
+                    # Collect files using glob patterns
                     import glob
                     patterns = [
                         os.path.join(report_dir, f"*{report.id}*"),
@@ -1068,13 +1069,29 @@ def delete_report(report_id):
                     ]
                     for pattern in patterns:
                         for file_path in glob.glob(pattern):
-                            try:
-                                os.remove(file_path)
-                                logger.info(f"Deleted file: {file_path}")
-                            except Exception as e:
-                                logger.warning(f"Failed to remove file {file_path}: {str(e)}")
+                            if file_path not in files_to_delete:
+                                files_to_delete.append(file_path)
 
-                # Delete from database
+                # Attempt to delete all files first (before database deletion)
+                for file_path in files_to_delete:
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"Deleted file: {file_path}")
+                    except (OSError, PermissionError, FileNotFoundError) as e:
+                        error_msg = f"Failed to remove file {file_path}: {str(e)}"
+                        logger.error(error_msg, exc_info=True)
+                        file_deletion_errors.append(error_msg)
+
+                # If critical file deletion failed, don't delete database record
+                if file_deletion_errors:
+                    logger.warning(f"Report {report_id} has file deletion errors: {file_deletion_errors}")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Failed to delete report files',
+                        'details': file_deletion_errors
+                    }), 500
+
+                # Only delete from database if all files were deleted successfully
                 db.session.delete(report)
                 db.session.commit()
 
