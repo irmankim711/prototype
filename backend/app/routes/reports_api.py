@@ -519,29 +519,41 @@ def _handle_firestore_download(firestore_report: dict, user_id: str, file_type: 
     if not firebase_uid and not user_id:
         return jsonify({'error': 'Authentication required', 'code': 'UNAUTHORIZED'}), 401
 
-    # Use firebase_uid as the canonical identifier for Firestore reports
-    canonical_identifier = firebase_uid if firebase_uid else user_id
+    # Build list of valid identifiers for this user
+    valid_identifiers = set()
+
+    # Add Firebase UID
+    if firebase_uid:
+        valid_identifiers.add(str(firebase_uid))
+
+    # Add SQL user ID
+    if user_id:
+        valid_identifiers.add(str(user_id))
 
     # Check admin status if we have a User record in SQL
     is_admin = False
+    sql_user = None
     try:
         if firebase_uid:
-            user = User.get_by_firebase_uid(firebase_uid)
-            is_admin = user and user.role == UserRole.ADMIN
+            sql_user = User.get_by_firebase_uid(firebase_uid)
+            if sql_user:
+                is_admin = sql_user.role == UserRole.ADMIN
+                # Add SQL user ID from database lookup
+                valid_identifiers.add(str(sql_user.id))
     except Exception as e:
         # SQL connection errors are non-fatal for Firestore-only operations
         logger.warning(f"Could not check admin status from SQL (non-fatal): {e}")
         is_admin = False
 
-    # canonical_identifier is the identifier we should compare against the
-    # Firestore report's userId (it may be the original Firestore id string or
-    # the numeric SQL id depending on the authenticated context)
     # Firestore reports store userId in createdBy.userId
     report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
 
-    if str(report_owner_id) != str(canonical_identifier) and not is_admin:
-        logger.warning(f"Access denied for user {canonical_identifier} attempting to download Firestore report {report_id} "
-                      f"(owned by {report_owner_id})")
+    # Check if any of the user's identifiers match the report owner
+    user_owns_report = str(report_owner_id) in valid_identifiers
+
+    if not user_owns_report and not is_admin:
+        logger.warning(f"Access denied for user (firebase_uid={firebase_uid}, user_id={user_id}, valid_ids={valid_identifiers}) "
+                      f"attempting to download Firestore report {report_id} (owned by {report_owner_id})")
         return jsonify({
             'error': 'Access denied - you do not have permission to download this report',
             'code': 'INSUFFICIENT_PERMISSIONS'
