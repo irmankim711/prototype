@@ -2,7 +2,7 @@
   "firestore": {
     "database": "(default)",
     "location": "asia-southeast1",
-    "rules": " ",
-    "indexes": "firebase deploy --only firestore:rules"
+    "rules": "migrations/firestore.rules",
+    "indexes": "migrations/firestore.indexes.json"
   }
 }

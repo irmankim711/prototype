@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWT Authentication Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        .log { background: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; max-height: 300px; overflow-y: auto; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <h1>JWT Authentication Fix Test</h1>
+
+    <div class="section">
+        <h2>1. Current Auth Status</h2>
+        <div id="auth-status"></div>
+        <button onclick="checkAuthStatus()">Check Auth Status</button>
+        <button onclick="clearAllTokens()">Clear All Tokens</button>
+    </div>
+
+    <div class="section">
+        <h2>2. Login Test</h2>
+        <input type="email" id="email" placeholder="Email" value="test@example.com">
+        <input type="password" id="password" placeholder="Password" value="password123">
+        <button onclick="testLogin()">Test Login</button>
+        <div id="login-result"></div>
+    </div>
+
+    <div class="section">
+        <h2>3. API Call Test (with JWT)</h2>
+        <button onclick="testAPICall()">Test NextGen Report API</button>
+        <div id="api-result"></div>
+    </div>
+
+    <div class="section">
+        <h2>4. Debug Logs</h2>
+        <button onclick="clearLogs()">Clear Logs</button>
+        <div class="log" id="debug-log"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000';
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('debug-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const typeIcon = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warning' ? '⚠️' : 'ℹ️';
+            logDiv.innerHTML += `<div>[${timestamp}] ${typeIcon} ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLogs() {
+            document.getElementById('debug-log').innerHTML = '';
+        }
+
+        function checkAuthStatus() {
+            const accessToken = localStorage.getItem('accessToken');
+            const refreshToken = localStorage.getItem('refreshToken');
+            
+            let status = '<div class="warning">';
+            
+            if (accessToken) {
+                try {
+                    const payload = JSON.parse(atob(accessToken.split('.')[1]));
+                    const exp = new Date(payload.exp * 1000);
+                    const now = new Date();
+                    const isExpired = exp <= now;
+                    
+                    status += `<strong>Access Token:</strong> ${isExpired ? '❌ EXPIRED' : '✅ Valid'}<br>`;
+                    status += `<strong>Expires:</strong> ${exp.toLocaleString()}<br>`;
+                    status += `<strong>User ID:</strong> ${payload.sub}<br>`;
+                    status += `<strong>Email:</strong> ${payload.email || 'N/A'}<br>`;
+                    
+                    log(`Token Status: ${isExpired ? 'EXPIRED' : 'Valid'} - Expires: ${exp.toLocaleString()}`, isExpired ? 'error' : 'success');
+                } catch (e) {
+                    status += `<strong>Access Token:</strong> ❌ Invalid format<br>`;
+                    log('Access token has invalid format', 'error');
+                }
+            } else {
+                status += '<strong>Access Token:</strong> ❌ Not found<br>';
+                log('No access token found in localStorage', 'warning');
+            }
+            
+            if (refreshToken) {
+                status += '<strong>Refresh Token:</strong> ✅ Present<br>';
+            } else {
+                status += '<strong>Refresh Token:</strong> ❌ Not found<br>';
+            }
+            
+            status += '</div>';
+            document.getElementById('auth-status').innerHTML = status;
+        }
+
+        function clearAllTokens() {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('token');
+            localStorage.removeItem('quickAccessToken');
+            localStorage.removeItem('userData');
+            localStorage.removeItem('devBypassEnabled');
+            localStorage.removeItem('devUser');
+            
+            log('All tokens cleared from localStorage', 'success');
+            checkAuthStatus();
+        }
+
+        async function testLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            if (!email || !password) {
+                alert('Please enter email and password');
+                return;
+            }
+            
+            try {
+                log(`Attempting login for: ${email}`, 'info');
+                
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include', // Important for cookies
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.access_token) {
+                    localStorage.setItem('accessToken', data.access_token);
+                    if (data.refresh_token) {
+                        localStorage.setItem('refreshToken', data.refresh_token);
+                    }
+                    
+                    document.getElementById('login-result').innerHTML = '<div class="success">✅ Login successful!</div>';
+                    log('Login successful - tokens stored', 'success');
+                    checkAuthStatus();
+                } else {
+                    document.getElementById('login-result').innerHTML = `<div class="error">❌ Login failed: ${data.message || 'Unknown error'}</div>`;
+                    log(`Login failed: ${data.message || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                document.getElementById('login-result').innerHTML = `<div class="error">❌ Network error: ${error.message}</div>`;
+                log(`Login network error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testAPICall() {
+            const accessToken = localStorage.getItem('accessToken');
+            
+            if (!accessToken) {
+                document.getElementById('api-result').innerHTML = '<div class="error">❌ No access token. Please login first.</div>';
+                log('No access token available for API call', 'error');
+                return;
+            }
+            
+            try {
+                log('Testing NextGen Excel Generate Report API call...', 'info');
+                
+                // Test the exact API call that's failing
+                const response = await fetch(`${API_BASE}/api/v1/nextgen/excel/generate-report`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`,
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        excelFilePath: '/test/path/test.xlsx',
+                        templateId: 'test-template',
+                        reportTitle: 'Test Report'
+                    })
+                });
+                
+                const responseText = await response.text();
+                let data;
+                
+                try {
+                    data = JSON.parse(responseText);
+                } catch (e) {
+                    data = { raw_response: responseText };
+                }
+                
+                log(`API Response Status: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+                log(`API Response Headers: ${JSON.stringify([...response.headers.entries()])}`, 'info');
+                log(`API Response Data: ${JSON.stringify(data, null, 2)}`, 'info');
+                
+                if (response.ok) {
+                    document.getElementById('api-result').innerHTML = '<div class="success">✅ API call successful!</div>';
+                    log('API call successful!', 'success');
+                } else {
+                    document.getElementById('api-result').innerHTML = `<div class="error">❌ API call failed: ${response.status} - ${JSON.stringify(data)}</div>`;
+                    
+                    if (response.status === 401) {
+                        log('🔄 Received 401 Unauthorized - Token may be expired or invalid', 'error');
+                        checkAuthStatus();
+                    }
+                }
+                
+            } catch (error) {
+                document.getElementById('api-result').innerHTML = `<div class="error">❌ Network error: ${error.message}</div>`;
+                log(`API call network error: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize
+        checkAuthStatus();
+        log('JWT Authentication Test Page Loaded', 'info');
+    </script>
+</body>
+</html>

@@ -1,0 +1,1246 @@
+{
+	"info": {
+		"_postman_id": "stratosys-api-2024",
+		"name": "StratoSys API Collection",
+		"description": "Complete API collection for StratoSys - Form Builder & Report Generator Platform",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{firebase_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Firebase Sync/Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{firebase_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/firebase/firebase-sync",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "firebase", "firebase-sync"]
+						},
+						"description": "Sync Firebase user with backend database. Use this for initial login."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{firebase_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/firebase/verify-token",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "firebase", "verify-token"]
+						},
+						"description": "Verify Firebase token validity"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{firebase_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/firebase/profile",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "firebase", "profile"]
+						},
+						"description": "Get current user profile"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{firebase_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\",\n  \"display_name\": \"John Doe\",\n  \"phone\": \"+1234567890\",\n  \"company\": \"Acme Corp\",\n  \"job_title\": \"Developer\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/firebase/profile",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "firebase", "profile"]
+						},
+						"description": "Update user profile information"
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{firebase_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/firebase/logout",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "firebase", "logout"]
+						},
+						"description": "Logout user"
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints for Firebase-based authentication"
+		},
+		{
+			"name": "Forms",
+			"item": [
+				{
+					"name": "Get All Forms",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/forms/?page=1&per_page=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", ""],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "per_page",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Get all forms for current user (paginated)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Form by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/forms/{{form_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", "{{form_id}}"]
+						},
+						"description": "Get specific form details"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Form",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Customer Feedback Form\",\n  \"description\": \"Please share your feedback\",\n  \"fields\": [\n    {\n      \"name\": \"full_name\",\n      \"type\": \"text\",\n      \"label\": \"Full Name\",\n      \"required\": true,\n      \"placeholder\": \"Enter your full name\"\n    },\n    {\n      \"name\": \"email\",\n      \"type\": \"email\",\n      \"label\": \"Email Address\",\n      \"required\": true\n    },\n    {\n      \"name\": \"rating\",\n      \"type\": \"rating\",\n      \"label\": \"Rate your experience\",\n      \"required\": true\n    },\n    {\n      \"name\": \"feedback\",\n      \"type\": \"textarea\",\n      \"label\": \"Your Feedback\",\n      \"required\": false,\n      \"placeholder\": \"Tell us about your experience\"\n    }\n  ],\n  \"is_public\": true,\n  \"is_active\": true,\n  \"form_settings\": {\n    \"auto_generate_reports\": true,\n    \"send_email_on_submission\": false,\n    \"require_auth\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/forms/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", ""]
+						},
+						"description": "Create a new form"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Form",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Updated Form Title\",\n  \"description\": \"Updated description\",\n  \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/forms/{{form_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", "{{form_id}}"]
+						},
+						"description": "Update an existing form"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Form",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/forms/{{form_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", "{{form_id}}"]
+						},
+						"description": "Delete a form"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Field Types",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/forms/field-types",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", "field-types"]
+						},
+						"description": "Get available field types for forms"
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Form (Public)",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"data\": {\n    \"full_name\": \"Jane Smith\",\n    \"email\": \"jane@example.com\",\n    \"rating\": 5,\n    \"feedback\": \"Great service!\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/forms/{{form_id}}/submissions",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", "{{form_id}}", "submissions"]
+						},
+						"description": "Submit a form (no authentication required for public forms)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Form Submissions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/forms/{{form_id}}/submissions?page=1&per_page=50",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", "{{form_id}}", "submissions"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "per_page",
+									"value": "50"
+								}
+							]
+						},
+						"description": "Get all submissions for a form"
+					},
+					"response": []
+				},
+				{
+					"name": "Generate QR Code",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"size\": 300,\n  \"include_logo\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/forms/{{form_id}}/qr-codes",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", "{{form_id}}", "qr-codes"]
+						},
+						"description": "Generate QR code for form access"
+					},
+					"response": []
+				}
+			],
+			"description": "Form management endpoints"
+		},
+		{
+			"name": "Reports",
+			"item": [
+				{
+					"name": "Get All Reports",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/reports?page=1&per_page=20",
+							"host": ["{{base_url}}"],
+							"path": ["api", "reports"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "per_page",
+									"value": "20"
+								}
+							]
+						},
+						"description": "Get all reports (paginated)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Report by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/reports/{{report_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "reports", "{{report_id}}"]
+						},
+						"description": "Get specific report details"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Report",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Monthly Sales Report\",\n  \"description\": \"Sales report for January 2024\",\n  \"template_id\": 1,\n  \"data\": {\n    \"month\": \"January\",\n    \"year\": 2024,\n    \"sales_data\": []\n  },\n  \"status\": \"processing\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/reports",
+							"host": ["{{base_url}}"],
+							"path": ["api", "reports"]
+						},
+						"description": "Create a new report"
+					},
+					"response": []
+				},
+				{
+					"name": "Download Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/reports/{{report_id}}/download",
+							"host": ["{{base_url}}"],
+							"path": ["api", "reports", "{{report_id}}", "download"]
+						},
+						"description": "Download report file"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Recent Reports",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/reports/recent?limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "reports", "recent"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Get recent reports"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Report Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/reports/stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "reports", "stats"]
+						},
+						"description": "Get report statistics"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Report Templates",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/reports/templates",
+							"host": ["{{base_url}}"],
+							"path": ["api", "reports", "templates"]
+						},
+						"description": "Get available report templates"
+					},
+					"response": []
+				},
+				{
+					"name": "Generate Automated Report",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"form_id\": 1,\n  \"template_id\": 1,\n  \"date_range\": {\n    \"start_date\": \"2024-01-01\",\n    \"end_date\": \"2024-01-31\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/reports/automated/generate",
+							"host": ["{{base_url}}"],
+							"path": ["api", "reports", "automated", "generate"]
+						},
+						"description": "Trigger automated report generation"
+					},
+					"response": []
+				}
+			],
+			"description": "Report management endpoints"
+		},
+		{
+			"name": "Excel Export",
+			"item": [
+				{
+					"name": "Export Form to Excel",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"date_range\": {\n    \"start_date\": \"2024-01-01\",\n    \"end_date\": \"2024-12-31\"\n  },\n  \"filters\": {},\n  \"include_metadata\": true,\n  \"max_records\": 10000,\n  \"immediate\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/forms/{{form_id}}/export-excel",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", "{{form_id}}", "export-excel"]
+						},
+						"description": "Export form submissions to Excel (async)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Export Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/forms/{{form_id}}/export-status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", "{{form_id}}", "export-status"]
+						},
+						"description": "Get export task status"
+					},
+					"response": []
+				},
+				{
+					"name": "Download Excel File",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/forms/{{form_id}}/download-excel",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", "{{form_id}}", "download-excel"]
+						},
+						"description": "Download exported Excel file"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Export History",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/forms/{{form_id}}/export-history",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", "{{form_id}}", "export-history"]
+						},
+						"description": "Get export history for a form"
+					},
+					"response": []
+				},
+				{
+					"name": "Bulk Export Multiple Forms",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"form_ids\": [1, 2, 3],\n  \"date_range\": {\n    \"start_date\": \"2024-01-01\",\n    \"end_date\": \"2024-12-31\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/forms/bulk-export",
+							"host": ["{{base_url}}"],
+							"path": ["api", "forms", "bulk-export"]
+						},
+						"description": "Bulk export multiple forms to Excel"
+					},
+					"response": []
+				}
+			],
+			"description": "Excel export endpoints with rate limiting (20/hour per form, 10/hour bulk)"
+		},
+		{
+			"name": "Google Forms Integration",
+			"item": [
+				{
+					"name": "Get Google Forms Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/google-forms/status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "google-forms", "status"]
+						},
+						"description": "Get Google Forms sync status"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Connected Google Forms",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/google-forms/forms",
+							"host": ["{{base_url}}"],
+							"path": ["api", "google-forms", "forms"]
+						},
+						"description": "Get list of connected Google Forms"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Google Form Info",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/google-forms/forms/{{google_form_id}}/info",
+							"host": ["{{base_url}}"],
+							"path": ["api", "google-forms", "forms", "{{google_form_id}}", "info"]
+						},
+						"description": "Get form info from Google Forms"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Google Form Responses",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/google-forms/forms/{{google_form_id}}/responses",
+							"host": ["{{base_url}}"],
+							"path": ["api", "google-forms", "forms", "{{google_form_id}}", "responses"]
+						},
+						"description": "Get form responses from Google Forms"
+					},
+					"response": []
+				},
+				{
+					"name": "Generate Report from Google Form",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"template_id\": 1,\n  \"date_range\": {\n    \"start_date\": \"2024-01-01\",\n    \"end_date\": \"2024-12-31\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/google-forms/forms/{{google_form_id}}/generate-report",
+							"host": ["{{base_url}}"],
+							"path": ["api", "google-forms", "forms", "{{google_form_id}}", "generate-report"]
+						},
+						"description": "Generate report from Google Form data"
+					},
+					"response": []
+				},
+				{
+					"name": "Export Google Form to Excel",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"date_range\": {\n    \"start_date\": \"2024-01-01\",\n    \"end_date\": \"2024-12-31\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/google-forms/forms/{{google_form_id}}/export-excel",
+							"host": ["{{base_url}}"],
+							"path": ["api", "google-forms", "forms", "{{google_form_id}}", "export-excel"]
+						},
+						"description": "Export Google Form responses to Excel"
+					},
+					"response": []
+				}
+			],
+			"description": "Google Forms integration endpoints"
+		},
+		{
+			"name": "Analytics",
+			"item": [
+				{
+					"name": "Get Dashboard Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/analytics/dashboard/stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "analytics", "dashboard", "stats"]
+						},
+						"description": "Get dashboard statistics"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Analytics Trends",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/analytics/trends?period=30d",
+							"host": ["{{base_url}}"],
+							"path": ["api", "analytics", "trends"],
+							"query": [
+								{
+									"key": "period",
+									"value": "30d"
+								}
+							]
+						},
+						"description": "Get analytics trends"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Top Forms",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/analytics/top-forms?limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "analytics", "top-forms"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Get top performing forms"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Field Analytics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/analytics/field-analytics/{{form_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "analytics", "field-analytics", "{{form_id}}"]
+						},
+						"description": "Get field-level analytics for a form"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Real-time Analytics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/analytics/real-time",
+							"host": ["{{base_url}}"],
+							"path": ["api", "analytics", "real-time"]
+						},
+						"description": "Get real-time analytics data"
+					},
+					"response": []
+				}
+			],
+			"description": "Analytics and reporting endpoints"
+		},
+		{
+			"name": "Dashboard",
+			"item": [
+				{
+					"name": "Get Dashboard Metrics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/dashboard/metrics",
+							"host": ["{{base_url}}"],
+							"path": ["api", "dashboard", "metrics"]
+						},
+						"description": "Get dashboard metrics"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Dashboard Summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/dashboard/summary",
+							"host": ["{{base_url}}"],
+							"path": ["api", "dashboard", "summary"]
+						},
+						"description": "Get dashboard summary data"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Recent Items",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/dashboard/recent?limit=20",
+							"host": ["{{base_url}}"],
+							"path": ["api", "dashboard", "recent"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						},
+						"description": "Get recent dashboard items"
+					},
+					"response": []
+				}
+			],
+			"description": "Dashboard data endpoints"
+		},
+		{
+			"name": "Health & Status",
+			"item": [
+				{
+					"name": "API Root",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/",
+							"host": ["{{base_url}}"],
+							"path": [""]
+						},
+						"description": "Root endpoint - API info"
+					},
+					"response": []
+				},
+				{
+					"name": "API Status",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "status"]
+						},
+						"description": "API status check"
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/health",
+							"host": ["{{base_url}}"],
+							"path": ["api", "health"]
+						},
+						"description": "Basic health check"
+					},
+					"response": []
+				},
+				{
+					"name": "Database Health",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/health/database",
+							"host": ["{{base_url}}"],
+							"path": ["api", "health", "database"]
+						},
+						"description": "Check database health"
+					},
+					"response": []
+				},
+				{
+					"name": "Detailed Health",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/health/detailed",
+							"host": ["{{base_url}}"],
+							"path": ["api", "health", "detailed"]
+						},
+						"description": "Detailed health information"
+					},
+					"response": []
+				}
+			],
+			"description": "Health check and status endpoints (no auth required)"
+		},
+		{
+			"name": "User Management",
+			"item": [
+				{
+					"name": "Get User Profile",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/users/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "profile"]
+						},
+						"description": "Get current user profile"
+					},
+					"response": []
+				},
+				{
+					"name": "Update User Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\",\n  \"display_name\": \"JD\",\n  \"phone\": \"+1234567890\",\n  \"company\": \"Tech Corp\",\n  \"job_title\": \"Software Engineer\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/users/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "profile"]
+						},
+						"description": "Update user profile"
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Avatar",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "avatar",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/users/avatar",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "avatar"]
+						},
+						"description": "Upload user avatar image"
+					},
+					"response": []
+				},
+				{
+					"name": "Change Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"current_password\": \"oldpassword123\",\n  \"new_password\": \"newpassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/users/change-password",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "change-password"]
+						},
+						"description": "Change user password"
+					},
+					"response": []
+				}
+			],
+			"description": "User profile management endpoints"
+		},
+		{
+			"name": "NextGen Report Builder",
+			"item": [
+				{
+					"name": "Get Data Sources",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/nextgen/data-sources",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "nextgen", "data-sources"]
+						},
+						"description": "Get available data sources"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Data Source",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Google Forms Integration\",\n  \"type\": \"google_forms\",\n  \"config\": {\n    \"form_id\": \"abc123\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/nextgen/data-sources",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "nextgen", "data-sources"]
+						},
+						"description": "Create new data source"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Templates",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/nextgen/templates",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "nextgen", "templates"]
+						},
+						"description": "Get report templates"
+					},
+					"response": []
+				},
+				{
+					"name": "Preview Template",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"template_id\": 1,\n  \"sample_data\": {}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/nextgen/templates/{{template_id}}/preview",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "nextgen", "templates", "{{template_id}}", "preview"]
+						},
+						"description": "Preview report template"
+					},
+					"response": []
+				},
+				{
+					"name": "Generate Report",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"template_id\": 1,\n  \"data_source_id\": 1,\n  \"parameters\": {\n    \"date_range\": {\n      \"start\": \"2024-01-01\",\n      \"end\": \"2024-12-31\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/nextgen/generate",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "nextgen", "generate"]
+						},
+						"description": "Generate report using NextGen builder"
+					},
+					"response": []
+				}
+			],
+			"description": "NextGen report builder endpoints"
+		},
+		{
+			"name": "File Management",
+			"item": [
+				{
+					"name": "Upload File",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "category",
+									"value": "document",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/files/upload",
+							"host": ["{{base_url}}"],
+							"path": ["api", "files", "upload"]
+						},
+						"description": "Upload a file"
+					},
+					"response": []
+				},
+				{
+					"name": "List Files",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/files/?page=1&per_page=20",
+							"host": ["{{base_url}}"],
+							"path": ["api", "files", ""],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "per_page",
+									"value": "20"
+								}
+							]
+						},
+						"description": "List uploaded files"
+					},
+					"response": []
+				},
+				{
+					"name": "Get File Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/files/stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "files", "stats"]
+						},
+						"description": "Get file storage statistics"
+					},
+					"response": []
+				}
+			],
+			"description": "File upload and management endpoints"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5000",
+			"type": "string"
+		},
+		{
+			"key": "firebase_token",
+			"value": "your_firebase_id_token_here",
+			"type": "string"
+		},
+		{
+			"key": "form_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "report_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "google_form_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "template_id",
+			"value": "1",
+			"type": "string"
+		}
+	]
+}

@@ -2,23 +2,36 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if user is authenticated
+    // =========================================================================
+    // HELPER FUNCTIONS
+    // =========================================================================
+
+    // Check if user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Helper function to check if user owns a resource
+    // Check if user is the document owner
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // ParsedExcelFiles collection - user can only access their own files
+    // Check if user has admin role
+    function isAdmin() {
+      return isAuthenticated() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // =========================================================================
+    // PARSED EXCEL FILES COLLECTION - CRITICAL SECURITY
+    // =========================================================================
+
     match /parsed_excel_files/{fileId} {
       // Read: User must be authenticated and match user_id
       allow read: if isAuthenticated()
                   && resource.data.user_id == request.auth.uid;
 
-      // List/Query: User can only query their own files
+      // List/Query: User can only query their own files - ENFORCES WHERE CLAUSE
       allow list: if isAuthenticated()
                   && request.query.filters.hasAny(['user_id'])
                   && request.auth.uid in request.query.filters;
@@ -36,12 +49,15 @@ service cloud.firestore {
                     && resource.data.user_id == request.auth.uid
                     && request.resource.data.user_id == resource.data.user_id;
 
-      // Delete: User must own the file
-      allow delete: if isAuthenticated()
-                    && resource.data.user_id == request.auth.uid;
+      // Delete: User must own the file or is admin
+      allow delete: if isAuthenticated() &&
+                       (resource.data.user_id == request.auth.uid || isAdmin());
     }
 
-    // ExcelTables collection - user can access if they own the parent file
+    // =========================================================================
+    // EXCEL TABLES COLLECTION - CRITICAL SECURITY
+    // =========================================================================
+
     match /excel_tables/{tableId} {
       // Helper to check if user owns parent file
       function ownsParentFile() {
@@ -52,23 +68,29 @@ service cloud.firestore {
       // Read: User must own the parent file
       allow read: if isAuthenticated() && ownsParentFile();
 
-      // List/Query: User can query tables for their files
+      // List/Query: User can query tables only for their files
+      // WARNING: Without proper WHERE clause, this will scan all tables (expensive)
       allow list: if isAuthenticated();
 
-      // Create: Backend only (tables created during file upload)
-      // For now, allow if user owns the parent file
+      // Create: User must own the parent file
       allow create: if isAuthenticated()
                     && exists(/databases/$(database)/documents/parsed_excel_files/$(request.resource.data.parsed_file_id))
                     && get(/databases/$(database)/documents/parsed_excel_files/$(request.resource.data.parsed_file_id)).data.user_id == request.auth.uid;
 
-      // Update: User must own parent file (for status updates, etc.)
+      // Update: User must own parent file
       allow update: if isAuthenticated() && ownsParentFile();
 
-      // Delete: User must own parent file (cascade delete)
-      allow delete: if isAuthenticated() && ownsParentFile();
+      // Delete: User must own parent file or is admin (cascade delete)
+      allow delete: if isAuthenticated() && (ownsParentFile() || isAdmin());
     }
 
-    // Existing rules for other collections...
-    // (Add your existing template, report, form rules here)
+    // =========================================================================
+    // DEFAULT DENY - CRITICAL SECURITY
+    // =========================================================================
+
+    // Deny all other access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }

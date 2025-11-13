@@ -1,0 +1,397 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // HELPER FUNCTIONS
+    // =========================================================================
+
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user is the document owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Check if user has admin role
+    function isAdmin() {
+      return isAuthenticated() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Check if user is active
+    function isActiveUser() {
+      return isAuthenticated() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true;
+    }
+
+    // Check if form is public
+    function isPublicForm(formId) {
+      return get(/databases/$(database)/documents/forms/$(formId)).data.isPublic == true;
+    }
+
+    // Check if form is active
+    function isActiveForm(formId) {
+      return get(/databases/$(database)/documents/forms/$(formId)).data.isActive == true;
+    }
+
+    // Check if user is form creator
+    function isFormCreator(formId) {
+      return isAuthenticated() &&
+             get(/databases/$(database)/documents/forms/$(formId)).data.creator.userId == request.auth.uid;
+    }
+
+    // Validate email format
+    function isValidEmail(email) {
+      return email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+    }
+
+    // =========================================================================
+    // USERS COLLECTION
+    // =========================================================================
+
+    match /users/{userId} {
+      // Allow read if:
+      // - User is reading their own document
+      // - User is admin
+      // - Reading basic public profile info
+      allow read: if isOwner(userId) || isAdmin();
+
+      // Allow create only during signup (no auth required yet)
+      allow create: if request.auth == null ||
+                       (isAuthenticated() && request.auth.uid == userId);
+
+      // Allow update only if owner or admin
+      allow update: if isOwner(userId) || isAdmin();
+
+      // Delete only by admin
+      allow delete: if isAdmin();
+
+      // Subcollection: OAuth Tokens
+      match /tokens/{platform} {
+        // Only user can access their own tokens
+        allow read, write: if isOwner(userId);
+      }
+
+      // Subcollection: Sessions
+      match /sessions/{sessionId} {
+        // Only user can access their own sessions
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      // Subcollection: Quick Access Tokens
+      match /quickAccessTokens/{tokenId} {
+        // Allow read with valid token
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isAuthenticated(); // Require authentication
+        allow update: if isOwner(userId) || isAdmin();
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // =========================================================================
+    // FORMS COLLECTION
+    // =========================================================================
+
+    match /forms/{formId} {
+      // Allow read if:
+      // - Form is public and active
+      // - User is the creator
+      // - User is admin
+      allow read: if (isActiveForm(formId) && isPublicForm(formId)) ||
+                     isFormCreator(formId) ||
+                     isAdmin();
+
+      // Allow create if authenticated and active
+      allow create: if isAuthenticated() &&
+                       isActiveUser() &&
+                       request.resource.data.creator.userId == request.auth.uid;
+
+      // Allow update only by creator or admin
+      allow update: if isFormCreator(formId) || isAdmin();
+
+      // Allow delete only by creator or admin
+      allow delete: if isFormCreator(formId) || isAdmin();
+
+      // Subcollection: Form Submissions
+      match /submissions/{submissionId} {
+        // Allow read if:
+        // - User is form creator
+        // - User is the submitter
+        // - User is admin
+        allow read: if isFormCreator(formId) ||
+                       (isAuthenticated() && resource.data.submitter.userId == request.auth.uid) ||
+                       isAdmin();
+
+        // Allow create if:
+        // - Form is active and public (anyone can submit)
+        // - User is authenticated (for private forms)
+        allow create: if (isActiveForm(formId) && isPublicForm(formId)) ||
+                         (isActiveForm(formId) && isAuthenticated());
+
+        // Allow update only by form creator or admin
+        allow update: if isFormCreator(formId) || isAdmin();
+
+        // Allow delete only by form creator or admin
+        allow delete: if isFormCreator(formId) || isAdmin();
+      }
+
+      // Subcollection: QR Codes
+      match /qrCodes/{qrCodeId} {
+        // Allow read if can read form
+        allow read: if (isActiveForm(formId) && isPublicForm(formId)) ||
+                       isFormCreator(formId) ||
+                       isAdmin();
+
+        // Allow create/update/delete only by form creator or admin
+        allow create, update, delete: if isFormCreator(formId) || isAdmin();
+      }
+
+      // Subcollection: Access Codes
+      match /accessCodes/{codeId} {
+        // Allow read only by form creator or admin
+        allow read: if isFormCreator(formId) || isAdmin();
+
+        // Allow create/update/delete only by form creator or admin
+        allow create, update, delete: if isFormCreator(formId) || isAdmin();
+      }
+    }
+
+    // =========================================================================
+    // PROGRAMS COLLECTION
+    // =========================================================================
+
+    match /programs/{programId} {
+      // Allow read if authenticated and active
+      allow read: if isActiveUser() || isAdmin();
+
+      // Allow create if authenticated and active
+      allow create: if isActiveUser();
+
+      // Allow update by creator or admin
+      // Note: We'd need to track program creator in the document
+      allow update: if isAuthenticated() || isAdmin();
+
+      // Allow delete only by admin
+      allow delete: if isAdmin();
+
+      // Subcollection: Participants
+      match /participants/{participantId} {
+        // Allow read if authenticated
+        allow read: if isActiveUser() || isAdmin();
+
+        // Allow create if authenticated
+        allow create: if isActiveUser();
+
+        // Allow update/delete by admin only
+        allow update, delete: if isAdmin();
+
+        // Subcollection: Attendance Records
+        match /attendance/{recordId} {
+          // Allow read if authenticated
+          allow read: if isActiveUser() || isAdmin();
+
+          // Allow create/update by authenticated users
+          allow create, update: if isActiveUser();
+
+          // Allow delete only by admin
+          allow delete: if isAdmin();
+        }
+      }
+
+      // Subcollection: Integrations
+      match /integrations/{integrationId} {
+        // Allow read if authenticated
+        allow read: if isActiveUser() || isAdmin();
+
+        // Allow create/update by authenticated users
+        allow create, update: if isActiveUser();
+
+        // Allow delete by admin
+        allow delete: if isAdmin();
+
+        // Subcollection: Integration Responses
+        match /responses/{responseId} {
+          // Allow read if authenticated
+          allow read: if isActiveUser() || isAdmin();
+
+          // Allow create by system (webhooks)
+          allow create: if true; // Webhook endpoint
+
+          // Allow update/delete by admin
+          allow update, delete: if isAdmin();
+        }
+      }
+    }
+
+    // =========================================================================
+    // REPORTS COLLECTION
+    // =========================================================================
+
+    match /reports/{reportId} {
+      // Allow read if:
+      // - User is the creator
+      // - User is admin
+      allow read: if isAuthenticated() &&
+                     (resource.data.createdBy.userId == request.auth.uid || isAdmin());
+
+      // Allow create if authenticated and active
+      allow create: if isActiveUser() &&
+                       request.resource.data.createdBy.userId == request.auth.uid;
+
+      // Allow update by creator or admin
+      allow update: if (isAuthenticated() && resource.data.createdBy.userId == request.auth.uid) ||
+                       isAdmin();
+
+      // Allow delete by creator or admin
+      allow delete: if (isAuthenticated() && resource.data.createdBy.userId == request.auth.uid) ||
+                       isAdmin();
+
+      // Subcollection: Analytics
+      match /analytics/{analyticsId} {
+        // Same permissions as parent report
+        allow read: if isAuthenticated() &&
+                       (get(/databases/$(database)/documents/reports/$(reportId)).data.createdBy.userId == request.auth.uid ||
+                        isAdmin());
+
+        allow write: if isAdmin(); // Only admin or system can write analytics
+      }
+    }
+
+    // =========================================================================
+    // REPORT TEMPLATES COLLECTION
+    // =========================================================================
+
+    match /reportTemplates/{templateId} {
+      // Allow read if authenticated
+      allow read: if isActiveUser();
+
+      // Allow create/update/delete only by admin
+      allow create, update, delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // FILES COLLECTION
+    // =========================================================================
+
+    match /files/{fileId} {
+      // Allow read if:
+      // - File is public
+      // - User is the uploader
+      // - User is admin
+      allow read: if resource.data.isPublic == true ||
+                     (isAuthenticated() && resource.data.uploader.userId == request.auth.uid) ||
+                     isAdmin();
+
+      // Allow create if authenticated
+      allow create: if isActiveUser() &&
+                       request.resource.data.uploader.userId == request.auth.uid;
+
+      // Allow update by uploader or admin
+      allow update: if (isAuthenticated() && resource.data.uploader.userId == request.auth.uid) ||
+                       isAdmin();
+
+      // Allow delete by uploader or admin
+      allow delete: if (isAuthenticated() && resource.data.uploader.userId == request.auth.uid) ||
+                       isAdmin();
+    }
+
+    // =========================================================================
+    // API INTEGRATIONS COLLECTION
+    // =========================================================================
+
+    match /apiIntegrations/{integrationId} {
+      // Allow read if owner or admin
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Allow create if authenticated
+      allow create: if isActiveUser() &&
+                       request.resource.data.userId == request.auth.uid;
+
+      // Allow update by owner or admin
+      allow update: if (isAuthenticated() && resource.data.userId == request.auth.uid) ||
+                       isAdmin();
+
+      // Allow delete by owner or admin
+      allow delete: if (isAuthenticated() && resource.data.userId == request.auth.uid) ||
+                       isAdmin();
+
+      // Subcollection: Metrics
+      match /metrics/{metricId} {
+        // Same permissions as parent integration
+        allow read: if isAuthenticated() &&
+                       (get(/databases/$(database)/documents/apiIntegrations/$(integrationId)).data.userId == request.auth.uid ||
+                        isAdmin());
+
+        // System writes metrics
+        allow create: if isAuthenticated();
+      }
+
+      // Subcollection: Audit Log
+      match /auditLog/{logId} {
+        // Read by owner or admin
+        allow read: if isAuthenticated() &&
+                       (get(/databases/$(database)/documents/apiIntegrations/$(integrationId)).data.userId == request.auth.uid ||
+                        isAdmin());
+
+        // System creates audit logs
+        allow create: if isAuthenticated();
+
+        // No updates or deletes
+        allow update, delete: if false;
+      }
+    }
+
+    // =========================================================================
+    // SYSTEM METRICS COLLECTION (Admin Only)
+    // =========================================================================
+
+    match /systemMetrics/{document=**} {
+      // Read only by admin
+      allow read: if isAdmin();
+
+      // Write only by system/admin
+      allow write: if isAdmin();
+    }
+
+    // =========================================================================
+    // VALIDATION RULES
+    // =========================================================================
+
+    // Ensure required fields exist on user creation
+    match /users/{userId} {
+      allow create: if request.resource.data.keys().hasAll(['email', 'role', 'isActive', 'createdAt']) &&
+                       isValidEmail(request.resource.data.email) &&
+                       request.resource.data.role in ['user', 'admin', 'moderator'];
+    }
+
+    // Ensure required fields on form creation
+    match /forms/{formId} {
+      allow create: if request.resource.data.keys().hasAll(['title', 'schema', 'creator', 'isActive', 'createdAt']) &&
+                       request.resource.data.title.size() > 0 &&
+                       request.resource.data.creator.userId == request.auth.uid;
+    }
+
+    // Ensure required fields on form submission
+    match /forms/{formId}/submissions/{submissionId} {
+      allow create: if request.resource.data.keys().hasAll(['data', 'submittedAt', 'status']) &&
+                       request.resource.data.status == 'submitted';
+    }
+
+    // =========================================================================
+    // DEFAULT DENY
+    // =========================================================================
+
+    // Deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
