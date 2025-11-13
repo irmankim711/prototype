@@ -470,11 +470,23 @@ class FirestoreReportService:
             Download URL if successful, None otherwise
         """
         try:
+            # Validate file path exists before upload
+            if not os.path.exists(file_path):
+                logger.error(f"❌ File does not exist at path: {file_path}")
+                logger.error(f"❌ Cannot upload to Firebase Storage - file missing")
+                return None
+
             # Generate storage path
             storage_path = f'reports/{report_id}/report.{file_format}'
 
             # Get file size
-            file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+            file_size = os.path.getsize(file_path)
+            logger.info(f"📤 Uploading file to Firebase Storage:")
+            logger.info(f"   - Report ID: {report_id}")
+            logger.info(f"   - Local path: {file_path}")
+            logger.info(f"   - Storage path: {storage_path}")
+            logger.info(f"   - File size: {file_size} bytes")
+            logger.info(f"   - Format: {file_format}")
 
             # Upload to Firebase Storage
             download_url = firebase_storage_service.upload_file(
@@ -488,6 +500,8 @@ class FirestoreReportService:
             )
 
             if download_url:
+                logger.info(f"✅ File uploaded successfully to Firebase Storage")
+                logger.info(f"   - Download URL generated: {download_url[:100]}...")
                 # Update Firestore with file info
                 self.update_report_status(
                     report_id=report_id,
@@ -496,11 +510,19 @@ class FirestoreReportService:
                     storage_url=download_url,
                     file_size=file_size
                 )
+            else:
+                logger.error(f"❌ Firebase Storage upload returned None")
+                logger.error(f"❌ File was NOT uploaded to Firebase Storage")
+                logger.error(f"❌ Check Firebase Storage service initialization and credentials")
 
             return download_url
 
         except Exception as e:
             logger.error(f"❌ Error saving report file: {e}")
+            logger.error(f"❌ File path: {file_path}")
+            logger.error(f"❌ Report ID: {report_id}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return None
 
 
