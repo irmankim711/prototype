@@ -121,6 +121,8 @@ const FormDataExporter: React.FC<FormDataExporterProps> = ({
         newOptions.excel_options = { ...prev.excel_options, [key]: value };
       } else if (section === 'include_analytics') {
         newOptions.include_analytics = value;
+      } else if (section === 'use_ai_enhancement') {
+        newOptions.use_ai_enhancement = value;
       }
       return newOptions;
     });
