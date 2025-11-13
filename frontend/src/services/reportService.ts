@@ -92,6 +92,26 @@ class ReportService {
     try {
       console.log(`📥 Downloading report ${reportId} via proxy endpoint`);
 
+      // Check if token exists and is valid
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) {
+        throw new Error('Authentication required. Please log in again.');
+      }
+
+      // Check if token is expired
+      try {
+        const decoded = JSON.parse(atob(accessToken.split(".")[1]));
+        const currentTime = Math.floor(Date.now() / 1000);
+        if (decoded.exp && decoded.exp <= currentTime) {
+          console.warn("⚠️ Token expired, attempting to refresh...");
+          // Dispatch event to trigger token refresh
+          window.dispatchEvent(new CustomEvent('auth:token-refresh-needed'));
+          throw new Error('Your session has expired. Please log in again.');
+        }
+      } catch (tokenCheckError) {
+        console.error("Token validation error:", tokenCheckError);
+      }
+
       const response = await axiosInstance.get(downloadUrl, {
         responseType: 'blob',
         headers: {
@@ -130,9 +150,19 @@ class ReportService {
 
     } catch (error: any) {
       console.error('Download error:', error);
+      console.error('Download error response:', error.response?.data);
 
       // Provide more detailed error message
-      if (error.response?.status === 404) {
+      if (error.response?.status === 401) {
+        const errorData = error.response.data;
+        const errorMessage = errorData?.error || 'Authentication failed';
+        const errorCode = errorData?.code;
+
+        if (errorCode === 'MISSING_AUTH_HEADER' || errorCode === 'INVALID_TOKEN') {
+          throw new Error('Your session has expired. Please log out and log in again to continue.');
+        }
+        throw new Error(`Authentication error: ${errorMessage}`);
+      } else if (error.response?.status === 404) {
         throw new Error('Report not found or has been deleted');
       } else if (error.response?.status === 403) {
         throw new Error('You do not have permission to download this report');
