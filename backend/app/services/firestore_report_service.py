@@ -234,6 +234,24 @@ class FirestoreReportService:
         Returns:
             Report dict in API format
         """
+        # Extract storage paths for different formats
+        storage_path = report.get('storagePath', '')
+        report_id = report.get('id', '')
+
+        # Generate format-specific paths based on Firebase Storage structure
+        # Firebase Storage stores files at: reports/{report_id}/report.{format}
+        pdf_file_path = f'reports/{report_id}/report.pdf' if report_id else None
+        docx_file_path = f'reports/{report_id}/report.docx' if report_id else None
+        excel_file_path = f'reports/{report_id}/report.xlsx' if report_id else None
+
+        # Check which files actually exist based on storagePath or downloadUrl
+        # If storagePath exists, we know at least one format was generated
+        if not storage_path and not report.get('downloadUrl'):
+            # No files generated yet
+            pdf_file_path = None
+            docx_file_path = None
+            excel_file_path = None
+
         return {
             'id': report.get('id'),
             'uuid': report.get('id'),
@@ -242,8 +260,16 @@ class FirestoreReportService:
             'status': report.get('generationStatus', 'unknown'),
             'generation_status': report.get('generationStatus', 'unknown'),
             'report_type': report.get('reportType', 'automated'),
-            'file_path': report.get('storagePath'),
+            'file_path': storage_path,
             'file_format': self._extract_file_format(report.get('reportType', '')),
+            # Multi-format file paths for frontend download buttons
+            'pdf_file_path': pdf_file_path,
+            'docx_file_path': docx_file_path,
+            'excel_file_path': excel_file_path,
+            # File sizes (can be added later when stored in Firestore)
+            'pdf_file_size': report.get('pdfFileSize'),
+            'docx_file_size': report.get('docxFileSize'),
+            'excel_file_size': report.get('excelFileSize') or report.get('fileSize'),
             'created_at': serialize_firestore_timestamp(report.get('createdAt')),
             'updated_at': serialize_firestore_timestamp(report.get('updatedAt')),
             'generated_at': serialize_firestore_timestamp(report.get('generatedAt')),
