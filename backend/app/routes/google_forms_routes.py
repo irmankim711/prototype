@@ -557,7 +557,8 @@ def download_google_forms_excel(form_id: str, filename: str):
         # In a production environment, you might want to add more security checks
 
         # Construct file path
-        upload_folder = os.path.join(current_app.root_path, '..', 'backend', 'static', 'exports')
+        # current_app.root_path points to backend/app, so we need to go up one level and then into static/exports
+        upload_folder = os.path.join(current_app.root_path, '..', 'static', 'exports')
         file_path = os.path.join(upload_folder, filename)
 
         # Verify file exists and is an Excel file
