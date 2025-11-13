@@ -551,59 +551,51 @@ def _handle_firestore_download(firestore_report: dict, user_id: str, file_type: 
     if file_type not in valid_types:
         return jsonify({'error': f'Invalid file type. Must be one of: {", ".join(valid_types)}'}), 400
 
-    # Get the file path from Firestore
-    file_path = None
-    filename = None
+    # For Firestore reports, files are stored in Firebase Storage, not local filesystem
+    # Construct Firebase Storage path based on file type
+    storage_path = None
 
-    # Try format-specific path first
-    if file_type == 'pdf' and firestore_report.get('pdfPath'):
-        file_path = firestore_report.get('pdfPath')
-        filename = f"{firestore_report.get('title', 'report').replace(' ', '_')}.pdf"
-    elif file_type == 'docx' and firestore_report.get('docxPath'):
-        file_path = firestore_report.get('docxPath')
-        filename = f"{firestore_report.get('title', 'report').replace(' ', '_')}.docx"
-    elif file_type == 'excel' and firestore_report.get('excelPath'):
-        file_path = firestore_report.get('excelPath')
-        filename = f"{firestore_report.get('title', 'report').replace(' ', '_')}.xlsx"
+    # Firebase Storage structure: reports/{report_id}/report.{format}
+    if file_type == 'pdf':
+        storage_path = f"reports/{report_id}/report.pdf"
+    elif file_type == 'docx':
+        storage_path = f"reports/{report_id}/report.docx"
+    elif file_type == 'excel':
+        storage_path = f"reports/{report_id}/report.xlsx"
 
-    # Fallback: Check generic filePath for legacy reports
-    if not file_path:
-        generic_path = firestore_report.get('filePath') or firestore_report.get('storagePath')
-        if generic_path:
-            # Check if the file extension matches what was requested
-            file_ext = os.path.splitext(generic_path)[1].lower().replace('.', '')
-            if (file_type == 'pdf' and file_ext == 'pdf') or \
-               (file_type == 'docx' and file_ext == 'docx') or \
-               (file_type == 'excel' and file_ext in ['xlsx', 'xls']):
-                file_path = generic_path
-                filename = f"{firestore_report.get('title', 'report').replace(' ', '_')}.{file_ext}"
-                logger.info(f"Using generic filePath for legacy report {report_id}: {file_path}")
+    if not storage_path:
+        logger.error(f"Invalid file type {file_type} for Firestore report {report_id}")
+        return jsonify({'error': f'Invalid file type: {file_type}'}), 400
 
-    if not file_path or not os.path.exists(file_path):
-        logger.error(f"File not found for Firestore report {report_id} type {file_type}. Checked path: {file_path}")
+    # Get signed URL from Firebase Storage
+    try:
+        from app.services.firebase_storage_service import firebase_storage_service
+
+        signed_url = firebase_storage_service.get_signed_url(storage_path, expiration_hours=1)
+
+        if not signed_url:
+            logger.error(f"Could not generate signed URL for {storage_path}")
+            return jsonify({
+                'error': 'File not found',
+                'details': f'The {file_type} file for this report is not available in Firebase Storage.',
+                'report_status': firestore_report.get('generationStatus')
+            }), 404
+
+        # Update download tracking in Firestore
+        firestore_report_service.increment_download_count(str(report_id))
+
+        logger.info(f"Redirecting to signed URL for Firestore report {report_id} type {file_type}")
+
+        # Redirect to signed URL
+        from flask import redirect
+        return redirect(signed_url)
+
+    except Exception as e:
+        logger.error(f"Error getting signed URL for {storage_path}: {e}")
         return jsonify({
-            'error': 'File not found',
-            'details': f'The {file_type} file for this report is not available. It may not have been generated yet.',
-            'report_status': firestore_report.get('generationStatus'),
-            'available_files': {
-                'pdf': bool(firestore_report.get('pdfPath')),
-                'docx': bool(firestore_report.get('docxPath')),
-                'excel': bool(firestore_report.get('excelPath'))
-            }
-        }), 404
-
-    # Update download tracking in Firestore
-    firestore_report_service.increment_download_count(str(report_id))
-
-    logger.info(f"Serving Firestore file {file_path} for report {report_id} type {file_type}")
-
-    # Send file
-    return send_file(
-        file_path,
-        as_attachment=True,
-        download_name=filename,
-        mimetype='application/octet-stream'
-    )
+            'error': 'Failed to generate download URL',
+            'details': str(e)
+        }), 500
 
 
 @reports_bp.route('/<report_id>/status', methods=['GET'])
