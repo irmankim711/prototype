@@ -130,10 +130,7 @@ export default function ReportHistory() {
   });
 
   // Fetch storage usage
-  const {
-    data: storageData,
-    isLoading: storageLoading,
-  } = useQuery({
+  const { data: storageData, isLoading: storageLoading } = useQuery({
     queryKey: ["storageUsage"],
     queryFn: () => reportService.getStorageUsage(),
     refetchInterval: 30000, // Refresh every 30 seconds
@@ -148,11 +145,14 @@ export default function ReportHistory() {
     },
     onError: (error: any) => {
       console.error("Delete error:", error);
-      const errorMessage = error?.response?.status === 401
-        ? "You must be logged in to delete reports"
-        : error?.response?.status === 403
-        ? "You don't have permission to delete this report"
-        : error?.response?.data?.error || error.message || "Failed to delete report";
+      const errorMessage =
+        error?.response?.status === 401
+          ? "You must be logged in to delete reports"
+          : error?.response?.status === 403
+          ? "You don't have permission to delete this report"
+          : error?.response?.data?.error ||
+            error.message ||
+            "Failed to delete report";
       setError(errorMessage);
     },
   });
@@ -163,15 +163,20 @@ export default function ReportHistory() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["reports"] });
       queryClient.invalidateQueries({ queryKey: ["storageUsage"] });
-      setSuccess(`Cleanup completed: ${result.reports_processed || 0} reports processed`);
+      setSuccess(
+        `Cleanup completed: ${result.reports_processed || 0} reports processed`
+      );
     },
     onError: (error: any) => {
       console.error("Cleanup error:", error);
-      const errorMessage = error?.response?.status === 401
-        ? "You must be logged in to cleanup reports"
-        : error?.response?.status === 403
-        ? "You don't have permission to cleanup reports"
-        : error?.response?.data?.error || error.message || "Failed to cleanup reports";
+      const errorMessage =
+        error?.response?.status === 401
+          ? "You must be logged in to cleanup reports"
+          : error?.response?.status === 403
+          ? "You don't have permission to cleanup reports"
+          : error?.response?.data?.error ||
+            error.message ||
+            "Failed to cleanup reports";
       setError(errorMessage);
     },
   });
@@ -200,22 +205,63 @@ export default function ReportHistory() {
     setIsPreviewOpen(false);
   };
 
-  const handleDownloadReport = async (report: Report, fileType: 'pdf' | 'docx' | 'excel') => {
+  const handleDownloadReport = async (
+    report: Report,
+    fileType: "pdf" | "docx" | "excel"
+  ) => {
     try {
-      const blob = await reportService.downloadReport(report.id.toString(), fileType);
+      setError(null); // Clear previous errors
+      console.log(
+        `📥 Starting download for report ${
+          report.id
+        } as ${fileType.toUpperCase()}`
+      );
+      const blob = await reportService.downloadReport(
+        report.id.toString(),
+        fileType
+      );
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.style.display = "none";
       a.href = url;
-      a.download = `${report.title}_${fileType}.${fileType === 'excel' ? 'xlsx' : fileType}`;
+      a.download = `${report.title}_${fileType}.${
+        fileType === "excel" ? "xlsx" : fileType
+      }`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      setSuccess(`Report downloaded as ${fileType.toUpperCase()}`);
+      setSuccess(`✅ Report downloaded as ${fileType.toUpperCase()}`);
+      console.log(`✅ Download completed for report ${report.id}`);
     } catch (err: any) {
-      setError(`Failed to download ${fileType.toUpperCase()}: ${err.message}`);
-      console.error("Download error:", err);
+      console.error("❌ Download error:", err);
+
+      // Extract detailed error information
+      let errorMessage = `Failed to download ${fileType.toUpperCase()}`;
+
+      if (err.response?.status === 403) {
+        errorMessage =
+          "❌ Access Denied: You do not have permission to download this report. This report may belong to another user or you may not have admin privileges.";
+      } else if (err.response?.status === 404) {
+        errorMessage = `❌ File Not Found: The ${fileType.toUpperCase()} file for this report is not available. The report may not have been fully generated yet.`;
+      } else if (err.response?.status === 401) {
+        errorMessage =
+          "❌ Authentication Required: Your session has expired. Please log in again.";
+      } else if (err.response?.data?.error) {
+        errorMessage = `❌ ${err.response.data.error}`;
+        if (err.response.data.details) {
+          errorMessage += `\n\nDetails: ${err.response.data.details}`;
+        }
+      } else if (err.message) {
+        errorMessage = `❌ Error: ${err.message}`;
+      }
+
+      setError(errorMessage);
+      console.error("Download error details:", {
+        status: err.response?.status,
+        data: err.response?.data,
+        message: err.message,
+      });
     }
   };
 
@@ -232,7 +278,9 @@ export default function ReportHistory() {
   };
 
   const handleForceCleanup = async () => {
-    if (window.confirm("This will force cleanup all old reports. Are you sure?")) {
+    if (
+      window.confirm("This will force cleanup all old reports. Are you sure?")
+    ) {
       await cleanupMutation.mutateAsync(true);
     }
   };
@@ -261,7 +309,14 @@ export default function ReportHistory() {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3,
+        }}
+      >
         <Typography variant="h4" component="h1">
           Report History
         </Typography>
@@ -374,7 +429,9 @@ export default function ReportHistory() {
                   <TableRow key={report.id} hover>
                     <TableCell>
                       <Chip
-                        label={`${getStatusIcon(report.status)} ${report.status}`}
+                        label={`${getStatusIcon(report.status)} ${
+                          report.status
+                        }`}
                         color={getStatusColor(report.status)}
                         size="small"
                       />
@@ -391,17 +448,17 @@ export default function ReportHistory() {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={report.report_type || 'custom'}
+                        label={report.report_type || "custom"}
                         size="small"
                         variant="outlined"
                       />
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        {new Date(report.created_at || '').toLocaleDateString()}
+                        {new Date(report.created_at || "").toLocaleDateString()}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {new Date(report.created_at || '').toLocaleTimeString()}
+                        {new Date(report.created_at || "").toLocaleTimeString()}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -410,7 +467,9 @@ export default function ReportHistory() {
                           <Tooltip title="Download PDF">
                             <IconButton
                               size="small"
-                              onClick={() => handleDownloadReport(report, 'pdf')}
+                              onClick={() =>
+                                handleDownloadReport(report, "pdf")
+                              }
                               color="error"
                             >
                               <PdfIcon fontSize="small" />
@@ -421,7 +480,9 @@ export default function ReportHistory() {
                           <Tooltip title="Download DOCX">
                             <IconButton
                               size="small"
-                              onClick={() => handleDownloadReport(report, 'docx')}
+                              onClick={() =>
+                                handleDownloadReport(report, "docx")
+                              }
                               color="primary"
                             >
                               <DocxIcon fontSize="small" />
@@ -432,7 +493,9 @@ export default function ReportHistory() {
                           <Tooltip title="Download Excel">
                             <IconButton
                               size="small"
-                              onClick={() => handleDownloadReport(report, 'excel')}
+                              onClick={() =>
+                                handleDownloadReport(report, "excel")
+                              }
                               color="success"
                             >
                               <ExcelIcon fontSize="small" />
@@ -447,16 +510,26 @@ export default function ReportHistory() {
                           <IconButton
                             size="small"
                             onClick={() => {
-                              console.log('👁️ Preview button clicked for report:', report);
-                              console.log('👁️ Report ID:', report.id);
-                              console.log('👁️ Report ID type:', typeof report.id);
-                              const reportIdString = report.id?.toString() || '0';
-                              console.log('👁️ Setting preview report ID:', reportIdString);
+                              console.log(
+                                "👁️ Preview button clicked for report:",
+                                report
+                              );
+                              console.log("👁️ Report ID:", report.id);
+                              console.log(
+                                "👁️ Report ID type:",
+                                typeof report.id
+                              );
+                              const reportIdString =
+                                report.id?.toString() || "0";
+                              console.log(
+                                "👁️ Setting preview report ID:",
+                                reportIdString
+                              );
                               setPreviewReportId(reportIdString);
                               setPreviewReport(report); // Store the full report object
                               setPreviewOpen(true);
                             }}
-                            disabled={report.status !== 'completed'}
+                            disabled={report.status !== "completed"}
                           >
                             <ViewIcon fontSize="small" />
                           </IconButton>
@@ -496,9 +569,7 @@ export default function ReportHistory() {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>
-          Report Preview: {selectedReport?.title}
-        </DialogTitle>
+        <DialogTitle>Report Preview: {selectedReport?.title}</DialogTitle>
         <DialogContent>
           {selectedReport && (
             <Box>
@@ -514,22 +585,34 @@ export default function ReportHistory() {
                     <strong>Type:</strong> {selectedReport.report_type}
                   </Typography>
                   <Typography variant="body2">
-                    <strong>Created:</strong> {new Date(selectedReport.created_at || '').toLocaleString()}
+                    <strong>Created:</strong>{" "}
+                    {new Date(selectedReport.created_at || "").toLocaleString()}
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="body2">
-                    <strong>PDF Size:</strong> {selectedReport.pdf_file_size ? `${Math.round(selectedReport.pdf_file_size / 1024)} KB` : 'N/A'}
+                    <strong>PDF Size:</strong>{" "}
+                    {selectedReport.pdf_file_size
+                      ? `${Math.round(selectedReport.pdf_file_size / 1024)} KB`
+                      : "N/A"}
                   </Typography>
                   <Typography variant="body2">
-                    <strong>DOCX Size:</strong> {selectedReport.docx_file_size ? `${Math.round(selectedReport.docx_file_size / 1024)} KB` : 'N/A'}
+                    <strong>DOCX Size:</strong>{" "}
+                    {selectedReport.docx_file_size
+                      ? `${Math.round(selectedReport.docx_file_size / 1024)} KB`
+                      : "N/A"}
                   </Typography>
                   <Typography variant="body2">
-                    <strong>Excel Size:</strong> {selectedReport.excel_file_size ? `${Math.round(selectedReport.excel_file_size / 1024)} KB` : 'N/A'}
+                    <strong>Excel Size:</strong>{" "}
+                    {selectedReport.excel_file_size
+                      ? `${Math.round(
+                          selectedReport.excel_file_size / 1024
+                        )} KB`
+                      : "N/A"}
                   </Typography>
                 </Grid>
               </Grid>
-              
+
               {selectedReport.description && (
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="h6" gutterBottom>
@@ -547,10 +630,12 @@ export default function ReportHistory() {
                 </Typography>
                 <Box sx={{ display: "flex", gap: 1 }}>
                   {/* Google Forms reports only support DOCX */}
-                  {selectedReport.report_type === 'google_forms_automated' ? (
+                  {selectedReport.report_type === "google_forms_automated" ? (
                     <Button
                       startIcon={<DocxIcon />}
-                      onClick={() => handleDownloadReport(selectedReport, 'docx')}
+                      onClick={() =>
+                        handleDownloadReport(selectedReport, "docx")
+                      }
                       variant="contained"
                       color="primary"
                     >
@@ -562,7 +647,9 @@ export default function ReportHistory() {
                       {selectedReport.pdf_file_path && (
                         <Button
                           startIcon={<PdfIcon />}
-                          onClick={() => handleDownloadReport(selectedReport, 'pdf')}
+                          onClick={() =>
+                            handleDownloadReport(selectedReport, "pdf")
+                          }
                           variant="outlined"
                           color="error"
                         >
@@ -572,7 +659,9 @@ export default function ReportHistory() {
                       {selectedReport.docx_file_path && (
                         <Button
                           startIcon={<DocxIcon />}
-                          onClick={() => handleDownloadReport(selectedReport, 'docx')}
+                          onClick={() =>
+                            handleDownloadReport(selectedReport, "docx")
+                          }
                           variant="outlined"
                           color="primary"
                         >
@@ -582,7 +671,9 @@ export default function ReportHistory() {
                       {selectedReport.excel_file_path && (
                         <Button
                           startIcon={<ExcelIcon />}
-                          onClick={() => handleDownloadReport(selectedReport, 'excel')}
+                          onClick={() =>
+                            handleDownloadReport(selectedReport, "excel")
+                          }
                           variant="outlined"
                           color="success"
                         >
@@ -638,7 +729,8 @@ export default function ReportHistory() {
                     Total Storage: {storageUsage.total_storage_mb} MB
                   </Typography>
                   <Typography variant="body2">
-                    Average per Report: {storageUsage.average_storage_per_report} bytes
+                    Average per Report:{" "}
+                    {storageUsage.average_storage_per_report} bytes
                   </Typography>
                   <Typography variant="body2">
                     Static Directory: {storageUsage.static_directory_size_mb} MB
@@ -648,21 +740,23 @@ export default function ReportHistory() {
                   </Typography>
                 </Grid>
               </Grid>
-              
+
               {storageUsage.last_cleanup && (
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="h6" gutterBottom>
                     Cleanup Information
                   </Typography>
                   <Typography variant="body2">
-                    Last Cleanup: {new Date(storageUsage.last_cleanup).toLocaleString()}
+                    Last Cleanup:{" "}
+                    {new Date(storageUsage.last_cleanup).toLocaleString()}
                   </Typography>
                   <Typography variant="body2">
                     Retention Policy: {storageUsage.retention_days} days
                   </Typography>
                   {storageUsage.next_cleanup_due && (
                     <Typography variant="body2">
-                      Next Cleanup: {new Date(storageUsage.next_cleanup_due).toLocaleString()}
+                      Next Cleanup:{" "}
+                      {new Date(storageUsage.next_cleanup_due).toLocaleString()}
                     </Typography>
                   )}
                 </Box>
@@ -680,7 +774,11 @@ export default function ReportHistory() {
 
       {/* Success/Error Alerts */}
       {success && (
-        <Alert severity="success" sx={{ mt: 2 }} onClose={() => setSuccess(null)}>
+        <Alert
+          severity="success"
+          sx={{ mt: 2 }}
+          onClose={() => setSuccess(null)}
+        >
           {success}
         </Alert>
       )}
@@ -702,7 +800,7 @@ export default function ReportHistory() {
           reportId={previewReportId}
           title="Report Preview"
           report={previewReport}
-          onDownload={(fileType: 'pdf' | 'docx' | 'excel') => {
+          onDownload={(fileType: "pdf" | "docx" | "excel") => {
             // Download the report in the selected format
             if (previewReport) {
               handleDownloadReport(previewReport, fileType);

@@ -4561,10 +4561,12 @@ def download_report_pdf(report_id):
     """Download report as PDF"""
     try:
         user_id = get_current_user_id()
+        logger.info(f"📥 PDF download requested for report {report_id} by user {user_id}")
 
         # Get the report
         report = Report.query.filter_by(id=report_id).first()
         if not report:
+            logger.warning(f"❌ Report not found: {report_id}")
             return jsonify({
                 'error': 'Report not found',
                 'code': 'NOT_FOUND'
@@ -4576,17 +4578,42 @@ def download_report_pdf(report_id):
 
         # Support both created_by and user_id fields for compatibility
         report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+        
+        # Normalize IDs for comparison (handle both int and string)
+        try:
+            normalized_owner = int(report_owner) if report_owner else None
+            normalized_user = int(user_id) if user_id else None
+        except (ValueError, TypeError):
+            normalized_owner = str(report_owner) if report_owner else None
+            normalized_user = str(user_id) if user_id else None
+        
+        logger.info(f"📋 Access check: report_owner={report_owner} (normalized={normalized_owner}), user_id={user_id} (normalized={normalized_user}), is_admin={is_admin}")
 
-        if str(report_owner) != str(user_id) and not is_admin:
+        if normalized_owner != normalized_user and not is_admin:
+            logger.warning(f"❌ Access denied: User {user_id} trying to download report owned by {report_owner}")
             return jsonify({
                 'error': 'Access denied - you do not have permission to download this report',
-                'code': 'INSUFFICIENT_PERMISSIONS'
+                'code': 'INSUFFICIENT_PERMISSIONS',
+                'details': f'Report owner: {report_owner}, Current user: {user_id}'
             }), 403
 
         # Check if PDF file exists
-        if not report.pdf_file_path or not os.path.exists(report.pdf_file_path):
-            return jsonify({'error': 'PDF file not found'}), 404
+        if not report.pdf_file_path:
+            logger.warning(f"❌ PDF file path not set for report {report_id}")
+            return jsonify({
+                'error': 'PDF file not available',
+                'code': 'NOT_FOUND'
+            }), 404
+        
+        if not os.path.exists(report.pdf_file_path):
+            logger.warning(f"❌ PDF file does not exist: {report.pdf_file_path}")
+            return jsonify({
+                'error': 'PDF file not found on disk',
+                'code': 'NOT_FOUND',
+                'path': report.pdf_file_path
+            }), 404
 
+        logger.info(f"✅ Sending PDF file: {report.pdf_file_path}")
         # Send the file
         return send_file(
             report.pdf_file_path,
@@ -4596,8 +4623,8 @@ def download_report_pdf(report_id):
         )
 
     except Exception as e:
-        logger.error(f"Error downloading PDF for report {report_id}: {str(e)}")
-        return jsonify({'error': 'Failed to download PDF'}), 500
+        logger.error(f"❌ Error downloading PDF for report {report_id}: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to download PDF', 'details': str(e)}), 500
 
 @nextgen_bp.route('/reports/<report_id>/download/docx', methods=['GET'])
 @cross_origin(supports_credentials=True)
@@ -4607,6 +4634,7 @@ def download_report_docx(report_id):
     try:
         user_id = get_current_user_id()
         firebase_uid = get_firebase_uid()
+        logger.info(f"📥 DOCX download requested for report {report_id} by user {user_id}")
 
         # Try Firestore first (for string IDs from Google Forms/Firebase)
         try:
@@ -4616,18 +4644,22 @@ def download_report_docx(report_id):
             firestore_report = firestore_report_service.get_report(str(report_id))
 
             if firestore_report:
+                logger.info(f"✅ Found Firestore report: {report_id}")
                 # Check access for Firestore report
                 user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else User.query.get(user_id)
-                is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+                is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
 
                 # Firestore reports store userId in createdBy.userId
                 report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
+                
+                logger.info(f"📋 Firestore access check: report_owner={report_owner_id}, user_id={user_id}, is_admin={is_admin}")
 
                 if str(report_owner_id) != str(user_id) and not is_admin:
-                    logger.warning(f"Access denied for user {user_id} attempting to download Firestore report {report_id}")
+                    logger.warning(f"❌ Access denied for user {user_id} attempting to download Firestore report {report_id} (owner: {report_owner_id})")
                     return jsonify({
                         'error': 'Access denied - you do not have permission to download this report',
-                        'code': 'INSUFFICIENT_PERMISSIONS'
+                        'code': 'INSUFFICIENT_PERMISSIONS',
+                        'details': f'Report owner: {report_owner_id}, Current user: {user_id}'
                     }), 403
 
                 # Get the DOCX download URL from Firebase Storage
@@ -4637,67 +4669,98 @@ def download_report_docx(report_id):
                 # Check if there's a specific DOCX file in storage
                 docx_storage_path = f"reports/{report_id}/report.docx"
 
-                logger.info(f"Attempting Firestore download for report {report_id}")
-                logger.info(f"Storage path: {storage_path}, Download URL: {download_url}")
+                logger.info(f"🔍 Attempting Firestore download for report {report_id}")
+                logger.info(f"   Storage path: {storage_path}, Download URL: {download_url}")
 
                 # Try to get signed URL for DOCX file
                 try:
-                    signed_url = firebase_storage_service.get_signed_url(docx_storage_path, expiration_minutes=15)
+                    signed_url = firebase_storage_service.get_signed_url(docx_storage_path)
                     if signed_url:
                         logger.info(f"✅ Generated signed URL for DOCX download: {report_id}")
                         # Redirect to signed URL
                         from flask import redirect
                         return redirect(signed_url)
                 except Exception as storage_error:
-                    logger.warning(f"Could not get signed URL for {docx_storage_path}: {storage_error}")
+                    logger.warning(f"⚠️ Could not get signed URL for {docx_storage_path}: {storage_error}")
 
                 # Fallback: use the general download URL if available
                 if download_url:
-                    logger.info(f"Using fallback download URL for report {report_id}")
+                    logger.info(f"✅ Using fallback download URL for report {report_id}")
                     from flask import redirect
                     return redirect(download_url)
 
+                logger.error(f"❌ DOCX file not found in Firebase Storage for report {report_id}")
                 return jsonify({
                     'error': 'DOCX file not found in Firebase Storage',
-                    'code': 'NOT_FOUND'
+                    'code': 'NOT_FOUND',
+                    'reportId': report_id
                 }), 404
 
         except Exception as firestore_error:
-            logger.info(f"Firestore lookup failed for report {report_id}, trying PostgreSQL: {firestore_error}")
+            logger.info(f"ℹ️ Firestore lookup failed for report {report_id}, trying PostgreSQL: {firestore_error}")
 
         # Fallback to PostgreSQL (for integer IDs from local forms)
         try:
             report_id_int = int(report_id)
             report = Report.query.filter_by(id=report_id_int).first()
+            logger.info(f"🔍 Trying PostgreSQL lookup for report ID {report_id_int}")
         except (ValueError, TypeError):
+            logger.warning(f"❌ Invalid report ID format: {report_id}")
             return jsonify({
                 'error': 'Report not found',
                 'code': 'NOT_FOUND'
             }), 404
 
         if not report:
+            logger.warning(f"❌ PostgreSQL report not found: {report_id}")
             return jsonify({
                 'error': 'Report not found',
                 'code': 'NOT_FOUND'
             }), 404
 
+        logger.info(f"✅ Found PostgreSQL report: {report_id}")
         # Check access - allow if user owns the report OR user is admin
         user = User.query.get(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
 
         # Support both created_by and user_id fields for compatibility
         report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+        
+        # Normalize IDs for comparison (handle both int and string)
+        try:
+            normalized_owner = int(report_owner) if report_owner else None
+            normalized_user = int(user_id) if user_id else None
+        except (ValueError, TypeError):
+            normalized_owner = str(report_owner) if report_owner else None
+            normalized_user = str(user_id) if user_id else None
+        
+        logger.info(f"📋 PostgreSQL access check: report_owner={report_owner} (normalized={normalized_owner}), user_id={user_id} (normalized={normalized_user}), is_admin={is_admin}")
 
-        if str(report_owner) != str(user_id) and not is_admin:
+        if normalized_owner != normalized_user and not is_admin:
+            logger.warning(f"❌ Access denied: User {user_id} trying to download report owned by {report_owner}")
             return jsonify({
                 'error': 'Access denied - you do not have permission to download this report',
-                'code': 'INSUFFICIENT_PERMISSIONS'
+                'code': 'INSUFFICIENT_PERMISSIONS',
+                'details': f'Report owner: {report_owner}, Current user: {user_id}'
             }), 403
 
         # Check if DOCX file exists
-        if not report.docx_file_path or not os.path.exists(report.docx_file_path):
-            return jsonify({'error': 'DOCX file not found'}), 404
+        if not report.docx_file_path:
+            logger.warning(f"❌ DOCX file path not set for report {report_id}")
+            return jsonify({
+                'error': 'DOCX file not available',
+                'code': 'NOT_FOUND'
+            }), 404
+        
+        if not os.path.exists(report.docx_file_path):
+            logger.warning(f"❌ DOCX file does not exist: {report.docx_file_path}")
+            return jsonify({
+                'error': 'DOCX file not found on disk',
+                'code': 'NOT_FOUND',
+                'path': report.docx_file_path
+            }), 404
 
+        logger.info(f"✅ Sending DOCX file: {report.docx_file_path}")
         # Send the file
         return send_file(
             report.docx_file_path,
@@ -4707,10 +4770,10 @@ def download_report_docx(report_id):
         )
 
     except Exception as e:
-        logger.error(f"Error downloading DOCX for report {report_id}: {str(e)}")
+        logger.error(f"❌ Error downloading DOCX for report {report_id}: {str(e)}", exc_info=True)
         import traceback
         logger.error(traceback.format_exc())
-        return jsonify({'error': 'Failed to download DOCX'}), 500
+        return jsonify({'error': 'Failed to download DOCX', 'details': str(e)}), 500
 
 @nextgen_bp.route('/reports/<int:report_id>/download/excel', methods=['GET'])
 @cross_origin(supports_credentials=True)
@@ -4719,10 +4782,12 @@ def download_report_excel(report_id):
     """Download report as Excel"""
     try:
         user_id = get_current_user_id()
+        logger.info(f"📥 Excel download requested for report {report_id} by user {user_id}")
 
         # Get the report
         report = Report.query.filter_by(id=report_id).first()
         if not report:
+            logger.warning(f"❌ Report not found: {report_id}")
             return jsonify({
                 'error': 'Report not found',
                 'code': 'NOT_FOUND'
@@ -4730,21 +4795,46 @@ def download_report_excel(report_id):
 
         # Check access - allow if user owns the report OR user is admin
         user = User.query.get(user_id)
-        is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
 
         # Support both created_by and user_id fields for compatibility
         report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+        
+        # Normalize IDs for comparison (handle both int and string)
+        try:
+            normalized_owner = int(report_owner) if report_owner else None
+            normalized_user = int(user_id) if user_id else None
+        except (ValueError, TypeError):
+            normalized_owner = str(report_owner) if report_owner else None
+            normalized_user = str(user_id) if user_id else None
+        
+        logger.info(f"📋 Access check: report_owner={report_owner} (normalized={normalized_owner}), user_id={user_id} (normalized={normalized_user}), is_admin={is_admin}")
 
-        if str(report_owner) != str(user_id) and not is_admin:
+        if normalized_owner != normalized_user and not is_admin:
+            logger.warning(f"❌ Access denied: User {user_id} trying to download report owned by {report_owner}")
             return jsonify({
                 'error': 'Access denied - you do not have permission to download this report',
-                'code': 'INSUFFICIENT_PERMISSIONS'
+                'code': 'INSUFFICIENT_PERMISSIONS',
+                'details': f'Report owner: {report_owner}, Current user: {user_id}'
             }), 403
 
         # Check if Excel file exists
-        if not report.excel_file_path or not os.path.exists(report.excel_file_path):
-            return jsonify({'error': 'Excel file not found'}), 404
+        if not report.excel_file_path:
+            logger.warning(f"❌ Excel file path not set for report {report_id}")
+            return jsonify({
+                'error': 'Excel file not available',
+                'code': 'NOT_FOUND'
+            }), 404
+        
+        if not os.path.exists(report.excel_file_path):
+            logger.warning(f"❌ Excel file does not exist: {report.excel_file_path}")
+            return jsonify({
+                'error': 'Excel file not found on disk',
+                'code': 'NOT_FOUND',
+                'path': report.excel_file_path
+            }), 404
 
+        logger.info(f"✅ Sending Excel file: {report.excel_file_path}")
         # Send the file
         return send_file(
             report.excel_file_path,
@@ -4754,8 +4844,8 @@ def download_report_excel(report_id):
         )
 
     except Exception as e:
-        logger.error(f"Error downloading Excel for report {report_id}: {str(e)}")
-        return jsonify({'error': 'Failed to download Excel'}), 500
+        logger.error(f"❌ Error downloading Excel for report {report_id}: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to download Excel', 'details': str(e)}), 500
 
 # ================ REPORT EXPORT ================
 
