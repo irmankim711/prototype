@@ -8,6 +8,7 @@ import os
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any
+import time
 
 from ..services.form_data_export_service import form_data_export_service
 from ..services.google_forms_service import google_forms_service
@@ -21,6 +22,7 @@ from ..models import Form, ExportFile
 from .. import db
 from ..core.rate_limiter import rate_limit, RateLimitStrategy, RateLimitScope
 from ..utils.export_cleanup import get_cleanup_service
+from sqlalchemy.exc import OperationalError
 
 logger = logging.getLogger(__name__)
 
@@ -233,24 +235,40 @@ def export_google_form_data(google_form_id: str):
                    f"download_url={result.get('download_url', 'N/A')}")
 
         if result.get('success'):
-            # SECURITY: Register the export file for access control
-            try:
-                filename = os.path.basename(result.get('file_path', ''))
-                ExportFile.register_export(
-                    filename=filename,
-                    user_id=str(user_id),
-                    file_type='google_forms_export',
-                    file_format=export_format,
-                    file_size=result.get('file_size', 0),
-                    file_path=result.get('file_path', ''),
-                    related_id=google_form_id,
-                    related_type='google_form',
-                    expires_at=datetime.utcnow() + timedelta(hours=24)  # Expire after 24 hours
-                )
-                logger.info(f"Registered export file: {filename} for user {user_id}")
-            except Exception as reg_error:
-                logger.error(f"Failed to register export file: {str(reg_error)}", exc_info=True)
-                # Don't fail the request if registration fails, but log it
+            # SECURITY: Register the export file for access control with retry logic
+            filename = os.path.basename(result.get('file_path', ''))
+            max_retries = 3
+            retry_delay = 0.5  # seconds
+
+            for attempt in range(max_retries):
+                try:
+                    # Rollback any pending transactions before retry
+                    if attempt > 0:
+                        db.session.rollback()
+                        time.sleep(retry_delay * attempt)  # Exponential backoff
+
+                    ExportFile.register_export(
+                        filename=filename,
+                        user_id=str(user_id),
+                        file_type='google_forms_export',
+                        file_format=export_format,
+                        file_size=result.get('file_size', 0),
+                        file_path=result.get('file_path', ''),
+                        related_id=google_form_id,
+                        related_type='google_form',
+                        expires_at=datetime.utcnow() + timedelta(hours=24)  # Expire after 24 hours
+                    )
+                    logger.info(f"Registered export file: {filename} for user {user_id}")
+                    break  # Success, exit retry loop
+                except OperationalError as db_error:
+                    logger.warning(f"Database connection error on attempt {attempt + 1}/{max_retries}: {str(db_error)}")
+                    if attempt == max_retries - 1:
+                        logger.error(f"Failed to register export file after {max_retries} attempts: {str(db_error)}", exc_info=True)
+                        # Don't fail the request if registration fails, but log it
+                except Exception as reg_error:
+                    logger.error(f"Failed to register export file: {str(reg_error)}", exc_info=True)
+                    # Don't fail the request if registration fails, but log it
+                    break  # Exit on non-connection errors
 
             return jsonify(result), 200
         else:
