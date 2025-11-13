@@ -1061,12 +1061,28 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                           'aria-labelledby': 'download-button',
                         }}
                       >
+                        {availableTypes.includes('pdf') && (
+                          <MenuItem onClick={() => handleDownloadFile('pdf')}>
+                            <ListItemIcon>
+                              <PdfIcon fontSize="small" color="error" />
+                            </ListItemIcon>
+                            <ListItemText>Download PDF</ListItemText>
+                          </MenuItem>
+                        )}
                         {availableTypes.includes('docx') && (
                           <MenuItem onClick={() => handleDownloadFile('docx')}>
                             <ListItemIcon>
                               <DocxIcon fontSize="small" color="primary" />
                             </ListItemIcon>
                             <ListItemText>Download DOCX</ListItemText>
+                          </MenuItem>
+                        )}
+                        {availableTypes.includes('excel') && (
+                          <MenuItem onClick={() => handleDownloadFile('excel')}>
+                            <ListItemIcon>
+                              <ExcelIcon fontSize="small" color="success" />
+                            </ListItemIcon>
+                            <ListItemText>Download Excel</ListItemText>
                           </MenuItem>
                         )}
                       </Menu>
