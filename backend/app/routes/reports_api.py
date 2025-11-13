@@ -1412,6 +1412,8 @@ def delete_report(report_id):
     Delete a report and its files (works with both Firestore string IDs and PostgreSQL integer IDs)
     DELETE /api/reports/{report_id}
     """
+    from flask import g
+
     try:
         user_id = get_current_user_id()
         firebase_uid = get_firebase_uid()
@@ -1429,9 +1431,15 @@ def delete_report(report_id):
 
         if firestore_report:
             # Check access - user must own the report or be admin
-            # Use firebase_uid instead of user_id for database lookup
-            user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
-            is_admin = user and user.role == UserRole.ADMIN
+            # Get user from g.current_user (set by @firebase_auth_required decorator)
+            current_user = getattr(g, 'current_user', None)
+
+            # Handle both dict (Firestore) and User object (SQLAlchemy)
+            if isinstance(current_user, dict):
+                user_role = current_user.get('role', 'user')
+                is_admin = user_role.lower() == 'admin'
+            else:
+                is_admin = current_user and hasattr(current_user, 'role') and current_user.role == UserRole.ADMIN
 
             if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
                 logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete Firestore report {report_id} owned by user {firestore_report.get('userId')}")
@@ -1459,9 +1467,15 @@ def delete_report(report_id):
 
             if report:
                 # Check access
-                # Use firebase_uid instead of user_id for database lookup
-                user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
-                is_admin = user and user.role == UserRole.ADMIN
+                # Get user from g.current_user (set by @firebase_auth_required decorator)
+                current_user = getattr(g, 'current_user', None)
+
+                # Handle both dict (Firestore) and User object (SQLAlchemy)
+                if isinstance(current_user, dict):
+                    user_role = current_user.get('role', 'user')
+                    is_admin = user_role.lower() == 'admin'
+                else:
+                    is_admin = current_user and hasattr(current_user, 'role') and current_user.role == UserRole.ADMIN
 
                 if str(report.user_id) != str(user_id) and not is_admin:
                     logger.warning(f"User {user_id} (admin={is_admin}) attempted to delete PostgreSQL report {report_id} owned by user {report.user_id}")
