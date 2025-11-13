@@ -20,6 +20,10 @@ import {
   LinearProgress,
   TextField,
   Stack,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -32,6 +36,9 @@ import {
   Refresh as RefreshIcon,
   Save as SaveIcon,
   Cancel as CancelIcon,
+  PictureAsPdf as PdfIcon,
+  Description as DocxIcon,
+  TableChart as ExcelIcon,
 } from '@mui/icons-material';
 import { useMutation } from '@tanstack/react-query';
 import axios from 'axios';
@@ -43,9 +50,11 @@ interface DocumentPreviewProps {
   reportId: string | number;
   title?: string;
   onEdit?: () => void;
-  onDownload?: () => void;
+  onDownload?: (fileType: 'pdf' | 'docx' | 'excel') => void;
   // Used when preview endpoint returns 404 but we still have a file URL
   fallbackDownloadUrl?: string | null;
+  // Report object to check available file types
+  report?: any;
 }
 
 interface PreviewResponse {
@@ -64,6 +73,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   onEdit,
   onDownload,
   fallbackDownloadUrl = null,
+  report = null,
 }) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<'html' | 'pdf' | 'image' | 'data'>('html');
@@ -73,6 +83,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editableContent, setEditableContent] = useState<any>(null);
+  const [downloadMenuAnchor, setDownloadMenuAnchor] = useState<null | HTMLElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -161,6 +172,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 
           // Check if we have actual file paths for PDF/DOCX (same logic as NextGen)
           if (preview?.files) {
+            // Prioritize PDF over DOCX since Office Web Viewer has accessibility issues
             if (preview.files.pdf?.exists) {
               const pdfUrl = preview.files.pdf.download_url || `/api/reports/${id}/download/pdf`;
               console.log('✅ PDF file exists, using URL:', pdfUrl);
@@ -173,15 +185,11 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             }
 
             if (preview.files.docx?.exists) {
-              // For DOCX, use Office Web Viewer for embedding
-              console.log('✅ DOCX file exists - using Office Web Viewer');
-              const docxUrl = preview.files.docx.download_url || `/api/reports/${id}/download/docx`;
-              return {
-                success: true,
-                preview_url: buildOfficeViewerUrl(docxUrl),
-                preview_type: 'html' as const,
-                preview_data: preview
-              };
+              // DOCX preview has issues with Office Web Viewer requiring public URLs
+              // For now, show data preview with download option
+              console.log('⚠️ DOCX file exists but Office Web Viewer requires publicly accessible URLs');
+              console.log('📊 Showing data preview instead with download option');
+              // Don't set preview_url, let it fall through to data preview
             }
           }
 
@@ -517,6 +525,42 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     }));
   };
 
+  const handleDownloadMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setDownloadMenuAnchor(event.currentTarget);
+  };
+
+  const handleDownloadMenuClose = () => {
+    setDownloadMenuAnchor(null);
+  };
+
+  const handleDownloadFile = (fileType: 'pdf' | 'docx' | 'excel') => {
+    if (onDownload) {
+      onDownload(fileType);
+    }
+    handleDownloadMenuClose();
+  };
+
+  // Check which file types are available
+  const getAvailableFileTypes = () => {
+    const available: Array<'pdf' | 'docx' | 'excel'> = [];
+
+    // Check from report prop first
+    if (report) {
+      if (report.pdf_file_path) available.push('pdf');
+      if (report.docx_file_path) available.push('docx');
+      if (report.excel_file_path) available.push('excel');
+    }
+
+    // Fallback to preview data
+    if (previewData?.files) {
+      if (previewData.files.pdf?.exists && !available.includes('pdf')) available.push('pdf');
+      if (previewData.files.docx?.exists && !available.includes('docx')) available.push('docx');
+      if (previewData.files.excel?.exists && !available.includes('excel')) available.push('excel');
+    }
+
+    return available;
+  };
+
   // Render inline editable content based on the report structure
   const renderEditableContent = () => {
     if (!editableContent) return null;
@@ -744,32 +788,43 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                 <Typography variant="subtitle1" gutterBottom>
                   Available Files:
                 </Typography>
-                {Object.entries(previewData.files).map(([type, fileInfo]: [string, any]) => (
-                  <Paper key={type} variant="outlined" sx={{ p: 2, mb: 1 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Box>
-                        <Typography variant="body2" fontWeight="medium">
-                          {type.toUpperCase()} File
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Size: {fileInfo.size ? `${Math.round(fileInfo.size / 1024)} KB` : 'Unknown'}
-                        </Typography>
-                        <Typography variant="caption" color={fileInfo.exists ? 'success.main' : 'error.main'} sx={{ ml: 1 }}>
-                          {fileInfo.exists ? '✓ Available' : '✗ Missing'}
-                        </Typography>
+                {Object.entries(previewData.files).map(([type, fileInfo]: [string, any]) => {
+                  const fileType = type.toLowerCase() as 'pdf' | 'docx' | 'excel';
+                  const FileIcon = fileType === 'pdf' ? PdfIcon : fileType === 'docx' ? DocxIcon : ExcelIcon;
+                  const iconColor = fileType === 'pdf' ? 'error' : fileType === 'docx' ? 'primary' : 'success';
+
+                  return (
+                    <Paper key={type} variant="outlined" sx={{ p: 2, mb: 1 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <FileIcon fontSize="medium" color={iconColor} />
+                          <Box>
+                            <Typography variant="body2" fontWeight="medium">
+                              {type.toUpperCase()} File
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              Size: {fileInfo.size ? `${Math.round(fileInfo.size / 1024)} KB` : 'Unknown'}
+                            </Typography>
+                            <Typography variant="caption" color={fileInfo.exists ? 'success.main' : 'error.main'} sx={{ ml: 1 }}>
+                              {fileInfo.exists ? '✓ Available' : '✗ Missing'}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        {fileInfo.exists && onDownload && (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color={iconColor}
+                            startIcon={<DownloadIcon />}
+                            onClick={() => onDownload(fileType)}
+                          >
+                            Download
+                          </Button>
+                        )}
                       </Box>
-                      {fileInfo.exists && onDownload && (
-                        <Button 
-                          size="small" 
-                          startIcon={<DownloadIcon />}
-                          onClick={() => onDownload()}
-                        >
-                          Download
-                        </Button>
-                      )}
-                    </Box>
-                  </Paper>
-                ))}
+                    </Paper>
+                  );
+                })}
               </Box>
             )}
             
@@ -981,16 +1036,59 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                   </Button>
                 )}
 
-                {onDownload && (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<DownloadIcon />}
-                    onClick={onDownload}
-                  >
-                    Download
-                  </Button>
-                )}
+                {onDownload && (() => {
+                  const availableTypes = getAvailableFileTypes();
+                  return availableTypes.length > 0 ? (
+                    <>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        color="primary"
+                        startIcon={<DownloadIcon />}
+                        onClick={handleDownloadMenuOpen}
+                        aria-controls={downloadMenuAnchor ? 'download-menu' : undefined}
+                        aria-haspopup="true"
+                        aria-expanded={downloadMenuAnchor ? 'true' : undefined}
+                      >
+                        Download
+                      </Button>
+                      <Menu
+                        id="download-menu"
+                        anchorEl={downloadMenuAnchor}
+                        open={Boolean(downloadMenuAnchor)}
+                        onClose={handleDownloadMenuClose}
+                        MenuListProps={{
+                          'aria-labelledby': 'download-button',
+                        }}
+                      >
+                        {availableTypes.includes('pdf') && (
+                          <MenuItem onClick={() => handleDownloadFile('pdf')}>
+                            <ListItemIcon>
+                              <PdfIcon fontSize="small" color="error" />
+                            </ListItemIcon>
+                            <ListItemText>Download PDF</ListItemText>
+                          </MenuItem>
+                        )}
+                        {availableTypes.includes('docx') && (
+                          <MenuItem onClick={() => handleDownloadFile('docx')}>
+                            <ListItemIcon>
+                              <DocxIcon fontSize="small" color="primary" />
+                            </ListItemIcon>
+                            <ListItemText>Download DOCX</ListItemText>
+                          </MenuItem>
+                        )}
+                        {availableTypes.includes('excel') && (
+                          <MenuItem onClick={() => handleDownloadFile('excel')}>
+                            <ListItemIcon>
+                              <ExcelIcon fontSize="small" color="success" />
+                            </ListItemIcon>
+                            <ListItemText>Download Excel</ListItemText>
+                          </MenuItem>
+                        )}
+                      </Menu>
+                    </>
+                  ) : null;
+                })()}
               </>
             )}
           </Box>

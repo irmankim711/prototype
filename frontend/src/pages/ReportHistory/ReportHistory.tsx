@@ -686,10 +686,11 @@ export default function ReportHistory() {
           }}
           reportId={previewReportId}
           title="Report Preview"
-          onDownload={() => {
-            // Download the report - default to DOCX format
+          report={previewReport}
+          onDownload={(fileType: 'pdf' | 'docx' | 'excel') => {
+            // Download the report in the selected format
             if (previewReport) {
-              handleDownloadReport(previewReport, 'docx');
+              handleDownloadReport(previewReport, fileType);
             }
           }}
         />
