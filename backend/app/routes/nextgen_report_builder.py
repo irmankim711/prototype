@@ -5,7 +5,7 @@ template management, Excel automation, and report generation
 """
 
 from flask import Blueprint, request, jsonify, send_file, current_app
-from ..decorators import get_current_user_id, get_current_user, firebase_auth_required
+from ..decorators import get_current_user_id, get_current_user, firebase_auth_required, get_firebase_uid
 from ..middleware.firebase_auth import firebase_auth_manager
 
 from flask_cors import cross_origin
@@ -4591,16 +4591,79 @@ def download_report_pdf(report_id):
         logger.error(f"Error downloading PDF for report {report_id}: {str(e)}")
         return jsonify({'error': 'Failed to download PDF'}), 500
 
-@nextgen_bp.route('/reports/<int:report_id>/download/docx', methods=['GET'])
+@nextgen_bp.route('/reports/<report_id>/download/docx', methods=['GET'])
 @cross_origin(supports_credentials=True)
 @firebase_auth_required
 def download_report_docx(report_id):
-    """Download report as DOCX"""
+    """Download report as DOCX - supports both Firestore and PostgreSQL"""
     try:
         user_id = get_current_user_id()
+        firebase_uid = get_firebase_uid()
 
-        # Get the report
-        report = Report.query.filter_by(id=report_id).first()
+        # Try Firestore first (for string IDs from Google Forms/Firebase)
+        try:
+            from app.services.firestore_report_service import firestore_report_service
+            from app.services.firebase_storage_service import firebase_storage_service
+
+            firestore_report = firestore_report_service.get_report(str(report_id))
+
+            if firestore_report:
+                # Check access for Firestore report
+                user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else User.query.get(user_id)
+                is_admin = user and user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+                if str(firestore_report.get('userId')) != str(user_id) and not is_admin:
+                    logger.warning(f"Access denied for user {user_id} attempting to download Firestore report {report_id}")
+                    return jsonify({
+                        'error': 'Access denied - you do not have permission to download this report',
+                        'code': 'INSUFFICIENT_PERMISSIONS'
+                    }), 403
+
+                # Get the DOCX download URL from Firebase Storage
+                storage_path = firestore_report.get('storagePath')
+                download_url = firestore_report.get('downloadUrl')
+
+                # Check if there's a specific DOCX file in storage
+                docx_storage_path = f"reports/{report_id}/report.docx"
+
+                logger.info(f"Attempting Firestore download for report {report_id}")
+                logger.info(f"Storage path: {storage_path}, Download URL: {download_url}")
+
+                # Try to get signed URL for DOCX file
+                try:
+                    signed_url = firebase_storage_service.get_signed_url(docx_storage_path, expiration_minutes=15)
+                    if signed_url:
+                        logger.info(f"✅ Generated signed URL for DOCX download: {report_id}")
+                        # Redirect to signed URL
+                        from flask import redirect
+                        return redirect(signed_url)
+                except Exception as storage_error:
+                    logger.warning(f"Could not get signed URL for {docx_storage_path}: {storage_error}")
+
+                # Fallback: use the general download URL if available
+                if download_url:
+                    logger.info(f"Using fallback download URL for report {report_id}")
+                    from flask import redirect
+                    return redirect(download_url)
+
+                return jsonify({
+                    'error': 'DOCX file not found in Firebase Storage',
+                    'code': 'NOT_FOUND'
+                }), 404
+
+        except Exception as firestore_error:
+            logger.info(f"Firestore lookup failed for report {report_id}, trying PostgreSQL: {firestore_error}")
+
+        # Fallback to PostgreSQL (for integer IDs from local forms)
+        try:
+            report_id_int = int(report_id)
+            report = Report.query.filter_by(id=report_id_int).first()
+        except (ValueError, TypeError):
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
+
         if not report:
             return jsonify({
                 'error': 'Report not found',
@@ -4634,6 +4697,8 @@ def download_report_docx(report_id):
 
     except Exception as e:
         logger.error(f"Error downloading DOCX for report {report_id}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': 'Failed to download DOCX'}), 500
 
 @nextgen_bp.route('/reports/<int:report_id>/download/excel', methods=['GET'])
