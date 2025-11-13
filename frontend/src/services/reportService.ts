@@ -86,42 +86,37 @@ class ReportService {
 
   async downloadReport(reportId: string, fileType: 'pdf' | 'docx' | 'excel' = 'pdf'): Promise<Blob> {
     // For Firestore reports, the backend redirects to Firebase Storage signed URLs
-    // We need to get the redirect URL first, then navigate to it directly
+    // Use a hidden iframe or new tab to avoid navigating away from current page
     const downloadUrl = `${this.baseURL}/${reportId}/download/${fileType}`;
 
     try {
-      // First, make a request to get the redirect URL without following it
+      // Make request to get the download URL or blob
       const response = await axiosInstance.get(downloadUrl, {
         maxRedirects: 0,
-        validateStatus: (status) => status >= 200 && status < 400, // Accept redirects
+        validateStatus: (status) => status >= 200 && status < 400,
       });
 
-      // If we got a blob response (SQL database report), return it
+      // If we got a blob response (SQL database report), return it normally
       if (response.headers['content-type']?.includes('application')) {
         return response.data;
       }
 
-      // Otherwise, open the URL directly to trigger the download
-      // The backend will handle the redirect to Firebase Storage
-      window.location.href = downloadUrl;
+      // If it's a redirect (Firestore report), open in new tab to avoid navigation
+      window.open(downloadUrl, '_blank');
       return new Blob();
     } catch (error: any) {
-      // If axios throws on redirect, try to extract the location header
-      if (error.response?.status === 302 && error.response?.headers?.location) {
-        window.open(error.response.headers.location, '_blank');
-        return new Blob();
+      // If axios throws on redirect, extract the location header
+      if (error.response?.status === 302) {
+        const redirectUrl = error.response?.headers?.location || error.response?.headers?.Location;
+        if (redirectUrl) {
+          // Open Firebase Storage signed URL in new tab
+          window.open(redirectUrl, '_blank');
+          return new Blob();
+        }
       }
 
-      // For other errors, fall back to direct navigation with auth headers
-      // Create a form and submit it to preserve authentication
-      const form = document.createElement('form');
-      form.method = 'GET';
-      form.action = downloadUrl;
-      form.style.display = 'none';
-      document.body.appendChild(form);
-      form.submit();
-      document.body.removeChild(form);
-
+      // Fallback: open in new tab
+      window.open(downloadUrl, '_blank');
       return new Blob();
     }
   }
