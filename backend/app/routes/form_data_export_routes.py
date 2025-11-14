@@ -172,6 +172,9 @@ def export_google_form_data(google_form_id: str):
         # Get request data
         data = request.get_json() or {}
 
+        # Log received data for debugging AI enhancement
+        logger.info(f"📥 Export request data: format={data.get('format')}, use_ai_enhancement={data.get('use_ai_enhancement')}, include_analytics={data.get('include_analytics')}")
+
         export_format = data.get('format', 'excel').lower()
 
         # Validate format

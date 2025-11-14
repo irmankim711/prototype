@@ -27,7 +27,7 @@ class GoogleFormsExcelService:
     """Service for exporting Google Forms responses to Excel with advanced formatting"""
 
     def __init__(self, upload_folder: str = None):
-        self.upload_folder = upload_folder or os.path.join(os.getcwd(), 'backend', 'static', 'exports')
+        self.upload_folder = upload_folder or os.path.join(os.getcwd(), 'static', 'exports')
         self.ensure_upload_directory()
 
     def ensure_upload_directory(self):
