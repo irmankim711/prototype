@@ -4473,17 +4473,72 @@ def delete_report(report_id):
 
 # ================ REPORT PREVIEW ================
 
-@nextgen_bp.route('/reports/<int:report_id>/preview', methods=['GET'])
+@nextgen_bp.route('/reports/<report_id>/preview', methods=['GET'])
 @cross_origin(supports_credentials=True)
 @firebase_auth_required
 def preview_report(report_id):
-    """Preview a report without downloading"""
+    """
+    Preview a report without downloading
+    Supports both integer IDs (PostgreSQL) and string IDs (Firestore)
+    """
     try:
         user_id = get_current_user_id()
+        firebase_uid = get_firebase_uid()
 
-        # Get the report
-        report = Report.query.filter_by(id=report_id).first()
+        # Try Firestore first (for string IDs like "AXH9JstFxnugebP8TSBy")
+        from app.services.firestore_report_service import firestore_report_service
+        firestore_report = firestore_report_service.get_report(str(report_id))
+
+        if firestore_report:
+            # Check access
+            user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+            is_admin = user and user.role == UserRole.ADMIN
+
+            # Firestore reports store userId in createdBy.userId
+            report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
+
+            if str(report_owner_id) != str(user_id) and not is_admin:
+                logger.warning(f"Access denied for user {user_id} attempting to preview Firestore report {report_id}")
+                return jsonify({
+                    'error': 'Access denied - you do not have permission to view this report',
+                    'code': 'INSUFFICIENT_PERMISSIONS'
+                }), 403
+
+            # Check if report is ready
+            if firestore_report.get('generationStatus') != 'completed':
+                return jsonify({
+                    'success': False,
+                    'error': 'Report not ready for preview',
+                    'status': firestore_report.get('generationStatus'),
+                    'progress': firestore_report.get('generationProgress', 0)
+                }), 400
+
+            # Return Firestore report preview with top-level fields for frontend compatibility
+            return jsonify({
+                'success': True,
+                'reportId': firestore_report.get('id'),
+                'reportTitle': firestore_report.get('title'),
+                'reportType': firestore_report.get('reportType'),
+                'id': firestore_report.get('id'),
+                'title': firestore_report.get('title'),
+                'preview': firestore_report,
+                'preview_data': firestore_report,
+                'source': 'firestore'
+            }), 200
+
+        # Fallback to PostgreSQL (for integer IDs)
+        try:
+            report_id_int = int(report_id)
+            report = Report.query.filter_by(id=report_id_int).first()
+        except (ValueError, TypeError):
+            logger.warning(f"Preview request for report {report_id} - invalid ID format")
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
+
         if not report:
+            logger.warning(f"Preview request for report {report_id} - report not found")
             return jsonify({
                 'error': 'Report not found',
                 'code': 'NOT_FOUND'
@@ -4497,11 +4552,12 @@ def preview_report(report_id):
         report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
 
         if str(report_owner) != str(user_id) and not is_admin:
+            logger.warning(f"Access denied for user {user_id} attempting to preview PostgreSQL report {report_id}")
             return jsonify({
                 'error': 'Access denied - you do not have permission to view this report',
                 'code': 'INSUFFICIENT_PERMISSIONS'
             }), 403
-        
+
         preview_data = {
             'id': report.id,
             'title': report.title,
@@ -4512,7 +4568,7 @@ def preview_report(report_id):
             'files': {},
             'metadata': {}
         }
-        
+
         # Add file information
         if report.docx_file_path:
             preview_data['files']['docx'] = {
@@ -4521,7 +4577,7 @@ def preview_report(report_id):
                 'download_url': report.docx_download_url,
                 'exists': os.path.exists(report.docx_file_path) if report.docx_file_path else False
             }
-        
+
         if report.pdf_file_path:
             preview_data['files']['pdf'] = {
                 'path': report.pdf_file_path,
@@ -4529,7 +4585,7 @@ def preview_report(report_id):
                 'download_url': report.pdf_download_url,
                 'exists': os.path.exists(report.pdf_file_path) if report.pdf_file_path else False
             }
-            
+
         if report.excel_file_path:
             preview_data['files']['excel'] = {
                 'path': report.excel_file_path,
@@ -4537,21 +4593,34 @@ def preview_report(report_id):
                 'download_url': report.excel_download_url,
                 'exists': os.path.exists(report.excel_file_path) if report.excel_file_path else False
             }
-        
+
         # Add metadata
         if hasattr(report, 'generated_data') and report.generated_data:
             preview_data['metadata'] = report.generated_data
-        
+
+        # Return with top-level fields for frontend compatibility
         return jsonify({
             'success': True,
-            'preview': preview_data,          # Keep for backward compatibility
-            'preview_data': preview_data,     # Add for frontend DocumentPreview component
+            'reportId': report.id,
+            'reportTitle': report.title,
+            'reportType': report.report_type,
+            'id': report.id,
+            'title': report.title,
+            'preview': preview_data,
+            'preview_data': preview_data,
+            'source': 'postgresql',
             'message': 'Report preview retrieved successfully'
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error previewing report {report_id}: {str(e)}")
-        return jsonify({'error': 'Failed to preview report'}), 500
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': 'Failed to preview report',
+            'details': str(e)
+        }), 500
 
 # ================ REPORT DOWNLOAD ================
 
