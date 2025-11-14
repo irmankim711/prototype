@@ -134,7 +134,7 @@ class GoogleFormsExcelService:
             generation_time = time.time() - start_time
 
             # Generate download URL
-            download_url = f"/api/forms/google-forms/{form_id}/download-excel/{filename}"
+            download_url = f"/api/google-forms/forms/{form_id}/download-excel/{filename}"
 
             logger.info(f"Google Forms Excel export completed: {file_path} ({file_size} bytes)")
 
@@ -584,7 +584,7 @@ class GoogleFormsExcelService:
                 file_path = target_path
 
             # Generate download URL
-            download_url = f"/api/forms/google-forms/{form_id}/download-excel/{filename}"
+            download_url = f"/api/google-forms/forms/{form_id}/download-excel/{filename}"
 
             logger.info(f"AI-enhanced Google Forms Excel export completed: {file_path} ({file_size} bytes)")
 
