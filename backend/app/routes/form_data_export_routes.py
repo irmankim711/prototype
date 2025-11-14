@@ -12,6 +12,7 @@ import time
 
 from ..services.form_data_export_service import form_data_export_service
 from ..services.google_forms_service import google_forms_service
+from ..services.google_forms_excel_service import google_forms_excel_service
 from ..decorators import (
     firebase_auth_required as require_auth,
     get_current_user_id as get_current_user,
@@ -205,23 +206,18 @@ def export_google_form_data(google_form_id: str):
                 'error': f'Failed to fetch Google Forms data: {str(fetch_error)}'
             }), 500
 
-        # Export data
+        # Export data using Google Forms Excel service (supports AI enhancement)
         logger.info(f"Starting export of {len(responses_data.get('responses', []))} Google Form responses")
 
-        # Merge questions into form_info for export
-        form_info_with_questions = responses_data.get('form_info', {}).copy()
-        form_info_with_questions['questions'] = responses_data.get('questions', {})
-
-        logger.info(f"📋 Form has {len(form_info_with_questions.get('questions', {}))} questions for export")
-
-        result = form_data_export_service.export_google_form_responses(
-            google_form_id=google_form_id,
-            form_responses=responses_data.get('responses', []),
-            form_info=form_info_with_questions,
-            export_format=export_format,
+        result = google_forms_excel_service.export_google_form_to_excel(
+            user_id=str(user_id),
+            form_id=google_form_id,
             options={
                 'date_range': data.get('date_range', {}),
-                'include_analytics': data.get('include_analytics', True)
+                'include_analytics': data.get('include_analytics', True),
+                'use_ai_enhancement': data.get('use_ai_enhancement', False),
+                'excel_options': data.get('excel_options', {}),
+                'max_responses': data.get('max_records', 1000)
             }
         )
 
