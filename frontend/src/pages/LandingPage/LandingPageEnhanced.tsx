@@ -614,19 +614,37 @@ export default function LandingPageEnhanced() {
       {/* Navigation Bar */}
       <StyledAppBar elevation={0}>
         <StyledToolbar>
-          <Typography
-            variant="h5"
+          <Box
             sx={{
-              fontWeight: 700,
-              background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
-              backgroundClip: "text",
-              color: "transparent",
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
               cursor: "pointer",
             }}
             onClick={handleBackToHome}
           >
-            StratoSys
-          </Typography>
+            <Box
+              component="img"
+              src="/Logo.png"
+              alt="StratoSys Logo"
+              sx={{
+                width: 40,
+                height: 40,
+                objectFit: "contain",
+              }}
+            />
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 700,
+                background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+                backgroundClip: "text",
+                color: "transparent",
+              }}
+            >
+              StratoSys
+            </Typography>
+          </Box>
           {!showLogin && !showSignup && !showQuickAccess && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <NavButton onClick={() => scrollToSection(featuresRef)}>
