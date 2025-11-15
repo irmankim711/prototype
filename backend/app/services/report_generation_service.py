@@ -896,21 +896,52 @@ class ReportGenerationService:
             # Check if data has 'records' or 'submissions' (raw Excel data)
             elif 'records' in data and isinstance(data['records'], list):
                 peserta_list = []
+
+                # Log available columns from first record for debugging
+                if data['records']:
+                    logger.info(f"📋 Available Excel columns: {list(data['records'][0].keys())}")
+
                 for idx, record in enumerate(data['records'], 1):
+                    # Handle Excel headers with newlines and variations
+                    nama = (record.get('NAMA PESERTA HADIR') or
+                           record.get('NAMA') or
+                           record.get('Nama') or
+                           record.get('name') or
+                           f'Peserta {idx}')
+
+                    kehadiran_sabtu = (record.get('KEHADIRAH \n(SABTU)') or
+                                      record.get('KEHADIRAN \n(SABTU)') or
+                                      record.get('KEHADIRAN_SABTU') or
+                                      record.get('Attendance_Day1') or
+                                      'Hadir')
+
+                    kehadiran_ahad = (record.get('KEHADIRAN\n(AHAD)') or
+                                     record.get('KEHADIRAN \n(AHAD)') or
+                                     record.get('KEHADIRAN_AHAD') or
+                                     record.get('Attendance_Day2') or
+                                     'Hadir')
+
                     peserta = {
                         'bil': str(idx),
-                        'nama': record.get('NAMA', record.get('Nama', record.get('name', f'Peserta {idx}'))),
-                        'kad_pengenalan': record.get('NO_KP', record.get('IC', record.get('ic', ''))),
-                        'no_telefon': record.get('NO_TEL', record.get('Phone', record.get('phone', ''))),
-                        'jantina': record.get('JANTINA', record.get('Gender', record.get('gender', ''))),
-                        'alamat': record.get('ALAMAT', record.get('Address', record.get('address', ''))),
-                        'kehadiran_sabtu': record.get('KEHADIRAN_SABTU', record.get('Attendance_Day1', 'Hadir')),
-                        'kehadiran_ahad': record.get('KEHADIRAN_AHAD', record.get('Attendance_Day2', 'Hadir')),
-                        'nama_pre': record.get('NAMA', record.get('Nama', record.get('name', f'Peserta {idx}'))),
-                        'markah_pre': str(record.get('MARKAH_PRE', record.get('Pre_Test', record.get('pre_test', '')))),
-                        'nama_post': record.get('NAMA', record.get('Nama', record.get('name', f'Peserta {idx}'))),
-                        'markah_post': str(record.get('MARKAH_POST', record.get('Post_Test', record.get('post_test', ''))))
+                        'nama': nama,
+                        'kad_pengenalan': record.get('KAD PENGENALAN') or record.get('NO_KP') or record.get('IC') or record.get('ic') or '',
+                        'no_telefon': record.get('NO TELEFON') or record.get('NO_TEL') or record.get('Phone') or record.get('phone') or '',
+                        'jantina': record.get('JANTINA') or record.get('Gender') or record.get('gender') or '',
+                        'alamat': record.get('ALAMAT') or record.get('Address') or record.get('address') or '',
+                        'kehadiran_sabtu': kehadiran_sabtu,
+                        'kehadiran_ahad': kehadiran_ahad,
+                        'nama_pre': record.get('NAMA PRE') or nama,
+                        'markah_pre': str(record.get('MARKAH_PRE') or record.get('Pre_Test') or record.get('pre_test') or ''),
+                        'nama_post': record.get('NAMA POST') or nama,
+                        'markah_post': str(record.get('MARKAH_POST') or record.get('Post_Test') or record.get('post_test') or ''),
+                        'penilaian': record.get('PENILAIAN') or '',
+                        'alasan': record.get('ALASAN') or ''
                     }
+
+                    # Log first participant data for debugging
+                    if idx == 1:
+                        logger.info(f"📋 Sample transformed participant data: {peserta}")
+
                     peserta_list.append(peserta)
 
                 transformed['peserta_list'] = peserta_list
