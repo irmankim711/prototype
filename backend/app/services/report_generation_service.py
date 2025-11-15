@@ -1011,6 +1011,10 @@ class ReportGenerationService:
                     if 'peserta_list' in data:
                         logger.info(f"  - peserta_list contains {len(data['peserta_list'])} items")
 
+                        # Log first 3 participants in detail
+                        for idx, peserta in enumerate(data['peserta_list'][:3], 1):
+                            logger.info(f"  - Participant {idx}: {peserta}")
+
                     # Log sample of data for debugging
                     for key, value in data.items():
                         if isinstance(value, list) and value:
@@ -1021,8 +1025,21 @@ class ReportGenerationService:
                             logger.info(f"  - {key}: {value}")
 
                     # Render the template with ALL data
+                    logger.info(f"📝 Calling doc_tpl.render() with {len(data)} top-level keys")
                     doc_tpl.render(data)
+                    logger.info(f"💾 Saving rendered template to: {output_path}")
                     doc_tpl.save(output_path)
+
+                    # Verify the rendered file doesn't still contain loop syntax
+                    with open(output_path, 'rb') as f:
+                        rendered_content = f.read()
+                        if b'{%tr for' in rendered_content:
+                            logger.error("❌ WARNING: Rendered file still contains loop syntax! docxtpl may have failed silently")
+                        elif b'{{peserta' in rendered_content:
+                            logger.error("❌ WARNING: Rendered file still contains {{peserta placeholders! Data not inserted")
+                        else:
+                            logger.info("✅ Verification: Loop syntax removed, template appears to be rendered correctly")
+
                     logger.info(f"✅ Template rendered successfully with docxtpl")
                 except Exception as e:
                     logger.error(f"❌ docxtpl render failed: {e}")
