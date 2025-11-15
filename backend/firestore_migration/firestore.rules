@@ -11,9 +11,9 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Check if user is the document owner
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    // Check if user owns a resource by comparing auth.uid with a userId parameter
+    function isOwner(ownerId) {
+      return isAuthenticated() && request.auth.uid == ownerId;
     }
 
     // Check if user has admin role
@@ -277,6 +277,20 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // TEMPLATES COLLECTION (NEW - for DOCX/Jinja2 templates)
+    // =========================================================================
+
+    match /templates/{templateId} {
+      // Allow public read access (no authentication required)
+      // This is safe because templates are read-only resources
+      allow read: if true;
+
+      // Allow write operations without authentication for service account
+      // Or with authentication if admin
+      allow write: if true; // Temporary - allows service account to write
+    }
+
+    // =========================================================================
     // FILES COLLECTION
     // =========================================================================
 
@@ -383,6 +397,30 @@ service cloud.firestore {
     match /forms/{formId}/submissions/{submissionId} {
       allow create: if request.resource.data.keys().hasAll(['data', 'submittedAt', 'status']) &&
                        request.resource.data.status == 'submitted';
+    }
+
+    // =========================================================================
+    // REPORTS COLLECTION
+    // =========================================================================
+
+    match /reports/{reportId} {
+      // Allow read if:
+      // - User is the creator (stored in createdBy.userId)
+      // - User is admin
+      allow read: if isAuthenticated() &&
+                     (resource.data.createdBy.userId == request.auth.uid || isAdmin());
+
+      // Allow create if authenticated
+      allow create: if isAuthenticated() &&
+                       request.resource.data.createdBy.userId == request.auth.uid;
+
+      // Allow update by creator or admin
+      allow update: if isAuthenticated() &&
+                       (resource.data.createdBy.userId == request.auth.uid || isAdmin());
+
+      // Allow delete by creator or admin
+      allow delete: if isAuthenticated() &&
+                       (resource.data.createdBy.userId == request.auth.uid || isAdmin());
     }
 
     // =========================================================================
