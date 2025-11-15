@@ -2165,7 +2165,11 @@ def generate_report_from_excel():
                 doc = DocxTemplate(template_file)
 
                 # ✅ CRITICAL FIX: Prepare comprehensive context data with structured extraction
-                context = {
+                # Start with mapped_data from template_data_mapper (includes peserta_list!)
+                context = dict(mapped_data) if mapped_data else {}
+
+                # Add/override with additional context
+                context.update({
                     # Raw Excel records for backward compatibility
                     'records': excel_records,
                     'data': excel_records,
@@ -2192,7 +2196,17 @@ def generate_report_from_excel():
                     'total_participants': extracted_statistics.get('total_participants', len(extracted_participants)),
                     'male_count': extracted_statistics.get('male_count', 0),
                     'female_count': extracted_statistics.get('female_count', 0),
-                }
+                })
+
+                # IMPORTANT: Ensure peserta_list is in context (from mapped_data)
+                # This is critical for DOCX templates that use {% for peserta in peserta_list %}
+                if 'peserta_list' in mapped_data:
+                    logger.info(f"🆔 [{request_id}] ✅ peserta_list added to context with {len(mapped_data['peserta_list'])} items")
+                    # Log first participant for debugging
+                    if mapped_data['peserta_list']:
+                        logger.info(f"🆔 [{request_id}] Sample participant: {mapped_data['peserta_list'][0]}")
+                else:
+                    logger.warning(f"🆔 [{request_id}] ⚠️ peserta_list NOT found in mapped_data!")
 
                 # Log Excel column names for debugging
                 if excel_records:
