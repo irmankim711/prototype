@@ -38,7 +38,8 @@ const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
         // Initialize and render the button
         window.google.accounts.id.initialize({
           client_id:
-            "1008582896300-ivas6c0e7vnr30lbr0v1jeu7q7io7k1u.apps.googleusercontent.com",
+            import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+            "1008582896300-sbsrcs6jg32lncrnmmf1ia93vnl81tls.apps.googleusercontent.com",
           callback: (window as any).googleSignInCallback,
         });
 
