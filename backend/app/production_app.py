@@ -116,6 +116,22 @@ def create_production_app(config_name='production'):
         app.logger.info("✅ NextGen blueprint registered under /api/v1/nextgen (production)")
     except Exception as e:
         app.logger.error(f"❌ Failed to register NextGen blueprint in production: {e}")
+
+    # Templates API (Firestore-based templates)
+    try:
+        from .routes.templates_api import templates_api
+        app.register_blueprint(templates_api)
+        app.logger.info("✅ Templates API blueprint registered at /api/v1/templates")
+    except Exception as e:
+        app.logger.error(f"❌ Failed to register Templates API blueprint: {e}")
+
+    # Debug Firestore endpoint
+    try:
+        from .routes.debug_firestore import debug_firestore_bp
+        app.register_blueprint(debug_firestore_bp)
+        app.logger.info("✅ Debug Firestore blueprint registered")
+    except Exception as e:
+        app.logger.error(f"❌ Failed to register Debug Firestore blueprint: {e}")
     
     # ====================================================================
     # ERROR HANDLERS
