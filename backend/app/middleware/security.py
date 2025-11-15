@@ -248,7 +248,7 @@ class EnhancedSecurityHeadersMiddleware:
             'enable_cross_origin_embedder_policy': True,
             'enable_cross_origin_opener_policy': True,
             'enable_cross_origin_resource_policy': True,
-            'csp_policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https:; connect-src 'self' https:; frame-ancestors 'none';",
+            'csp_policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https: https://fonts.gstatic.com; connect-src 'self' https:; frame-src 'self' https://www.google.com https://accounts.google.com; frame-ancestors 'self';",
             'hsts_max_age': 31536000,  # 1 year
             'hsts_include_subdomains': True,
             'hsts_preload': False,
