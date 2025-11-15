@@ -22,7 +22,7 @@
    - Select the project containing your OAuth client
 
 2. **Find Your OAuth 2.0 Client ID**
-   - Client ID: `1008582896300-sbsrcs6jg32lncrnmmf1ia93vnl81tls.apps.googleusercontent.com`
+   - Client ID: `87279819935-i7a1r6kruor58op1jom3mhgcvkvpc7uh.apps.googleusercontent.com`
 
 3. **Add Authorized JavaScript Origins**
    Click on the client ID, then add these origins:
@@ -120,7 +120,7 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=87279819935
 VITE_FIREBASE_APP_ID=1:87279819935:web:9f78b1c4c2efe16ad4d6aa
 VITE_FIREBASE_MEASUREMENT_ID=G-R2HGN102D3
 
-VITE_GOOGLE_CLIENT_ID=1008582896300-sbsrcs6jg32lncrnmmf1ia93vnl81tls.apps.googleusercontent.com
+VITE_GOOGLE_CLIENT_ID=87279819935-i7a1r6kruor58op1jom3mhgcvkvpc7uh.apps.googleusercontent.com
 ```
 
 ---
