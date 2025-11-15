@@ -4,11 +4,9 @@ import axiosInstance from "../services/axiosInstance";
 import { setTokenGetter } from "../services/formBuilder";
 import { environmentConfig } from "../config/environment";
 import {
-  decodeJWT,
   isTokenExpired as isTokenExpiredUtil,
   calculateTimeUntilExpiration,
-  clearAllAuthData as clearAuthData,
-  logTokenInfo
+  clearAllAuthData as clearAuthData
 } from "../utils/tokenUtils";
 
 interface User {
@@ -189,7 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchUserProfile();
   };
 
-  // Secure token refresh function
+  // Secure token refresh function - with Firebase, tokens auto-refresh
   const refreshToken = async (): Promise<boolean> => {
     if (isDevelopmentBypass) {
       console.log("Skipping token refresh - development bypass active");
@@ -197,120 +195,102 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      console.log("🔄 Attempting to refresh token...");
-      
-      const { data } = await api.post(
-        "/auth/refresh",
-        {},
-        { 
-          withCredentials: true,
-          timeout: 10000 // 10 second timeout for refresh requests
-        }
-      );
+      console.log("🔄 Attempting to refresh Firebase token...");
 
-      if (data.access_token) {
-        // Validate the new token
-        if (isTokenExpiredUtil(data.access_token)) {
-          console.error("❌ Received expired token from refresh");
-          throw new Error("Received expired token from refresh");
-        }
+      // Get fresh token from Firebase (Firebase handles token refresh automatically)
+      const { getAuth } = await import("firebase/auth");
+      const { auth } = await import("../config/firebase");
 
-        // Store the new token
-        setAccessToken(data.access_token);
-        localStorage.setItem("accessToken", data.access_token);
+      const firebaseAuth = auth || getAuth();
+      const currentUser = firebaseAuth.currentUser;
 
-        // Decode and set user from new token
-        const decoded = decodeJWT(data.access_token);
-        if (decoded) {
-          // Convert TokenPayload to User format
-          const userData: User = {
-            id: typeof decoded.sub === 'number' ? decoded.sub : parseInt(decoded.sub || '0'),
-            email: decoded.email || '',
-            username: decoded.username || '',
-            role: decoded.role || '',
-            is_active: true,
-            first_name: decoded.first_name,
-            last_name: decoded.last_name,
-            full_name: decoded.full_name
-          };
-          setUser(userData);
-        }
-
-        // Update expiration tracking
-        const timeUntilExpiration = calculateTimeUntilExpiration(data.access_token);
-        setTokenExpiresIn(timeUntilExpiration);
-
-        // Log token info for debugging
-        logTokenInfo(data.access_token, "Refreshed Token");
-
-        console.log("✅ Token refreshed successfully");
-        return true;
-      } else {
-        throw new Error("No access token received from refresh response");
+      if (!currentUser) {
+        console.error("❌ No Firebase user found for token refresh");
+        throw new Error("No authenticated user found");
       }
+
+      // Force refresh the token
+      const freshToken = await currentUser.getIdToken(true);
+
+      // Store the new token
+      setAccessToken(freshToken);
+      localStorage.setItem("accessToken", freshToken);
+
+      // Firebase tokens don't need expiration tracking - they auto-refresh
+      setTokenExpiresIn(null);
+
+      console.log("✅ Firebase token refreshed successfully");
+      return true;
     } catch (error: any) {
       console.error("❌ Token refresh failed:", error.message);
-      
+
       // Clear stale data on refresh failure
       clearAllAuthData();
-      
+
       // Dispatch custom event for components to handle
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('auth:token-expired', {
           detail: { reason: 'refresh_failed', error: error.message }
         }));
       }
-      
+
       return false;
     }
   };
 
   async function login(email: string, password: string) {
     try {
+      // Authenticate with Firebase first
+      console.log("🔐 Authenticating with Firebase...");
+
+      // Dynamically import Firebase auth to authenticate the user
+      const { getAuth, signInWithEmailAndPassword } = await import("firebase/auth");
+      const { auth } = await import("../config/firebase");
+
+      const firebaseAuth = auth || getAuth();
+      const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+
+      // Get Firebase ID token
+      const firebaseToken = await userCredential.user.getIdToken();
+      console.log("✅ Firebase authentication successful");
+
+      // Sync with backend using Firebase token
+      console.log("🔄 Syncing with backend...");
       const { data } = await api.post(
         "/auth/login",
-        { email, password },
-        { withCredentials: true }
+        {},  // Empty body - backend expects token in Authorization header
+        {
+          withCredentials: true,
+          headers: {
+            'Authorization': `Bearer ${firebaseToken}`
+          }
+        }
       );
-      
-      if (!data.access_token) {
-        throw new Error("No access token received from login");
-      }
 
-      // Validate the received token
-      if (isTokenExpiredUtil(data.access_token)) {
-        throw new Error("Received expired token from login");
-      }
+      // Backend returns user data but NOT an access_token (uses Firebase token instead)
+      // Store the Firebase token as our access token
+      setAccessToken(firebaseToken);
+      localStorage.setItem("accessToken", firebaseToken);
 
-      // Store the token
-      setAccessToken(data.access_token);
-      localStorage.setItem("accessToken", data.access_token);
-      
-      // Decode and set user
-      const decoded = decodeJWT(data.access_token);
-      if (decoded) {
-        // Convert TokenPayload to User format
+      // Set user data from backend response
+      if (data.user) {
         const userData: User = {
-          id: typeof decoded.sub === 'number' ? decoded.sub : parseInt(decoded.sub || '0'),
-          email: decoded.email || '',
-          username: decoded.username || '',
-          role: decoded.role || '',
-          is_active: true,
-          first_name: decoded.first_name,
-          last_name: decoded.last_name,
-          full_name: decoded.full_name
+          id: data.user.id,
+          email: data.user.email,
+          username: data.user.username || data.user.email?.split('@')[0] || '',
+          role: data.user.role || 'user',
+          is_active: data.user.is_active !== false,
+          first_name: data.user.first_name,
+          last_name: data.user.last_name,
+          full_name: data.user.full_name || `${data.user.first_name || ''} ${data.user.last_name || ''}`.trim()
         };
         setUser(userData);
-      } else {
-        throw new Error("Failed to decode user information from token");
+        console.log("✅ User data set from backend");
       }
 
-      // Update expiration tracking
-      const timeUntilExpiration = calculateTimeUntilExpiration(data.access_token);
-      setTokenExpiresIn(timeUntilExpiration);
-
-      // Log token info for debugging
-      logTokenInfo(data.access_token, "Login Token");
+      // Firebase tokens don't have traditional JWT expiration tracking
+      // They auto-refresh through Firebase SDK
+      setTokenExpiresIn(null);
 
       // Fetch full user profile after successful login
       try {
@@ -322,8 +302,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       console.log("✅ Login successful");
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Login failed:", error);
+
+      // Provide more helpful error messages for Firebase errors
+      if (error.code === 'auth/user-not-found') {
+        throw new Error("No account found with this email address");
+      } else if (error.code === 'auth/wrong-password') {
+        throw new Error("Invalid email or password");
+      } else if (error.code === 'auth/invalid-email') {
+        throw new Error("Invalid email address format");
+      } else if (error.code === 'auth/user-disabled') {
+        throw new Error("This account has been disabled");
+      } else if (error.code === 'auth/too-many-requests') {
+        throw new Error("Too many failed login attempts. Please try again later");
+      }
+
       throw error;
     }
   }
@@ -338,9 +332,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     organizationName?: string;
   }) {
     try {
-      await api.post("/auth/register", { email, password, organizationName });
-    } catch (error) {
+      console.log("📝 Registering new user with Firebase...");
+
+      // Create user with Firebase Auth
+      const { getAuth, createUserWithEmailAndPassword } = await import("firebase/auth");
+      const { auth } = await import("../config/firebase");
+
+      const firebaseAuth = auth || getAuth();
+      const userCredential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+
+      // Get Firebase ID token
+      const firebaseToken = await userCredential.user.getIdToken();
+      console.log("✅ Firebase registration successful");
+
+      // Sync with backend
+      console.log("🔄 Syncing new user with backend...");
+      await api.post(
+        "/auth/register",
+        { organizationName },  // Optional organization name
+        {
+          withCredentials: true,
+          headers: {
+            'Authorization': `Bearer ${firebaseToken}`
+          }
+        }
+      );
+
+      console.log("✅ User registered and synced with backend");
+    } catch (error: any) {
       console.error("Registration failed:", error);
+
+      // Provide helpful Firebase error messages
+      if (error.code === 'auth/email-already-in-use') {
+        throw new Error("An account with this email already exists");
+      } else if (error.code === 'auth/weak-password') {
+        throw new Error("Password should be at least 6 characters");
+      } else if (error.code === 'auth/invalid-email') {
+        throw new Error("Invalid email address format");
+      }
+
       throw error;
     }
   }
@@ -348,11 +378,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function logout() {
     try {
       if (!isDevelopmentBypass) {
+        // Sign out from Firebase first
+        try {
+          const { getAuth, signOut } = await import("firebase/auth");
+          const { auth } = await import("../config/firebase");
+          const firebaseAuth = auth || getAuth();
+          await signOut(firebaseAuth);
+          console.log("✅ Signed out from Firebase");
+        } catch (firebaseError) {
+          console.warn("Firebase signout failed, continuing:", firebaseError);
+        }
+
         // Attempt to call logout endpoint
-        await api.post("/api/auth/logout");
+        try {
+          await api.post("/api/auth/logout");
+        } catch (apiError) {
+          console.warn("Logout API call failed, continuing with local cleanup:", apiError);
+        }
       }
     } catch (error) {
-      console.warn("Logout API call failed, continuing with local cleanup:", error);
+      console.warn("Logout error, continuing with local cleanup:", error);
     } finally {
       // Always clear local data regardless of API call success
       clearAllAuthData();
@@ -360,17 +405,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Check if we likely have a refresh token (by checking if we've logged in before)
-  const hasRefreshToken = () => {
-    // Simple heuristic: if we have any auth-related data, we might have a refresh token
-    return (
-      localStorage.getItem("accessToken") !== null ||
-      document.cookie.includes("refresh_token")
-    );
-  };
-
   useEffect(() => {
-    // On mount, try to restore user from token in localStorage
+    // On mount, listen to Firebase auth state changes
     const initializeAuth = async () => {
       try {
         // Check for development bypass first
@@ -390,87 +426,90 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        // Check for tokens in multiple possible storage keys (for backward compatibility)
-        const token = localStorage.getItem("accessToken") || 
-                     localStorage.getItem("token") || 
-                     localStorage.getItem("quickAccessToken");
+        // Set up Firebase auth state listener
+        const { getAuth, onAuthStateChanged } = await import("firebase/auth");
+        const { auth } = await import("../config/firebase");
 
-        if (token) {
-          try {
-            // Validate token format and expiration
-            if (isTokenExpiredUtil(token)) {
-              console.log("⚠️ Access token expired, attempting refresh");
-              // Clear expired token
-              localStorage.removeItem("accessToken");
-              localStorage.removeItem("token");
-              localStorage.removeItem("quickAccessToken");
-              
-              if (hasRefreshToken()) {
-                await refreshToken();
-              }
-            } else {
-              // Token is valid
-              const decoded = decodeJWT(token);
-              if (decoded) {
-                setAccessToken(token);
-                
-                // Convert TokenPayload to User format
+        const firebaseAuth = auth || getAuth();
+
+        // Listen to auth state changes
+        const unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
+          if (firebaseUser) {
+            // User is signed in
+            console.log("🔄 Firebase user detected, syncing with backend...");
+
+            try {
+              // Get Firebase ID token
+              const firebaseToken = await firebaseUser.getIdToken();
+
+              // Store token
+              setAccessToken(firebaseToken);
+              localStorage.setItem("accessToken", firebaseToken);
+
+              // Sync with backend to get full user data
+              try {
+                const { data } = await api.post(
+                  "/auth/login",
+                  {},
+                  {
+                    withCredentials: true,
+                    headers: {
+                      'Authorization': `Bearer ${firebaseToken}`
+                    }
+                  }
+                );
+
+                if (data.user) {
+                  const userData: User = {
+                    id: data.user.id,
+                    email: data.user.email,
+                    username: data.user.username || data.user.email?.split('@')[0] || '',
+                    role: data.user.role || 'user',
+                    is_active: data.user.is_active !== false,
+                    first_name: data.user.first_name,
+                    last_name: data.user.last_name,
+                    full_name: data.user.full_name || `${data.user.first_name || ''} ${data.user.last_name || ''}`.trim()
+                  };
+                  setUser(userData);
+                  console.log("✅ User restored from Firebase auth");
+                }
+              } catch (syncError) {
+                console.warn("Backend sync failed, using Firebase data only:", syncError);
+                // Fall back to Firebase user data
                 const userData: User = {
-                  id: typeof decoded.sub === 'number' ? decoded.sub : parseInt(decoded.sub || '0'),
-                  email: decoded.email || '',
-                  username: decoded.username || '',
-                  role: decoded.role || '',
+                  id: 0,  // Temporary ID until backend sync
+                  email: firebaseUser.email || '',
+                  username: firebaseUser.email?.split('@')[0] || '',
+                  role: 'user',
                   is_active: true,
-                  first_name: decoded.first_name,
-                  last_name: decoded.last_name,
-                  full_name: decoded.full_name
+                  first_name: firebaseUser.displayName?.split(' ')[0],
+                  last_name: firebaseUser.displayName?.split(' ')[1],
+                  full_name: firebaseUser.displayName || ''
                 };
                 setUser(userData);
-                
-                // Standardize storage key
-                localStorage.setItem("accessToken", token);
-                localStorage.removeItem("token");
-                localStorage.removeItem("quickAccessToken");
-                
-                // Update expiration tracking
-                const timeUntilExpiration = calculateTimeUntilExpiration(token);
-                setTokenExpiresIn(timeUntilExpiration);
-                
-                // Log token info for debugging
-                logTokenInfo(token, "Restored Token");
-                
-                console.log("✅ Restored valid access token from localStorage");
-              } else {
-                throw new Error("Failed to decode token");
               }
+            } catch (error) {
+              console.error("Error restoring Firebase auth:", error);
+              clearAllAuthData();
             }
-          } catch (error) {
-            console.log(
-              "❌ Invalid token in localStorage, clearing and trying refresh"
-            );
-            // Clear all possible token keys
-            localStorage.removeItem("accessToken");
-            localStorage.removeItem("token");
-            localStorage.removeItem("quickAccessToken");
-            
-            if (hasRefreshToken()) {
-              await refreshToken();
-            }
+          } else {
+            // User is signed out
+            console.log("ℹ️ No Firebase user - user needs to login");
+            setUser(null);
+            setAccessToken(null);
+            setUserProfile(null);
           }
-        } else if (hasRefreshToken()) {
-          // No access token but we might have a refresh token in cookies
-          console.log("🔄 No access token found, attempting silent refresh");
-          await refreshToken();
-        } else {
-          // This is normal for new users - not an error
-          console.log("ℹ️ No authentication tokens found - user needs to login");
-        }
+
+          setIsLoading(false);
+        });
+
+        // Cleanup subscription on unmount
+        return () => unsubscribe();
+
       } catch (error) {
         console.log("❌ Error during auth initialization:", error);
         // Clear any potentially corrupted data
         clearAllAuthData();
-      } finally {
-        // Always set loading to false after initialization is complete
         setIsLoading(false);
       }
     };
