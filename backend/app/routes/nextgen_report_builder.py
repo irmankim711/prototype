@@ -1996,11 +1996,45 @@ def generate_report_from_excel():
                 except Exception as db_error:
                     logger.warning(f"🔍 [DEBUG] Database template lookup failed: {str(db_error)}")
 
-            # Fallback to filesystem lookup if not found in database
+            # Try Firestore if SQL database lookup failed
+            if not template_file:
+                try:
+                    from app.services.firestore_template_service import FirestoreTemplateService
+
+                    logger.info(f"🔍 [DEBUG] Template not found in SQL DB, checking Firestore...")
+                    firestore_service = FirestoreTemplateService()
+
+                    # Get template from Firestore by ID
+                    firestore_template = firestore_service.get_template_by_id(template_id)
+
+                    if firestore_template:
+                        logger.info(f"✅ Found template in Firestore: {firestore_template.get('name')}")
+
+                        # Get file_name from Firestore (NOT file_path, use file_name)
+                        file_name = firestore_template.get('file_name')
+                        if file_name:
+                            from app.utils.railway_paths import get_templates_dir
+                            templates_dir = get_templates_dir()
+                            template_file = templates_dir / file_name
+
+                            if template_file.exists():
+                                logger.info(f"✅ Template file found from Firestore metadata: {template_file}")
+                            else:
+                                logger.warning(f"⚠️ Template file_name from Firestore not found: {template_file}")
+                                template_file = None
+                        else:
+                            logger.warning(f"⚠️ Firestore template has no file_name field")
+                    else:
+                        logger.info(f"ℹ️ Template not found in Firestore with ID: {template_id}")
+
+                except Exception as firestore_error:
+                    logger.warning(f"⚠️ Firestore template lookup failed: {str(firestore_error)}")
+
+            # Fallback to filesystem lookup if not found in database or Firestore
             if not template_file:
                 from app.utils.railway_paths import get_templates_dir
 
-                logger.info(f"🔍 [DEBUG] Template not found in DB, falling back to filesystem lookup")
+                logger.info(f"🔍 [DEBUG] Template not found in DB/Firestore, falling back to filesystem lookup")
                 templates_dir = get_templates_dir()
                 logger.info(f"🔍 [DEBUG] Templates directory: {templates_dir}")
                 logger.info(f"🔍 [DEBUG] Templates directory exists: {templates_dir.exists()}")
