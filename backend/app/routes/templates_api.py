@@ -92,18 +92,37 @@ def get_templates():
         if request.args.get('supports_excel'):
             filters['supports_excel'] = request.args.get('supports_excel').lower() == 'true'
 
-        # Get all templates - create new service instance to ensure proper app context
-        from ..services.template_service import TemplateService
-        service = TemplateService()
-        templates = service.get_templates(user_id=user_id, filters=filters)
+        # Get templates from FIRESTORE
+        from ..services.firestore_template_service import FirestoreTemplateService
+        firestore_service = FirestoreTemplateService()
+        all_templates = firestore_service.get_all_templates(active_only=True)
 
-        logger.info(f"API returning {len(templates)} templates")
+        # Apply filters
+        templates = all_templates
+        if filters:
+            if 'category' in filters:
+                templates = [t for t in templates if t.get('category') == filters['category']]
+
+            if 'template_type' in filters:
+                templates = [t for t in templates if t.get('template_type') == filters['template_type']]
+
+            if 'search' in filters:
+                search_term = filters['search'].lower()
+                templates = [t for t in templates if
+                           search_term in t.get('name', '').lower() or
+                           search_term in t.get('description', '').lower()]
+
+            if 'supports_excel' in filters:
+                templates = [t for t in templates if t.get('supports_excel') == filters['supports_excel']]
+
+        logger.info(f"API returning {len(templates)} templates from Firestore (filtered from {len(all_templates)})")
 
         return jsonify({
             'success': True,
             'templates': templates,
             'total_count': len(templates),
-            'filters_applied': filters
+            'filters_applied': filters,
+            'source': 'firestore'
         }), 200
         
     except Exception as e:
