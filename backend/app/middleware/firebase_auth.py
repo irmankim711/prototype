@@ -359,6 +359,21 @@ class FirebaseAuthManager:
                 logger.info(f"   Service account file readable: {os.access(service_account_path, os.R_OK)}")
                 logger.info(f"   Service account file size: {os.path.getsize(service_account_path)} bytes")
     
+    def get_firestore_db(self):
+        """Get Firestore database client
+
+        Returns:
+            Firestore client instance or None if not initialized
+        """
+        if not self._initialized:
+            logger.warning("Firebase not initialized, attempting initialization...")
+            self._initialize_firebase()
+
+        if not self._firestore_db:
+            logger.warning("Firestore database client not available")
+
+        return self._firestore_db
+
     def get_initialization_status(self) -> Dict[str, Any]:
         """Get detailed initialization status for health checks"""
         return {
@@ -370,14 +385,14 @@ class FirebaseAuthManager:
             'project_id': os.getenv('FIREBASE_PROJECT_ID'),
             'has_service_account_path': bool(os.getenv('FIREBASE_SERVICE_ACCOUNT_PATH')),
             'has_private_key': bool(os.getenv('FIREBASE_PRIVATE_KEY')),
-            
+
             # Circuit breaker status
             'circuit_breaker_open': self._circuit_breaker_open,
             'circuit_breaker_failures': self._circuit_breaker_failures,
             'circuit_breaker_failure_threshold': self._circuit_breaker_failure_threshold,
             'circuit_breaker_reset_timeout': self._circuit_breaker_reset_timeout,
             'circuit_breaker_last_failure_time': self._circuit_breaker_last_failure_time.isoformat() if self._circuit_breaker_last_failure_time else None,
-            
+
             # Status tracking
             'last_successful_init': self._last_successful_init.isoformat() if self._last_successful_init else None,
             'consecutive_failures': self._consecutive_failures,
