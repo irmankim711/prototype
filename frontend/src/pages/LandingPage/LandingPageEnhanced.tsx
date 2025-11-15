@@ -26,6 +26,7 @@ import { useNavigate } from "react-router-dom";
 import { login, register } from "../../services/api";
 import React from "react";
 import GoogleSignInButton from "../../components/GoogleSignInButton";
+import FirebasePhoneAuth from "../../components/FirebasePhoneAuth";
 import { useAuth } from "../../context/AuthContext";
 import { useFirebaseAuth } from "../../context/FirebaseAuthContext";
 import {
@@ -838,111 +839,20 @@ export default function LandingPageEnhanced() {
                 </Typography>
               </Divider>
 
-              {/* Phone Number Option */}
-              {!otpSent ? (
-                <Box component="form" onSubmit={handleQuickAccessWithPhone}>
-                  <StyledTextField
-                    fullWidth
-                    label="Phone Number"
-                    type="tel"
-                    value={quickAccessPhone}
-                    onChange={(e: any) => setQuickAccessPhone(e.target.value)}
-                    required
-                    sx={{ mb: 3 }}
-                    placeholder="+60 123456 7890"
-                    helperText="We'll send you a verification code via SMS"
-                  />
-                  <Button
-                    type="submit"
-                    fullWidth
-                    variant="contained"
-                    disabled={quickAccessLoading}
-                    sx={{
-                      py: 2,
-                      mb: 2,
-                      borderRadius: "12px",
-                      background:
-                        "linear-gradient(135deg, #10B981 0%, #059669 100%)",
-                      fontSize: "1.1rem",
-                      fontWeight: 600,
-                      boxShadow: "0 8px 25px rgba(16, 185, 129, 0.3)",
-                      transition: "all 0.3s ease",
-                      "&:hover": {
-                        background:
-                          "linear-gradient(135deg, #059669 0%, #047857 100%)",
-                        transform: "translateY(-2px)",
-                        boxShadow: "0 12px 35px rgba(16, 185, 129, 0.4)",
-                      },
-                    }}
-                  >
-                    {quickAccessLoading ? (
-                      <CircularProgress size={24} color="inherit" />
-                    ) : (
-                      "Send SMS Code"
-                    )}
-                  </Button>
-                </Box>
-              ) : (
-                <Box component="form" onSubmit={handleVerifyOtp}>
-                  <Typography
-                    variant="body2"
-                    color="textSecondary"
-                    sx={{ mb: 2, textAlign: "center" }}
-                  >
-                    Enter the verification code sent to {quickAccessPhone}
-                  </Typography>
-                  <StyledTextField
-                    fullWidth
-                    label="Verification Code"
-                    value={quickAccessOtp}
-                    onChange={(e: any) => setQuickAccessOtp(e.target.value)}
-                    required
-                    sx={{ mb: 3 }}
-                    placeholder="Enter 6-digit code"
-                  />
-                  <Button
-                    type="submit"
-                    fullWidth
-                    variant="contained"
-                    disabled={quickAccessLoading}
-                    sx={{
-                      py: 2,
-                      mb: 2,
-                      borderRadius: "12px",
-                      background:
-                        "linear-gradient(135deg, #10B981 0%, #059669 100%)",
-                      fontSize: "1.1rem",
-                      fontWeight: 600,
-                      boxShadow: "0 8px 25px rgba(16, 185, 129, 0.3)",
-                      transition: "all 0.3s ease",
-                      "&:hover": {
-                        background:
-                          "linear-gradient(135deg, #059669 0%, #047857 100%)",
-                        transform: "translateY(-2px)",
-                        boxShadow: "0 12px 35px rgba(16, 185, 129, 0.4)",
-                      },
-                    }}
-                  >
-                    {quickAccessLoading ? (
-                      <CircularProgress size={24} color="inherit" />
-                    ) : (
-                      "Verify & Access Forms"
-                    )}
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setOtpSent(false);
-                      setQuickAccessOtp("");
-                      setQuickAccessError("");
-                    }}
-                    fullWidth
-                    variant="text"
-                    sx={{ color: "#10B981", fontWeight: 600 }}
-                  >
-                    Try Different Number
-                  </Button>
-                </Box>
-              )}
+              {/* Firebase Phone Authentication */}
+              <FirebasePhoneAuth
+                buttonText="Send SMS Code"
+                onSuccess={async (user) => {
+                  console.log("Phone authentication successful:", user);
+                  // User is already authenticated with Firebase
+                  // Navigate to forms page
+                  navigate("/google-forms-export");
+                }}
+                onError={(error) => {
+                  console.error("Phone authentication error:", error);
+                  setQuickAccessError(error);
+                }}
+              />
 
               <Divider sx={{ my: 3 }} />
               <Typography align="center" color="textSecondary">
