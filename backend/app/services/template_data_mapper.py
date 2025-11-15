@@ -224,28 +224,114 @@ class TemplateDataMapper:
             if 'data' in record and isinstance(record['data'], dict):
                 record = {**record, **record['data']}
 
-            # Extract participant data with multiple fallback field names
-            try:
-                pre_score = int(record.get('pre_test_score', record.get('pre_mark', record.get('pre_test', 70))))
-                post_score = int(record.get('post_test_score', record.get('post_mark', record.get('post_test', 85))))
-                change_value = post_score - pre_score
-            except (ValueError, TypeError):
-                pre_score = 70
-                post_score = 85
-                change_value = 15
+            # Extract participant name with Excel column variations
+            nama = (record.get('NAMA PESERTA HADIR') or
+                   record.get('name') or
+                   record.get('participant_name') or
+                   record.get('full_name') or
+                   record.get('NAMA') or
+                   f'Participant {i}')
 
+            # Extract IC/KP with variations
+            kad_pengenalan = (record.get('KAD PENGENALAN') or
+                             record.get('ic') or
+                             record.get('id_number') or
+                             record.get('identity_card') or
+                             record.get('NO_KP') or
+                             '')
+
+            # Extract phone with variations
+            no_telefon = (record.get('NO TELEFON') or
+                         record.get('phone') or
+                         record.get('tel') or
+                         record.get('telephone') or
+                         record.get('phone_number') or
+                         record.get('NO_TEL') or
+                         '')
+
+            # Extract gender
+            jantina = (record.get('JANTINA') or
+                      record.get('gender') or
+                      record.get('Gender') or
+                      '')
+
+            # Extract address
+            alamat = (record.get('ALAMAT') or
+                     record.get('address') or
+                     record.get('participant_address') or
+                     record.get('Address') or
+                     '')
+
+            # Extract attendance with Excel column variations (with newlines)
+            kehadiran_sabtu = (record.get('KEHADIRAH \n(SABTU)') or
+                              record.get('KEHADIRAN \n(SABTU)') or
+                              record.get('KEHADIRAN_SABTU') or
+                              record.get('attendance_day1') or
+                              record.get('day1_attendance') or
+                              record.get('Attendance_Day1') or
+                              'Hadir')
+
+            kehadiran_ahad = (record.get('KEHADIRAN\n(AHAD)') or
+                             record.get('KEHADIRAN \n(AHAD)') or
+                             record.get('KEHADIRAN_AHAD') or
+                             record.get('attendance_day2') or
+                             record.get('day2_attendance') or
+                             record.get('Attendance_Day2') or
+                             'Hadir')
+
+            # Extract test scores
+            try:
+                markah_pre = str(record.get('MARKAH_PRE') or
+                               record.get('pre_test_score') or
+                               record.get('pre_mark') or
+                               record.get('pre_test') or
+                               record.get('Pre_Test') or
+                               '')
+                markah_post = str(record.get('MARKAH_POST') or
+                                record.get('post_test_score') or
+                                record.get('post_mark') or
+                                record.get('post_test') or
+                                record.get('Post_Test') or
+                                '')
+            except (ValueError, TypeError):
+                markah_pre = ''
+                markah_post = ''
+
+            # Extract other fields
+            nama_pre = record.get('NAMA PRE') or nama
+            nama_post = record.get('NAMA POST') or nama
+            penilaian = record.get('PENILAIAN') or ''
+            alasan = record.get('ALASAN') or ''
+
+            # Create participant with BOTH English and Malay field names for compatibility
             participant = {
+                # Malay field names (for DOCX templates like UGS.docx)
                 'bil': str(i),
-                'name': record.get('name', record.get('participant_name', record.get('full_name', f'Participant {i}'))),
-                'ic': record.get('ic', record.get('id_number', record.get('identity_card', 'Not Specified'))),
-                'address': record.get('address', record.get('participant_address', 'Not Specified')),
-                'tel': record.get('phone', record.get('tel', record.get('telephone', record.get('phone_number', 'Not Specified')))),
-                'attendance_day1': record.get('attendance_day1', record.get('day1_attendance', 'Present')),
-                'attendance_day2': record.get('attendance_day2', record.get('day2_attendance', 'Present')),
-                'notes': record.get('notes', record.get('remarks', '')),
-                'pre_mark': str(pre_score),
-                'post_mark': str(post_score),
-                'change': str(change_value)
+                'nama': nama,
+                'kad_pengenalan': str(kad_pengenalan) if kad_pengenalan else '',
+                'no_telefon': str(no_telefon) if no_telefon else '',
+                'jantina': jantina,
+                'alamat': alamat,
+                'kehadiran_sabtu': kehadiran_sabtu,
+                'kehadiran_ahad': kehadiran_ahad,
+                'nama_pre': nama_pre,
+                'markah_pre': markah_pre,
+                'nama_post': nama_post,
+                'markah_post': markah_post,
+                'penilaian': penilaian,
+                'alasan': alasan,
+
+                # English field names (for backwards compatibility with LaTeX templates)
+                'name': nama,
+                'ic': str(kad_pengenalan) if kad_pengenalan else '',
+                'address': alamat,
+                'tel': str(no_telefon) if no_telefon else '',
+                'attendance_day1': kehadiran_sabtu,
+                'attendance_day2': kehadiran_ahad,
+                'notes': alasan,
+                'pre_mark': markah_pre,
+                'post_mark': markah_post,
+                'change': ''  # Can calculate if needed
             }
             participants.append(participant)
 
@@ -304,6 +390,7 @@ class TemplateDataMapper:
             'records': records,
             'total_records': len(records),
             'participants': participants,  # Add participants structure
+            'peserta_list': participants,  # Alias for DOCX templates that use 'peserta_list'
             'data': raw_data,
             'submissions': records
         }
