@@ -2260,22 +2260,24 @@ def generate_report_from_excel():
                                     # Re-read Excel file to get specific sheet data
                                     try:
                                         import pandas as pd
-                                        # Use the excel_file_path that was determined earlier in the function
-                                        # This variable is set from file_ids or legacy excelFilePath parameter
-                                        excel_path = None
+                                        # excel_file_path is set earlier in the function from file_ids[0] or excelFilePath parameter
+                                        # For single files: it's the actual path
+                                        # For multiple files: it's set to 'multiple_files'
 
-                                        # Try to get file path from file_ids_list
-                                        if file_ids_list and len(file_ids_list) > 0:
-                                            excel_path = file_ids_list[0].file_path
-                                        # Fallback to excel_file_path if available
-                                        elif 'excel_file_path' in locals() and excel_file_path and excel_file_path != 'multiple_files':
+                                        # If multiple files, we need to get the first file's path
+                                        if excel_file_path == 'multiple_files' and file_ids and len(file_ids) > 0:
+                                            temp_file = ParsedExcelFile.query.get(file_ids[0])
+                                            excel_path = temp_file.file_path if temp_file else None
+                                        else:
                                             excel_path = excel_file_path
 
-                                        if not excel_path:
+                                        if not excel_path or excel_path == 'multiple_files':
                                             logger.error(f"🆔 [{request_id}] ❌ Cannot determine Excel file path for chart")
-                                            logger.error(f"🆔 [{request_id}] file_ids_list: {len(file_ids_list) if file_ids_list else 0} files")
+                                            logger.error(f"🆔 [{request_id}] excel_file_path value: {excel_file_path}")
                                             chart_data = []
                                             continue
+
+                                        logger.info(f"🆔 [{request_id}] 📊 Using Excel file: {excel_path}")
 
                                         # First, list all available sheets
                                         excel_file = pd.ExcelFile(excel_path)
