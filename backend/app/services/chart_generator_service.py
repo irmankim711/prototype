@@ -74,11 +74,28 @@ class ChartGeneratorService:
             if group_by:
                 from collections import Counter
                 group_counts = Counter()
+
+                # Rating scale mapping (1-5 to text labels)
+                rating_map = {
+                    '1': 'TIDAK MEMUASKAN',
+                    '1.0': 'TIDAK MEMUASKAN',
+                    '2': 'KURANG MEMUASKAN',
+                    '2.0': 'KURANG MEMUASKAN',
+                    '3': 'MEMUASKAN',
+                    '3.0': 'MEMUASKAN',
+                    '4': 'BAIK',
+                    '4.0': 'BAIK',
+                    '5': 'CEMERLANG',
+                    '5.0': 'CEMERLANG'
+                }
+
                 for record in data:
                     if group_by in record and record[group_by]:
                         value = str(record[group_by]).strip()
                         if value:
-                            group_counts[value] += 1
+                            # Convert numeric rating to text label
+                            label = rating_map.get(value, value)
+                            group_counts[label] += 1
 
                 # Use predefined categories if provided, otherwise use counts
                 if categories:
