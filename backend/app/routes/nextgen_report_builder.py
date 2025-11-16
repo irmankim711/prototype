@@ -2249,8 +2249,46 @@ def generate_report_from_excel():
 
                         for chart_config in charts:
                             try:
+                                # Resolve data source
+                                chart_data = []
+
+                                # Check if chart specifies a sheetName to read from Excel
+                                if 'sheetName' in chart_config:
+                                    sheet_name = chart_config.get('sheetName')
+                                    logger.info(f"🆔 [{request_id}] 📊 Loading chart data from sheet: {sheet_name}")
+
+                                    # Re-read Excel file to get specific sheet data
+                                    try:
+                                        import pandas as pd
+                                        excel_file_path = uploaded_file_path
+                                        df = pd.read_excel(excel_file_path, sheet_name=sheet_name)
+                                        chart_data = df.to_dict('records')
+                                        logger.info(f"🆔 [{request_id}] ✅ Loaded {len(chart_data)} rows from sheet '{sheet_name}'")
+                                    except Exception as sheet_error:
+                                        logger.error(f"🆔 [{request_id}] ❌ Error reading sheet '{sheet_name}': {str(sheet_error)}")
+                                        chart_data = []
+
+                                # Otherwise resolve data reference (e.g., 'peserta_list' -> actual data array)
+                                elif 'data' in chart_config:
+                                    chart_data = chart_config.get('data', [])
+                                    if isinstance(chart_data, str):
+                                        # Data is a reference to a key in context
+                                        chart_data = context.get(chart_data, [])
+                                        logger.info(f"🆔 [{request_id}] 📊 Resolved chart data '{chart_config.get('data')}' to {len(chart_data)} items")
+
+                                if not chart_data:
+                                    logger.warning(f"🆔 [{request_id}] ⚠️ No data for chart '{chart_config.get('title')}'")
+                                    continue
+
+                                # Prepare chart config with resolved data
+                                resolved_chart_config = {
+                                    'chartType': chart_config.get('type', 'bar'),
+                                    'data': chart_data,
+                                    'config': chart_config  # Pass entire config for additional options
+                                }
+
                                 # Generate chart image
-                                file_path, base64_data = chart_generator_service.generate_chart_from_config(chart_config)
+                                file_path, base64_data = chart_generator_service.generate_chart_from_config(resolved_chart_config)
 
                                 if file_path and os.path.exists(file_path):
                                     # Add page break and chart

@@ -224,10 +224,25 @@ const ExcelImportComponent: React.FC<ExcelImportComponentProps> = ({
         reportTitle: reportTitle
       });
 
+      // ✅ Define charts to include in the report
+      const charts = [
+        {
+          type: 'bar',
+          title: 'PENILAIAN KESELURUHAN',
+          sheetName: '04- LAPORAN PENILAIAN PROGRAM',  // Read from this specific sheet
+          groupBy: 'PENILAIAN',  // Group by PENILAIAN column
+          orientation: 'horizontal',  // Horizontal bar chart like the example
+          showPercentage: true,  // Show percentage labels
+          categories: ['TIDAK MEMUASKAN', 'KURANG MEMUASKAN', 'MEMUASKAN', 'BAIK', 'CEMERLANG'],  // Order from bottom to top
+          color: '#ff8c42'  // Orange color like the example
+        }
+      ];
+
       const report = await nextGenReportService.generateReportFromExcel(
         selectedDataSource.filePath,
         templateId,
-        reportTitle
+        reportTitle,
+        charts  // Pass charts configuration
       );
       
       console.log('✅ Report generation completed successfully');

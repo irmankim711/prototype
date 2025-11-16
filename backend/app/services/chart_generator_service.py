@@ -58,45 +58,101 @@ class ChartGeneratorService:
         try:
             # Extract configuration
             title = config.get('title', 'Bar Chart')
+            group_by = config.get('groupBy')
             x_field = config.get('xField', 'name')
             y_field = config.get('yField', 'value')
-            color = config.get('colors', ['#3b82f6'])[0]
+            color = config.get('color', config.get('colors', ['#3b82f6'])[0] if isinstance(config.get('colors'), list) else '#3b82f6')
+            orientation = config.get('orientation', 'vertical')  # 'vertical' or 'horizontal'
+            show_percentage = config.get('showPercentage', False)
+            categories = config.get('categories', [])  # Predefined category order
 
-            # Extract data
+            # Extract and process data
             x_values = []
             y_values = []
-            for record in data:
-                if x_field in record and y_field in record:
-                    x_values.append(str(record[x_field]))
-                    try:
-                        y_values.append(float(record[y_field]))
-                    except (ValueError, TypeError):
-                        y_values.append(0)
+
+            # If groupBy is specified, aggregate data by counting occurrences
+            if group_by:
+                from collections import Counter
+                group_counts = Counter()
+                for record in data:
+                    if group_by in record and record[group_by]:
+                        value = str(record[group_by]).strip()
+                        if value:
+                            group_counts[value] += 1
+
+                # Use predefined categories if provided, otherwise use counts
+                if categories:
+                    # Ensure all categories are present, even if count is 0
+                    for category in categories:
+                        x_values.append(category)
+                        y_values.append(group_counts.get(category, 0))
+                else:
+                    # Use most common
+                    for label, count in group_counts.most_common():
+                        x_values.append(label)
+                        y_values.append(count)
+
+                logger.info(f"📊 Bar chart grouped by '{group_by}': {dict(group_counts)}")
+            else:
+                # Original behavior: use xField and yField
+                for record in data:
+                    if x_field in record and y_field in record:
+                        x_values.append(str(record[x_field]))
+                        try:
+                            y_values.append(float(record[y_field]))
+                        except (ValueError, TypeError):
+                            y_values.append(0)
 
             if not x_values or not y_values:
                 logger.warning("No valid data for bar chart")
                 return None, None
 
+            # Calculate percentages if needed
+            total = sum(y_values)
+            percentages = [(v/total*100) if total > 0 else 0 for v in y_values]
+
             # Create figure
             fig, ax = plt.subplots(figsize=(10, 6))
-            bars = ax.bar(x_values, y_values, color=color, alpha=0.8)
 
-            # Add value labels on bars
-            for bar in bars:
-                height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2., height,
-                       f'{height:.1f}',
-                       ha='center', va='bottom', fontsize=9)
+            if orientation == 'horizontal':
+                bars = ax.barh(x_values, y_values, color=color, alpha=0.9)
+
+                # Add labels on bars (values and/or percentages)
+                for idx, (bar, value, pct) in enumerate(zip(bars, y_values, percentages)):
+                    width = bar.get_width()
+                    if show_percentage:
+                        label = f'{pct:.0f}%' if value > 0 else f'{pct:.1f}%'
+                    else:
+                        label = f'{value:.0f}'
+
+                    ax.text(width, bar.get_y() + bar.get_height()/2.,
+                           f'  {label}',
+                           ha='left', va='center', fontsize=10, fontweight='bold')
+
+                ax.set_xlabel('PERATUS' if show_percentage else 'COUNT', fontsize=11)
+                ax.set_xlim(0, max(percentages) * 1.2 if show_percentage else max(y_values) * 1.2)
+            else:
+                bars = ax.bar(x_values, y_values, color=color, alpha=0.8)
+
+                # Add value labels on bars
+                for bar, value, pct in zip(bars, y_values, percentages):
+                    height = bar.get_height()
+                    if show_percentage:
+                        label = f'{pct:.1f}%'
+                    else:
+                        label = f'{value:.1f}'
+                    ax.text(bar.get_x() + bar.get_width()/2., height,
+                           label, ha='center', va='bottom', fontsize=9)
+
+                ax.set_ylabel('PERATUS' if show_percentage else 'COUNT', fontsize=11)
+
+                # Rotate x labels if too many
+                if len(x_values) > 5:
+                    plt.xticks(rotation=45, ha='right')
 
             # Styling
             ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
-            ax.set_xlabel(x_field.replace('_', ' ').title(), fontsize=11)
-            ax.set_ylabel(y_field.replace('_', ' ').title(), fontsize=11)
-            ax.grid(axis='y', alpha=0.3, linestyle='--')
-
-            # Rotate x labels if too many
-            if len(x_values) > 5:
-                plt.xticks(rotation=45, ha='right')
+            ax.grid(axis='x' if orientation == 'horizontal' else 'y', alpha=0.3, linestyle='--')
 
             plt.tight_layout()
 
@@ -177,20 +233,41 @@ class ChartGeneratorService:
         try:
             # Extract configuration
             title = config.get('title', 'Pie Chart')
+            group_by = config.get('groupBy')  # Field to group by (e.g., 'penilaian', 'jantina')
             name_field = config.get('nameField', 'name')
             value_field = config.get('valueField', 'value')
             colors = config.get('colors', ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'])
 
-            # Extract data
+            # Extract and process data
             labels = []
             values = []
-            for record in data:
-                if name_field in record and value_field in record:
-                    labels.append(str(record[name_field]))
-                    try:
-                        values.append(float(record[value_field]))
-                    except (ValueError, TypeError):
-                        values.append(0)
+
+            # If groupBy is specified, aggregate data by counting occurrences
+            if group_by:
+                from collections import Counter
+                # Count occurrences of each value in the groupBy field
+                group_counts = Counter()
+                for record in data:
+                    if group_by in record and record[group_by]:
+                        value = str(record[group_by]).strip()
+                        if value:  # Only count non-empty values
+                            group_counts[value] += 1
+
+                # Convert to lists
+                for label, count in group_counts.most_common():
+                    labels.append(label)
+                    values.append(count)
+
+                logger.info(f"📊 Pie chart grouped by '{group_by}': {dict(group_counts)}")
+            else:
+                # Original behavior: use nameField and valueField
+                for record in data:
+                    if name_field in record and value_field in record:
+                        labels.append(str(record[name_field]))
+                        try:
+                            values.append(float(record[value_field]))
+                        except (ValueError, TypeError):
+                            values.append(0)
 
             if not labels or not values:
                 logger.warning("No valid data for pie chart")
