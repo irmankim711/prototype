@@ -2255,17 +2255,38 @@ def generate_report_from_excel():
                                 # Check if chart specifies a sheetName to read from Excel
                                 if 'sheetName' in chart_config:
                                     sheet_name = chart_config.get('sheetName')
-                                    logger.info(f"🆔 [{request_id}] 📊 Loading chart data from sheet: {sheet_name}")
+                                    logger.info(f"🆔 [{request_id}] 📊 Loading chart data from sheet: '{sheet_name}'")
 
                                     # Re-read Excel file to get specific sheet data
                                     try:
                                         import pandas as pd
-                                        excel_file_path = uploaded_file_path
-                                        df = pd.read_excel(excel_file_path, sheet_name=sheet_name)
-                                        chart_data = df.to_dict('records')
-                                        logger.info(f"🆔 [{request_id}] ✅ Loaded {len(chart_data)} rows from sheet '{sheet_name}'")
+                                        # Use first file's path from file_ids_list
+                                        excel_path = first_file.file_path if first_file and hasattr(first_file, 'file_path') else None
+
+                                        if not excel_path:
+                                            logger.error(f"🆔 [{request_id}] ❌ Cannot determine Excel file path for chart")
+                                            chart_data = []
+                                            continue
+
+                                        # First, list all available sheets
+                                        excel_file = pd.ExcelFile(excel_path)
+                                        available_sheets = excel_file.sheet_names
+                                        logger.info(f"🆔 [{request_id}] 📋 Available sheets: {available_sheets}")
+
+                                        # Try exact match first
+                                        if sheet_name in available_sheets:
+                                            df = pd.read_excel(excel_path, sheet_name=sheet_name)
+                                            chart_data = df.to_dict('records')
+                                            logger.info(f"🆔 [{request_id}] ✅ Loaded {len(chart_data)} rows from sheet '{sheet_name}'")
+                                            logger.info(f"🆔 [{request_id}] 📋 Sheet columns: {list(df.columns)}")
+                                        else:
+                                            logger.error(f"🆔 [{request_id}] ❌ Sheet '{sheet_name}' not found!")
+                                            logger.error(f"🆔 [{request_id}] Available sheets are: {available_sheets}")
+                                            chart_data = []
                                     except Exception as sheet_error:
                                         logger.error(f"🆔 [{request_id}] ❌ Error reading sheet '{sheet_name}': {str(sheet_error)}")
+                                        import traceback
+                                        logger.error(f"🆔 [{request_id}] Traceback: {traceback.format_exc()}")
                                         chart_data = []
 
                                 # Otherwise resolve data reference (e.g., 'peserta_list' -> actual data array)
