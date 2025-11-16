@@ -2260,11 +2260,20 @@ def generate_report_from_excel():
                                     # Re-read Excel file to get specific sheet data
                                     try:
                                         import pandas as pd
-                                        # Use first file's path from file_ids_list
-                                        excel_path = first_file.file_path if first_file and hasattr(first_file, 'file_path') else None
+                                        # Use the excel_file_path that was determined earlier in the function
+                                        # This variable is set from file_ids or legacy excelFilePath parameter
+                                        excel_path = None
+
+                                        # Try to get file path from file_ids_list
+                                        if file_ids_list and len(file_ids_list) > 0:
+                                            excel_path = file_ids_list[0].file_path
+                                        # Fallback to excel_file_path if available
+                                        elif 'excel_file_path' in locals() and excel_file_path and excel_file_path != 'multiple_files':
+                                            excel_path = excel_file_path
 
                                         if not excel_path:
                                             logger.error(f"🆔 [{request_id}] ❌ Cannot determine Excel file path for chart")
+                                            logger.error(f"🆔 [{request_id}] file_ids_list: {len(file_ids_list) if file_ids_list else 0} files")
                                             chart_data = []
                                             continue
 
