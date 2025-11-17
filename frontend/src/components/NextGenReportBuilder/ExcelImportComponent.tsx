@@ -230,7 +230,7 @@ const ExcelImportComponent: React.FC<ExcelImportComponentProps> = ({
           type: 'bar',
           title: 'PENILAIAN KESELURUHAN',
           sheetName: '04- LAPORAN PENILAIAN PROGRAM',  // Read from this specific sheet
-          groupBy: 'ANALISA KEPUASAN PESERTA',  // Group by "ANALISA KEPUASAN PESERTA" column
+          groupBy: 'KESELURUHAN KURSUS',  // Group by "KESELURUHAN KURSUS" column
           orientation: 'horizontal',  // Horizontal bar chart like the example
           showPercentage: true,  // Show percentage labels
           categories: ['TIDAK MEMUASKAN', 'KURANG MEMUASKAN', 'MEMUASKAN', 'BAIK', 'CEMERLANG'],  // Order from bottom to top
