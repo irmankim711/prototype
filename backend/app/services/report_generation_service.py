@@ -1148,20 +1148,20 @@ class ReportGenerationService:
                     row = table.add_row()
                     values = [
                         str(idx),
-                        peserta.get('nama', ''),
-                        peserta.get('kad_pengenalan', ''),
-                        peserta.get('no_telefon', ''),
-                        peserta.get('jantina', ''),
-                        peserta.get('alamat', ''),
-                        peserta.get('kehadiran_sabtu', ''),
-                        peserta.get('kehadiran_ahad', ''),
-                        peserta.get('nama_pre', ''),
-                        peserta.get('markah_pre', ''),
-                        peserta.get('nama_post', ''),
-                        peserta.get('markah_post', '')
+                        str(peserta.get('nama', '')),
+                        str(peserta.get('kad_pengenalan', '')),
+                        str(peserta.get('no_telefon', '')),
+                        str(peserta.get('jantina', '')),
+                        str(peserta.get('alamat', '')),
+                        str(peserta.get('kehadiran_sabtu', '')),
+                        str(peserta.get('kehadiran_ahad', '')),
+                        str(peserta.get('nama_pre', '')),
+                        str(peserta.get('markah_pre', '')),
+                        str(peserta.get('nama_post', '')),
+                        str(peserta.get('markah_post', ''))
                     ]
                     for i, val in enumerate(values):
-                        row.cells[i].text = val
+                        row.cells[i].text = val if val else ''
                         if row.cells[i].paragraphs and row.cells[i].paragraphs[0].runs:
                             row.cells[i].paragraphs[0].runs[0].font.size = Pt(8)
 
