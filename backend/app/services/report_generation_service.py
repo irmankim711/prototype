@@ -872,8 +872,24 @@ class ReportGenerationService:
             # Check if data has 'participants' key (from template_data_mapper)
             if 'participants' in data and isinstance(data['participants'], list):
                 # Transform participants list to peserta_list format
+                import math
                 peserta_list = []
                 for p in data['participants']:
+                    # Get mark values and handle NaN properly
+                    pre_mark_value = p.get('pre_mark', '')
+                    post_mark_value = p.get('post_mark', '')
+
+                    # Convert to string if not empty, but check for NaN
+                    if pre_mark_value and not (isinstance(pre_mark_value, float) and math.isnan(pre_mark_value)):
+                        pre_mark_str = str(pre_mark_value)
+                    else:
+                        pre_mark_str = ''
+
+                    if post_mark_value and not (isinstance(post_mark_value, float) and math.isnan(post_mark_value)):
+                        post_mark_str = str(post_mark_value)
+                    else:
+                        post_mark_str = ''
+
                     peserta = {
                         'bil': p.get('bil', ''),
                         'nama': p.get('name', ''),
@@ -884,9 +900,9 @@ class ReportGenerationService:
                         'kehadiran_sabtu': p.get('attendance_day1', ''),
                         'kehadiran_ahad': p.get('attendance_day2', ''),
                         'nama_pre': p.get('name', ''),
-                        'markah_pre': p.get('pre_mark', ''),
+                        'markah_pre': pre_mark_str,
                         'nama_post': p.get('name', ''),
-                        'markah_post': p.get('post_mark', '')
+                        'markah_post': post_mark_str
                     }
                     peserta_list.append(peserta)
 
@@ -921,6 +937,22 @@ class ReportGenerationService:
                                      record.get('Attendance_Day2') or
                                      'Hadir')
 
+                    # Get mark values and handle NaN properly
+                    import math
+                    markah_pre_value = record.get('MARKAH_PRE') or record.get('Pre_Test') or record.get('pre_test')
+                    markah_post_value = record.get('MARKAH_POST') or record.get('Post_Test') or record.get('post_test')
+
+                    # Convert to string, but check for NaN first
+                    if markah_pre_value is not None and not (isinstance(markah_pre_value, float) and math.isnan(markah_pre_value)):
+                        markah_pre_str = str(markah_pre_value)
+                    else:
+                        markah_pre_str = ''
+
+                    if markah_post_value is not None and not (isinstance(markah_post_value, float) and math.isnan(markah_post_value)):
+                        markah_post_str = str(markah_post_value)
+                    else:
+                        markah_post_str = ''
+
                     peserta = {
                         'bil': str(idx),
                         'nama': nama,
@@ -931,9 +963,9 @@ class ReportGenerationService:
                         'kehadiran_sabtu': kehadiran_sabtu,
                         'kehadiran_ahad': kehadiran_ahad,
                         'nama_pre': record.get('NAMA PRE') or nama,
-                        'markah_pre': str(record.get('MARKAH_PRE') or record.get('Pre_Test') or record.get('pre_test') or ''),
+                        'markah_pre': markah_pre_str,
                         'nama_post': record.get('NAMA POST') or nama,
-                        'markah_post': str(record.get('MARKAH_POST') or record.get('Post_Test') or record.get('post_test') or ''),
+                        'markah_post': markah_post_str,
                         'penilaian': record.get('PENILAIAN') or '',
                         'alasan': record.get('ALASAN') or ''
                     }
