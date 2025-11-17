@@ -953,6 +953,9 @@ class ReportGenerationService:
                     else:
                         markah_post_str = ''
 
+                    # Auto-sync names: Use NAMA PESERTA HADIR as the primary name
+                    # If NAMA PRE or NAMA POST are different, still use the main name
+                    # This ensures marks stay linked even if user only updates NAMA PESERTA HADIR
                     peserta = {
                         'bil': str(idx),
                         'nama': nama,
@@ -962,9 +965,9 @@ class ReportGenerationService:
                         'alamat': record.get('ALAMAT') or record.get('Address') or record.get('address') or '',
                         'kehadiran_sabtu': kehadiran_sabtu,
                         'kehadiran_ahad': kehadiran_ahad,
-                        'nama_pre': record.get('NAMA PRE') or nama,
+                        'nama_pre': nama,  # Always use main name, not NAMA PRE column
                         'markah_pre': markah_pre_str,
-                        'nama_post': record.get('NAMA POST') or nama,
+                        'nama_post': nama,  # Always use main name, not NAMA POST column
                         'markah_post': markah_post_str,
                         'penilaian': record.get('PENILAIAN') or '',
                         'alasan': record.get('ALASAN') or ''
