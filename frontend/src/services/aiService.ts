@@ -264,6 +264,25 @@ export class AIService {
       );
     }
   }
+  /**
+   * Enhance report content using AI
+   */
+  static async enhanceReport(
+    reportId: number,
+    enhancementType: "general" | "insights" | "formatting" | "summary" = "general"
+  ): Promise<{ enhanced_content: string; message: string }> {
+    try {
+      const response = await aiApi.post(`/reports/${reportId}/enhance`, {
+        type: enhancementType,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("AI Report Enhancement failed:", error);
+      throw Error(
+        error instanceof Error ? error.message : "Report enhancement failed"
+      );
+    }
+  }
 }
 
 // Utility functions for AI integration

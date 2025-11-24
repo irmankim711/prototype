@@ -34,7 +34,9 @@ import {
   Link,
   Save,
   History,
+  AutoFixHigh,
 } from "@mui/icons-material";
+import AIService from "../../services/aiService";
 import debounce from "lodash-es/debounce";
 import enhancedReportService from "../../services/enhancedReportService";
 import type { ReportVersion } from "../../services/enhancedReportService";
@@ -84,6 +86,11 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
   // Save dialog state
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [changeSummary, setChangeSummary] = useState("");
+
+  // AI Enhancement state
+  const [showEnhanceDialog, setShowEnhanceDialog] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [enhancementType, setEnhancementType] = useState<"general" | "insights" | "formatting" | "summary">("general");
 
   // Editor refs
   const editorRef = useRef<HTMLDivElement>(null);
@@ -162,6 +169,30 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
       setSaveError("Failed to save report");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // AI Enhancement handler
+  const handleEnhanceReport = async () => {
+    setIsEnhancing(true);
+    setSaveError(null);
+
+    try {
+      const result = await AIService.enhanceReport(reportId, enhancementType);
+      
+      handleContentChange({
+        content: result.enhanced_content
+      });
+      
+      setShowEnhanceDialog(false);
+      setSaveError(null); // Clear any previous errors
+      
+      // Optional: Show success message or notification
+    } catch (error) {
+      console.error("Enhancement failed:", error);
+      setSaveError("Failed to enhance report with AI");
+    } finally {
+      setIsEnhancing(false);
     }
   };
 
@@ -383,6 +414,17 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
                     Versions
                   </Button>
                 )}
+
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<AutoFixHigh />}
+                  onClick={() => setShowEnhanceDialog(true)}
+                  disabled={isEnhancing || isSaving}
+                  size="small"
+                >
+                  AI Enhance
+                </Button>
               </>
             )}
           </Box>
@@ -555,6 +597,60 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
             startIcon={isSaving ? <CircularProgress size={16} /> : <Save />}
           >
             Save Version
+          </Button>
+        </DialogActions>
+      </Dialog>
+      {/* AI Enhancement Dialog */}
+      <Dialog
+        open={showEnhanceDialog}
+        onClose={() => !isEnhancing && setShowEnhanceDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Enhance Report with AI</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select how you would like AI to improve your report:
+          </Typography>
+          
+          <TextField
+            select
+            fullWidth
+            label="Enhancement Type"
+            value={enhancementType}
+            onChange={(e: any) => setEnhancementType(e.target.value)}
+            SelectProps={{
+              native: true,
+            }}
+            variant="outlined"
+            margin="dense"
+          >
+            <option value="general">General Improvement</option>
+            <option value="insights">Add Key Insights</option>
+            <option value="formatting">Improve Formatting</option>
+            <option value="summary">Generate Executive Summary</option>
+          </TextField>
+          
+          <Alert severity="info" sx={{ mt: 2 }}>
+            AI will analyze your current content and generate an improved version. 
+            You can review the changes before saving.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setShowEnhanceDialog(false)} 
+            disabled={isEnhancing}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleEnhanceReport}
+            variant="contained"
+            color="secondary"
+            disabled={isEnhancing}
+            startIcon={isEnhancing ? <CircularProgress size={16} /> : <AutoFixHigh />}
+          >
+            {isEnhancing ? "Enhancing..." : "Enhance Report"}
           </Button>
         </DialogActions>
       </Dialog>

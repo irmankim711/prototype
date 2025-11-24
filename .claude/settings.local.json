@@ -16,7 +16,9 @@
       "Bash(pip show:*)",
       "Bash(git add frontend/src/pages/GoogleFormsExport/GoogleFormsExport.tsx)",
       "Bash(git commit -m \"$(cat <<''EOF''\nFix preview endpoint response format to include reportId at top level\n\nThis commit resolves the issue where the frontend was unable to display\nreport previews because the backend response was missing the required\nreportId field at the top level.\n\nChanges:\n- Update GET /api/reports/<id>/preview endpoint response format\n- Add reportId, reportTitle, and reportType fields at top level\n- Maintain backward compatibility by keeping nested preview object\n- Frontend now receives expected response format for generateReportFromExcel\n\nThe issue was that the backend was returning:\n  { \"success\": true, \"preview\": { \"report_id\": 26, ... } }\n\nBut the frontend expected:\n  { \"reportId\": 26, \"reportTitle\": \"...\", \"reportType\": \"...\" }\n\nThis fix ensures Railway returns 200 successfully and the frontend\ncan properly process and display report previews.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(alembic -c migrations/alembic.ini upgrade head)"
+      "Bash(alembic -c migrations/alembic.ini upgrade head)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

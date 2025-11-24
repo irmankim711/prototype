@@ -1,0 +1,113 @@
+# SELENIUM LOCATOR REFERENCE GUIDE
+
+## Common MUI Element Locators
+
+### Text Input Fields
+# Email input
+By.css("input[type="email"]")
+By.css("input[placeholder*="email"]")
+
+# Generic text input
+By.css("input[type="text"]")
+
+### Buttons
+# Primary buttons
+By.css("button.MuiButton-contained")
+By.xpath("//button[contains(text(), "Save")]")
+By.xpath("//button[contains(text(), "Submit")]")
+By.xpath("//button[contains(text(), "Create")]")
+
+# Icon buttons
+By.css("button[aria-label="Edit"]")
+By.css("button[aria-label="Delete"]")
+By.css("button[aria-label="Download"]")
+
+# Floating Action Button
+By.css(".MuiFab-root")
+
+### Dropdowns
+By.css("[role="button"][aria-haspopup="listbox"]")
+By.css(".MuiSelect-root")
+
+### Checkboxes & Radio
+By.css("input[type="checkbox"]")
+By.css("input[type="radio"]")
+
+### Tables
+By.css("table")
+By.css(".MuiTable-root")
+By.css("tbody tr")
+By.css("td.MuiTableCell-body")
+
+### Pagination
+By.css(".MuiPagination-root")
+By.xpath("//button[contains(@aria-label, "Go to page")]")
+
+### Dialogs
+By.css("[role="dialog"]")
+By.css(".MuiDialog-root")
+By.xpath("//div[@role="dialog"]//button[contains(text(), "Confirm")]")
+
+### Tabs
+By.css("button.MuiTab-root")
+By.css("[role="tabpanel"]")
+
+### Snackbar/Toast
+By.css(".MuiSnackbar-root")
+By.css("[role="alert"]")
+
+### Loading
+By.css(".MuiCircularProgress-root")
+By.css(".MuiLinearProgress-root")
+
+### Navigation/Sidebar
+By.css(".MuiDrawer-root")
+By.css(".MuiListItemButton-root")
+By.css(".MuiListItemButton-root.Mui-selected")
+
+### Alerts
+By.css(".MuiAlert-root")
+By.css(".MuiAlert-standardSuccess")
+By.css(".MuiAlert-standardError")
+
+## Page-Specific Locators
+
+### Login Page
+By.css("input[type="email"]")
+By.css("input[type="password"]")
+By.xpath("//button[contains(text(), "Login")]")
+By.xpath("//button[contains(text(), "Sign in with Google")]")
+By.xpath("//a[contains(text(), "Forgot password")]")
+
+### Dashboard
+By.css("[data-testid="dashboard-card-create-form"]")
+By.css("[data-testid="dashboard-card-create-report"]")
+By.css("input[placeholder*="search"]")
+
+### Form Builder
+By.xpath("//button[contains(text(), "Text Field")]")
+By.xpath("//button[contains(text(), "Email")]")
+By.xpath("//button[contains(text(), "Select")]")
+By.css("[data-testid="add-field-button"]")
+By.xpath("//button[contains(text(), "Save")]")
+
+### Report Builder
+By.css("[data-testid="data-source-select"]")
+By.xpath("//button[contains(text(), "Line Chart")]")
+By.xpath("//button[contains(text(), "Bar Chart")]")
+By.xpath("//button[contains(text(), "Add Chart")]")
+By.xpath("//button[contains(text(), "Save Report")]")
+
+### Report History
+By.css("input[placeholder*="Search"]")
+By.css("[data-testid="status-filter"]")
+By.xpath("//button[@aria-label="Download"]")
+By.xpath("//button[@aria-label="Delete"]")
+
+### User Profile
+By.css(".MuiAvatar-root")
+By.xpath("//button[contains(text(), "Upload")]")
+By.xpath("//button[@aria-label="Edit"]")
+By.css("input[placeholder="First Name"]")
+By.css("input[placeholder="Last Name"]")
+

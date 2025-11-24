@@ -393,3 +393,4 @@ credentials.json.example
 
 backend/service/*.json
 firebase-backup-*.json
+backend/firestore_migration/firestore.rules

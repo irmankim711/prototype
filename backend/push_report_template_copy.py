@@ -57,7 +57,7 @@ def push_report_template_copy():
 
     # Create template document
     template_data = {
-        'name': 'Report Template Puncak Alam',
+        'name': 'UWAIS GLOBAL SOLUTION',
         'file_name': template_file.name,
         'file_path': str(relative_path).replace('\\', '/'),
         'absolute_path': str(template_file),
@@ -70,9 +70,9 @@ def push_report_template_copy():
         'supports_charts': True,
         'supports_images': True,
         'supports_loops': True,
-        'version': '2.0',
+        'version': '3.0',
         'usage_count': 0,
-        'description': 'Laporan Fiqh Usrah - Puncak Alam Template with participant table loops',
+        'description': 'UWAIS GLOBAL SOLUTION - Universal report template with participant table loops using docxtpl',
         'placeholder_schema': {
             'template_identifier': 'puncak_alam_fu',
             'required_fields': [
@@ -99,7 +99,7 @@ def push_report_template_copy():
     }
 
     # Use document ID
-    doc_id = 'report_template_puncak_alam'
+    doc_id = 'uwais_global_solution'
 
     # Create/update template in Firestore
     templates_collection = firestore_db.collection('templates')
@@ -146,7 +146,7 @@ def verify_upload():
         return False
 
     templates_collection = firestore_db.collection('templates')
-    template_ref = templates_collection.document('report_template_puncak_alam')
+    template_ref = templates_collection.document('uwais_global_solution')
 
     doc = template_ref.get()
     if doc.exists:
