@@ -20,6 +20,15 @@ class EnhancedExcelParser:
         """Initialize Enhanced Excel Parser"""
         self.supported_formats = ['.xlsx', '.xls', '.csv']
         
+        # Load configuration
+        config_path = os.path.join(os.path.dirname(__file__), '../config/excel_config.json')
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                self.config = json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading excel_config.json: {e}")
+            self.config = {}
+        
     def parse_excel_file(self, file_path: str) -> Dict[str, Any]:
         """
         Parse Excel file and extract comprehensive data analysis
@@ -199,17 +208,15 @@ class EnhancedExcelParser:
     def _detect_field_type(self, sample_values: List[str]) -> str:
         """Detect field type based on sample values"""
         # Date patterns
-        date_patterns = 0
-        email_patterns = 0
-        phone_patterns = 0
-        currency_patterns = 0
-        percentage_patterns = 0
+        type_config = self.config.get('type_detection', {})
+        date_indicators = type_config.get('date_indicators', ['/', '-', ':', 'jan', 'feb', 'mar', 'apr', 'may', 'jun'])
+        currency_indicators = type_config.get('currency_indicators', ['$', '€', '£', 'usd', 'eur', 'gbp'])
         
         for value in sample_values:
             value_str = str(value).strip().lower()
             
             # Date detection
-            if any(char in value_str for char in ['/', '-', ':', 'jan', 'feb', 'mar', 'apr', 'may', 'jun']):
+            if any(char in value_str for char in date_indicators):
                 date_patterns += 1
             
             # Email detection
@@ -221,7 +228,7 @@ class EnhancedExcelParser:
                 phone_patterns += 1
             
             # Currency detection
-            if any(symbol in value_str for symbol in ['$', '€', '£', 'usd', 'eur', 'gbp']):
+            if any(symbol in value_str for symbol in currency_indicators):
                 currency_patterns += 1
             
             # Percentage detection
@@ -250,25 +257,25 @@ class EnhancedExcelParser:
         """Categorize fields based on headers and content"""
         categories = {}
         
+        field_config = self.config.get('field_categorization', {})
+        
         for header in headers:
             header_lower = header.lower().strip()
             
             # Personal information
-            if any(keyword in header_lower for keyword in ['name', 'nama', 'participant', 'student', 'employee']):
+            if any(keyword in header_lower for keyword in field_config.get('personal_info', ['name', 'nama', 'participant', 'student'])):
                 categories[header] = "personal_info"
-            elif any(keyword in header_lower for keyword in ['email', 'e-mail', 'mail']):
-                categories[header] = "contact_info"
-            elif any(keyword in header_lower for keyword in ['phone', 'tel', 'mobile', 'contact']):
+            elif any(keyword in header_lower for keyword in field_config.get('contact_info', ['email', 'phone', 'address'])):
                 categories[header] = "contact_info"
             elif any(keyword in header_lower for keyword in ['address', 'location', 'city', 'state']):
                 categories[header] = "location_info"
             
             # Identifiers
-            elif any(keyword in header_lower for keyword in ['id', 'ic', 'nric', 'passport', 'number', 'no']):
+            elif any(keyword in header_lower for keyword in field_config.get('identifiers', ['id', 'ic', 'nric'])):
                 categories[header] = "identifier"
             
             # Scores and metrics
-            elif any(keyword in header_lower for keyword in ['score', 'mark', 'grade', 'point', 'rating']):
+            elif any(keyword in header_lower for keyword in field_config.get('performance', ['score', 'mark', 'grade'])):
                 categories[header] = "performance_metric"
             elif any(keyword in header_lower for keyword in ['pre', 'post', 'before', 'after']):
                 categories[header] = "performance_metric"
@@ -278,7 +285,7 @@ class EnhancedExcelParser:
                 categories[header] = "temporal_info"
             
             # Financial
-            elif any(keyword in header_lower for keyword in ['salary', 'wage', 'cost', 'price', 'amount', 'fee']):
+            elif any(keyword in header_lower for keyword in field_config.get('financial', ['salary', 'wage', 'cost'])):
                 categories[header] = "financial_info"
             
             # Status and categories

@@ -19,6 +19,16 @@ class ExcelDataExtractor:
     def __init__(self):
         self.uploads_dir = Path("static/uploads/excel")
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Load configuration
+        config_path = os.path.join(os.path.dirname(__file__), '../config/excel_config.json')
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                self.config = json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading excel_config.json: {e}")
+            # Fallback to empty config or default values could be implemented here
+            self.config = {}
 
     def extract_data_from_file(self, file_path: str) -> Dict[str, Any]:
         """
@@ -86,7 +96,8 @@ class ExcelDataExtractor:
     def _identify_main_sheet(self, sheets: Dict[str, pd.DataFrame]) -> str:
         """Identify the main data sheet from multiple sheets"""
         # Prefer sheets with common names
-        priority_names = ['data', 'participants', 'sheet1', 'main', 'peserta']
+        # Prefer sheets with common names
+        priority_names = self.config.get('sheet_detection', {}).get('priority_names', ['data', 'participants', 'sheet1', 'main', 'peserta'])
 
         for name in priority_names:
             for sheet_name in sheets.keys():
@@ -101,7 +112,8 @@ class ExcelDataExtractor:
         program_info = {}
 
         # Common field mappings (case-insensitive)
-        field_mappings = {
+        # Common field mappings (case-insensitive)
+        field_mappings = self.config.get('program_info_mappings', {
             'title': ['title', 'program_title', 'tajuk', 'nama_program', 'program'],
             'date': ['date', 'tarikh', 'program_date', 'start_date'],
             'time': ['time', 'masa', 'program_time', 'hour'],
@@ -109,7 +121,7 @@ class ExcelDataExtractor:
             'organizer': ['organizer', 'anjuran', 'penganjur', 'organized_by'],
             'facilitator': ['facilitator', 'fasilitator', 'trainer', 'jurulatih'],
             'objectives': ['objectives', 'objektif', 'matlamat', 'goals']
-        }
+        })
 
         # Convert column names to lowercase for matching
         columns_lower = {col.lower(): col for col in df.columns}
@@ -155,11 +167,13 @@ class ExcelDataExtractor:
         participants = []
 
         # Common column name mappings
-        name_cols = ['name', 'nama', 'participant_name', 'student_name', 'full_name']
-        id_cols = ['id', 'no', 'participant_id', 'student_id', 'no_peserta', 'bil']
-        gender_cols = ['gender', 'jantina', 'sex']
-        email_cols = ['email', 'emel', 'e-mail']
-        phone_cols = ['phone', 'telefon', 'no_telefon', 'contact']
+        # Common column name mappings
+        mappings = self.config.get('participant_mappings', {})
+        name_cols = mappings.get('name', ['name', 'nama', 'participant_name', 'student_name', 'full_name'])
+        id_cols = mappings.get('id', ['id', 'no', 'participant_id', 'student_id', 'no_peserta', 'bil'])
+        gender_cols = mappings.get('gender', ['gender', 'jantina', 'sex'])
+        email_cols = mappings.get('email', ['email', 'emel', 'e-mail'])
+        phone_cols = mappings.get('phone', ['phone', 'telefon', 'no_telefon', 'contact'])
 
         # Convert columns to lowercase for matching
         columns_lower = {col.lower(): col for col in df.columns}
@@ -206,7 +220,12 @@ class ExcelDataExtractor:
         attendance_cols = []
         for col in df.columns:
             col_lower = str(col).lower()
-            if any(keyword in col_lower for keyword in ['attendance', 'kehadiran', 'hadir', 'day', 'hari']):
+        attendance_config = self.config.get('attendance_mappings', {})
+        keywords = attendance_config.get('keywords', ['attendance', 'kehadiran', 'hadir', 'day', 'hari'])
+        
+        for col in df.columns:
+            col_lower = str(col).lower()
+            if any(keyword in col_lower for keyword in keywords):
                 attendance_cols.append(col)
 
         if not attendance_cols:
@@ -239,7 +258,8 @@ class ExcelDataExtractor:
                 # Normalize status
                 if pd.notna(status):
                     status_str = str(status).lower().strip()
-                    is_present = any(keyword in status_str for keyword in ['hadir', 'present', 'yes', 'y', '✓', '✔'])
+                    present_keywords = attendance_config.get('status_present', ['hadir', 'present', 'yes', 'y', '✓', '✔'])
+                    is_present = any(keyword in status_str for keyword in present_keywords)
                     record[f'day_{day_idx}_status'] = 'present' if is_present else 'absent'
                 else:
                     record[f'day_{day_idx}_status'] = 'absent'
@@ -262,8 +282,12 @@ class ExcelDataExtractor:
 
         if gender_col:
             gender_counts = df[gender_col].value_counts().to_dict()
-            stats['male_count'] = sum(v for k, v in gender_counts.items() if 'male' in str(k).lower() or 'lelaki' in str(k).lower())
-            stats['female_count'] = sum(v for k, v in gender_counts.items() if 'female' in str(k).lower() or 'perempuan' in str(k).lower())
+            gender_stats = self.config.get('gender_statistics', {})
+            male_keywords = gender_stats.get('male', ['male', 'lelaki'])
+            female_keywords = gender_stats.get('female', ['female', 'perempuan'])
+            
+            stats['male_count'] = sum(v for k, v in gender_counts.items() if any(m in str(k).lower() for m in male_keywords))
+            stats['female_count'] = sum(v for k, v in gender_counts.items() if any(f in str(k).lower() for f in female_keywords))
             stats['total_participants'] = stats['male_count'] + stats['female_count']
         else:
             # Count non-null names

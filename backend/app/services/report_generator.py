@@ -294,9 +294,15 @@ def _create_generic_report(doc: Document, data: Dict[str, Any]):
     # Title
     doc.add_heading(data.get('title', 'Report'), 0)
     
-    # Add data sections
+    # Check for structured editor content
+    content = data.get('content')
+    if isinstance(content, dict) and 'sections' in content and isinstance(content['sections'], list):
+        _render_editor_content_docx(doc, content['sections'])
+        return
+
+    # Add data sections (legacy/generic behavior)
     for key, value in data.items():
-        if key != 'title' and not key.startswith('_'):
+        if key != 'title' and not key.startswith('_') and key != 'content':
             doc.add_heading(key.replace('_', ' ').title(), level=1)
             
             if isinstance(value, str):
@@ -311,6 +317,60 @@ def _create_generic_report(doc: Document, data: Dict[str, Any]):
                     para.add_run(str(sub_value))
             else:
                 doc.add_paragraph(str(value))
+    
+    # Handle simple string content if not structured
+    if isinstance(content, str):
+        doc.add_heading('Content', level=1)
+        doc.add_paragraph(content)
+
+
+def _render_editor_content_docx(doc: Document, sections: List[Dict[str, Any]]):
+    """Render structured editor content to DOCX"""
+    for section in sections:
+        section_type = section.get('type', 'text')
+        content = section.get('content', '')
+        
+        if section_type == 'heading':
+            level = section.get('level', 1)
+            # Ensure level is within valid range (1-9)
+            level = max(1, min(9, level))
+            doc.add_heading(content, level=level)
+            
+        elif section_type == 'list':
+            # Detect if it's a bullet or numbered list based on content or metadata
+            # For now, default to bullet points as the editor mostly produces those
+            # If the content contains newlines, split them
+            items = content.split('\n')
+            for item in items:
+                if item.strip():
+                    doc.add_paragraph(item.strip(), style='List Bullet')
+                    
+        elif section_type == 'quote':
+            para = doc.add_paragraph(style='Quote')
+            if 'Quote' not in doc.styles:
+                # Fallback if Quote style doesn't exist
+                para = doc.add_paragraph()
+                para.paragraph_format.left_indent = Inches(0.5)
+            
+            run = para.add_run(content)
+            run.italic = True
+            
+        elif section_type == 'image':
+            # Handle image if it's base64
+            if content.startswith('data:image'):
+                try:
+                    # Extract base64 data
+                    header, encoded = content.split(',', 1)
+                    image_data = base64.b64decode(encoded)
+                    image_stream = BytesIO(image_data)
+                    doc.add_picture(image_stream, width=Inches(6))
+                except Exception as e:
+                    doc.add_paragraph(f"[Image: {str(e)}]")
+            else:
+                doc.add_paragraph("[Image]")
+                
+        else: # text or unknown
+            doc.add_paragraph(content)
 
 
 def create_pdf_report(template_id: str, data: Dict[str, Any], output_path: Optional[str] = None) -> str:
@@ -505,8 +565,11 @@ def _create_generic_pdf(story, data: Dict[str, Any], styles, title_style, headin
         story.append(Spacer(1, 20))
     
     # Content sections
-    if 'content' in data:
-        content = data['content']
+    content = data.get('content')
+    if isinstance(content, dict) and 'sections' in content and isinstance(content['sections'], list):
+        _render_editor_content_pdf(story, content['sections'], styles)
+    elif 'content' in data:
+        # Legacy/Simple content handling
         if isinstance(content, dict):
             for section_title, section_content in content.items():
                 story.append(Paragraph(section_title.replace('_', ' ').title(), heading_style))
@@ -519,7 +582,7 @@ def _create_generic_pdf(story, data: Dict[str, Any], styles, title_style, headin
                 story.append(Spacer(1, 15))
         else:
             story.append(Paragraph(str(content), styles['Normal']))
-    
+
     # Data table if available
     if 'table_data' in data and data['table_data']:
         story.append(Spacer(1, 20))
@@ -545,6 +608,72 @@ def _create_generic_pdf(story, data: Dict[str, Any], styles, title_style, headin
             ]))
             
             story.append(data_table)
+
+
+def _render_editor_content_pdf(story, sections: List[Dict[str, Any]], styles):
+    """Render structured editor content to PDF"""
+    from reportlab.platypus import Paragraph, Spacer, Image as RLImage
+    from reportlab.lib.units import inch
+    
+    for section in sections:
+        section_type = section.get('type', 'text')
+        content = section.get('content', '')
+        
+        if section_type == 'heading':
+            level = section.get('level', 1)
+            # Map levels to styles
+            style_name = 'Heading1' if level == 1 else 'Heading2' if level == 2 else 'Heading3'
+            if style_name not in styles:
+                style_name = 'Heading1' # Fallback
+            
+            story.append(Paragraph(content, styles[style_name]))
+            story.append(Spacer(1, 12))
+            
+        elif section_type == 'list':
+            items = content.split('\n')
+            for item in items:
+                if item.strip():
+                    # Use a bullet character
+                    story.append(Paragraph(f"• {item.strip()}", styles['Normal']))
+                    story.append(Spacer(1, 6))
+            story.append(Spacer(1, 6))
+                    
+        elif section_type == 'quote':
+            # Create a quote style if needed, or use Italic
+            story.append(Paragraph(f"<i>{content}</i>", styles['Normal']))
+            story.append(Spacer(1, 12))
+            
+        elif section_type == 'image':
+            if content.startswith('data:image'):
+                try:
+                    header, encoded = content.split(',', 1)
+                    image_data = base64.b64decode(encoded)
+                    image_stream = BytesIO(image_data)
+                    
+                    # Create ReportLab Image
+                    img = RLImage(image_stream)
+                    
+                    # Resize if too large (simple logic)
+                    max_width = 6 * inch
+                    if img.drawWidth > max_width:
+                        ratio = max_width / img.drawWidth
+                        img.drawHeight = img.drawHeight * ratio
+                        img.drawWidth = max_width
+                        
+                    story.append(img)
+                    story.append(Spacer(1, 12))
+                except Exception as e:
+                    story.append(Paragraph(f"[Image Error]", styles['Normal']))
+            else:
+                story.append(Paragraph("[Image]", styles['Normal']))
+                
+        else: # text
+            # Handle paragraphs with newlines
+            paragraphs = content.split('\n\n')
+            for p in paragraphs:
+                if p.strip():
+                    story.append(Paragraph(p.strip(), styles['Normal']))
+                    story.append(Spacer(1, 12))
 
 
 def create_excel_export(data: Dict[str, Any], output_path: Optional[str] = None) -> str:

@@ -35,6 +35,7 @@ import {
   Save,
   History,
   AutoFixHigh,
+  Title,
 } from "@mui/icons-material";
 import AIService from "../../services/aiService";
 import debounce from "lodash-es/debounce";
@@ -51,7 +52,7 @@ interface ReportEditorProps {
   autoSaveInterval?: number; // milliseconds
 }
 
-interface EditorState {
+export interface EditorState {
   content: string;
   title: string;
   sections: Array<{

@@ -39,6 +39,15 @@ class AIEnhancedExcelService:
 
         self.reports_dir = Path('reports/excel')
         self.reports_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Load configuration
+        config_path = os.path.join(os.path.dirname(__file__), '../config/excel_config.json')
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                self.config = json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading excel_config.json: {e}")
+            self.config = {}
 
     def generate_enhanced_excel(
         self,
@@ -179,9 +188,13 @@ Return ONLY valid JSON, no additional text."""
                 column_types[key] = "number"
             elif isinstance(value, str):
                 # Try to detect dates
-                if any(date_indicator in key.lower() for date_indicator in ['date', 'time', 'created', 'updated']):
+                type_config = self.config.get('type_detection', {})
+                date_indicators = type_config.get('date_indicators', ['date', 'time', 'created', 'updated'])
+                currency_indicators = type_config.get('currency_indicators', ['price', 'cost', 'amount', 'revenue', 'salary'])
+                
+                if any(date_indicator in key.lower() for date_indicator in date_indicators):
                     column_types[key] = "date"
-                elif any(curr_indicator in key.lower() for curr_indicator in ['price', 'cost', 'amount', 'revenue', 'salary']):
+                elif any(curr_indicator in key.lower() for curr_indicator in currency_indicators):
                     column_types[key] = "currency"
                 else:
                     column_types[key] = "text"

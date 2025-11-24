@@ -30,6 +30,7 @@ export interface Report {
       [key: string]: number | string;
     };
   };
+  content?: any;
   errorMessage?: string;
 }
 

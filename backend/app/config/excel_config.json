@@ -1,0 +1,40 @@
+{
+  "sheet_detection": {
+    "priority_names": ["data", "participants", "sheet1", "main", "peserta"]
+  },
+  "program_info_mappings": {
+    "title": ["title", "program_title", "tajuk", "nama_program", "program"],
+    "date": ["date", "tarikh", "program_date", "start_date"],
+    "time": ["time", "masa", "program_time", "hour"],
+    "location": ["location", "lokasi", "tempat", "venue", "place"],
+    "organizer": ["organizer", "anjuran", "penganjur", "organized_by"],
+    "facilitator": ["facilitator", "fasilitator", "trainer", "jurulatih"],
+    "objectives": ["objectives", "objektif", "matlamat", "goals"]
+  },
+  "participant_mappings": {
+    "name": ["name", "nama", "participant_name", "student_name", "full_name"],
+    "id": ["id", "no", "participant_id", "student_id", "no_peserta", "bil"],
+    "gender": ["gender", "jantina", "sex"],
+    "email": ["email", "emel", "e-mail"],
+    "phone": ["phone", "telefon", "no_telefon", "contact"]
+  },
+  "attendance_mappings": {
+    "keywords": ["attendance", "kehadiran", "hadir", "day", "hari"],
+    "status_present": ["hadir", "present", "yes", "y", "✓", "✔"]
+  },
+  "gender_statistics": {
+    "male": ["male", "lelaki"],
+    "female": ["female", "perempuan"]
+  },
+  "field_categorization": {
+    "personal_info": ["name", "nama", "participant", "student", "peserta", "gender", "jantina", "age", "umur"],
+    "contact_info": ["email", "emel", "phone", "telefon", "address", "alamat", "contact"],
+    "identifiers": ["id", "ic", "nric", "matric", "no"],
+    "performance": ["score", "mark", "grade", "gpa", "cgpa", "result", "keputusan"],
+    "financial": ["salary", "wage", "cost", "fee", "payment", "bayaran", "gaji"]
+  },
+  "type_detection": {
+    "date_indicators": ["/", "-", ":", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"],
+    "currency_indicators": ["$", "€", "£", "usd", "myr", "rm"]
+  }
+}

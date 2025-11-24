@@ -36,7 +36,7 @@ import type {
   ReportGenerationRequest,
 } from "../types/reports";
 import ReportPreview from "./ReportPreview";
-import ReportEditor from "./ReportEditor";
+import ReportEditor from "./ReportEditing/ReportEditor";
 
 interface ReportDashboardProps {
   formId?: string;
@@ -129,10 +129,9 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ formId }) => {
   const handleGenerateReport = (formId: string) => {
     // Fix: Send the correct data structure that the backend expects
     generateReportMutation.mutate({ 
-      form_id: parseInt(formId), 
-      report_type: 'summary',
+      formId: formId, 
       title: `Report for Form ${formId}`,
-      description: `Automated report generated for form ${formId}`
+      analysisType: 'basic'
     });
   };
 
@@ -413,8 +412,55 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ formId }) => {
         <DialogContent>
           {selectedReport && (
             <ReportEditor
-              report={selectedReport}
-              onSave={(updatedReport: Report) => {
+              reportId={parseInt(selectedReport.id)}
+              initialContent={
+                selectedReport.content || {
+                  title: selectedReport.title,
+                  content: selectedReport.aiInsights?.summary || "",
+                  sections: [
+                    ...(selectedReport.aiInsights?.trends
+                      ? [
+                          {
+                            id: "trends",
+                            type: "heading",
+                            content: "Trends",
+                            level: 2,
+                          },
+                          {
+                            id: "trends-list",
+                            type: "text",
+                            content: selectedReport.aiInsights.trends
+                              .map((t) => `• ${t}`)
+                              .join("\n"),
+                          },
+                        ]
+                      : []),
+                    ...(selectedReport.aiInsights?.recommendations
+                      ? [
+                          {
+                            id: "recommendations",
+                            type: "heading",
+                            content: "Recommendations",
+                            level: 2,
+                          },
+                          {
+                            id: "recommendations-list",
+                            type: "text",
+                            content: selectedReport.aiInsights.recommendations
+                              .map((r) => `• ${r}`)
+                              .join("\n"),
+                          },
+                        ]
+                      : []),
+                  ],
+                }
+              }
+              onSave={(content: any) => {
+                const updatedReport = {
+                  ...selectedReport,
+                  title: content.title,
+                  content: content,
+                };
                 queryClient.setQueryData(
                   ["reports"],
                   (old: Report[] | undefined) =>
