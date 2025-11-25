@@ -158,9 +158,8 @@ class ExportService:
 
     def _export_docx(self, template_id: str, context: Dict, reports_dir: str) -> str:
         """
-        Export DOCX by copying the template exactly as-is, preserving 100% of formatting.
+        Export DOCX by rendering the template with data.
         """
-        import shutil
         templates_dir = self._templates_dir()
 
         # Find template file
@@ -183,11 +182,17 @@ class ExportService:
             filename = self._timestamp_name(template_id, "docx")
             output_path = os.path.join(reports_dir, filename)
 
-            # Copy template exactly as-is to preserve 100% of formatting
-            shutil.copy2(template_path, output_path)
-
-            logger.info(f"✅ Report generated: {output_path}")
-            logger.info(f"✅ All original formatting, colors, and design preserved")
+            if HAS_DOCXTPL:
+                # Render template with data
+                doc = DocxTemplate(template_path)
+                doc.render(context)
+                doc.save(output_path)
+                logger.info(f"✅ Report generated and rendered: {output_path}")
+            else:
+                # Fallback if docxtpl is missing (though it should be there)
+                import shutil
+                shutil.copy2(template_path, output_path)
+                logger.warning(f"⚠️ docxtpl not found, copied template without rendering: {output_path}")
 
             return filename
 
