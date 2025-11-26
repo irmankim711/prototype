@@ -1066,6 +1066,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
   const handleClosePreview = () => {
     setShowPreview(false);
     setPreviewReportId(null);
+    setGeneratedReportId(null);
     setPreviewError(null);
   };
 

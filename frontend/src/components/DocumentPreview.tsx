@@ -40,6 +40,7 @@ import {
   Description as DocxIcon,
   TableChart as ExcelIcon,
 } from '@mui/icons-material';
+import ReportEditor, { type EditorState } from './ReportEditing/ReportEditor';
 import { useMutation } from '@tanstack/react-query';
 import axios from 'axios';
 import axiosInstance from '../services/axiosInstance';
@@ -252,6 +253,51 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           console.log('📊 Preview data metadata:', data.preview_data?.metadata);
           setPreviewData(data.preview_data);
           setPreviewType('data');
+
+          // AUTO-ENABLE EDIT MODE for data previews
+          console.log('📝 Auto-enabling edit mode for data preview');
+          setIsEditMode(true);
+          
+          // Populate editable content immediately
+          let contentToEdit: any = {};
+          const pData = data.preview_data;
+          
+          if (pData) {
+            if (pData.metadata) {
+              contentToEdit = { ...pData.metadata };
+            } else if (pData.data_source) {
+              contentToEdit = typeof pData.data_source === 'string' 
+                ? JSON.parse(pData.data_source) 
+                : pData.data_source;
+            } else if (pData.generated_data) {
+              contentToEdit = pData.generated_data;
+            }
+          }
+          
+          // If no content found, use sample structure (same as handleEditToggle)
+          if (Object.keys(contentToEdit).length === 0) {
+            console.log('⚠️ No editable content found, using sample structure');
+            contentToEdit = {
+              title: pData?.title || "LAPORAN PROGRAM TITLE",
+              location: "LOCATION",
+              tarikh: "TARIKH",
+              time: "9:00 AM - 5:00 PM",
+              resources: "PERUNDING MUBARAK RESOURCES",
+              lokasi: "LOKASI",
+              location2: "LOCATION",
+              anjuran: "ANJURAN",
+              organizer: "ORGANIZER",
+              content: "ISI KANDUNGAN",
+              course: "LAPORAN KURSUS FIQH USRAH DAERAH KUALA SELANGOR",
+              objectives: "Setelah mengikuti modul,peserta akan:",
+              evaluation: "*Rujuk lampiran A: Borang Penilaian Peserta (BPK-11/JPIE)",
+              improvements: "CADANGAN UNTUK PENAMBAHBAIKAN KESELURUHAN PROGRAM",
+              discussions: "CADANGAN PERUNDING"
+            };
+          }
+          
+          console.log('📝 Auto-loaded editable content:', contentToEdit);
+          setEditableContent(contentToEdit);
         }
         setError(null);
       } else {
@@ -561,156 +607,69 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     return available;
   };
 
-  // Render inline editable content based on the report structure
+  // Transform flat data to editor content
+  const transformDataToEditorContent = (data: any) => {
+    let htmlContent = '';
+    
+    // Helper to add section
+    const addSection = (title: string, content: string) => {
+      if (content) {
+        htmlContent += `<h2>${title}</h2><p>${content}</p>`;
+      }
+    };
+
+    // Build HTML content from fields
+    if (data.location) htmlContent += `<p><strong>Location:</strong> ${data.location}</p>`;
+    if (data.tarikh) htmlContent += `<p><strong>Tarikh:</strong> ${data.tarikh}</p>`;
+    if (data.time) htmlContent += `<p><strong>Masa:</strong> ${data.time}</p>`;
+    if (data.organizer || data.anjuran) htmlContent += `<p><strong>Anjuran:</strong> ${data.organizer || data.anjuran}</p>`;
+    
+    htmlContent += '<hr/>';
+    
+    addSection('Objektif Kursus', data.objectives);
+    addSection('Kandungan Kursus', data.course || data.content);
+    addSection('Penilaian Program', data.evaluation);
+    addSection('Cadangan Penambahbaikan', data.improvements);
+    addSection('Cadangan Perunding', data.discussions);
+
+    return {
+      title: data.title || 'Untitled Report',
+      content: htmlContent,
+      sections: []
+    };
+  };
+
+  // Render inline editable content using ReportEditor
   const renderEditableContent = () => {
     if (!editableContent) return null;
 
+    // Transform content for the editor if it hasn't been transformed yet
+    const editorInitialContent = editableContent.content && typeof editableContent.content === 'string' && editableContent.content.includes('<') 
+      ? editableContent 
+      : transformDataToEditorContent(editableContent);
+
     return (
-      <Box sx={{ p: 3, maxWidth: '800px', margin: '0 auto' }}>
-        <Stack spacing={3}>
-          {/* Main Title */}
-          <TextField
-            label="Program Title"
-            value={editableContent.title || ''}
-            onChange={(e) => handleContentChange('title', e.target.value)}
-            fullWidth
-            variant="outlined"
-            sx={{
-              '& .MuiInputBase-input': {
-                fontSize: '1.5rem',
-                fontWeight: 'bold',
-                textAlign: 'center'
-              }
-            }}
-          />
-
-          {/* Location */}
-          <TextField
-            label="Location"
-            value={editableContent.location || ''}
-            onChange={(e) => handleContentChange('location', e.target.value)}
-            fullWidth
-            variant="outlined"
-          />
-
-          {/* Date */}
-          <TextField
-            label="Tarikh (Date)"
-            value={editableContent.tarikh || ''}
-            onChange={(e) => handleContentChange('tarikh', e.target.value)}
-            fullWidth
-            variant="outlined"
-          />
-
-          {/* Time */}
-          <TextField
-            label="Time"
-            value={editableContent.time || ''}
-            onChange={(e) => handleContentChange('time', e.target.value)}
-            fullWidth
-            variant="outlined"
-            sx={{
-              '& .MuiInputBase-root': {
-                backgroundColor: '#f57c00',
-                color: 'white'
-              }
-            }}
-          />
-
-          {/* Resources */}
-          <TextField
-            label="Resources"
-            value={editableContent.resources || ''}
-            onChange={(e) => handleContentChange('resources', e.target.value)}
-            fullWidth
-            variant="outlined"
-          />
-
-          {/* Lokasi */}
-          <TextField
-            label="Lokasi"
-            value={editableContent.lokasi || ''}
-            onChange={(e) => handleContentChange('lokasi', e.target.value)}
-            fullWidth
-            variant="outlined"
-          />
-
-          {/* Anjuran */}
-          <TextField
-            label="Anjuran"
-            value={editableContent.anjuran || ''}
-            onChange={(e) => handleContentChange('anjuran', e.target.value)}
-            fullWidth
-            variant="outlined"
-          />
-
-          {/* Organizer */}
-          <TextField
-            label="Organizer"
-            value={editableContent.organizer || ''}
-            onChange={(e) => handleContentChange('organizer', e.target.value)}
-            fullWidth
-            variant="outlined"
-          />
-
-          {/* Course Content */}
-          <TextField
-            label="Course Content"
-            value={editableContent.course || ''}
-            onChange={(e) => handleContentChange('course', e.target.value)}
-            fullWidth
-            variant="outlined"
-            multiline
-            rows={2}
-          />
-
-          {/* Objectives */}
-          <TextField
-            label="Objektif Kursus"
-            value={editableContent.objectives || ''}
-            onChange={(e) => handleContentChange('objectives', e.target.value)}
-            fullWidth
-            variant="outlined"
-            multiline
-            rows={3}
-          />
-
-          {/* Evaluation */}
-          <TextField
-            label="Penilaian Program"
-            value={editableContent.evaluation || ''}
-            onChange={(e) => handleContentChange('evaluation', e.target.value)}
-            fullWidth
-            variant="outlined"
-            multiline
-            rows={2}
-          />
-
-          {/* Improvements */}
-          <TextField
-            label="Cadangan Penambahbaikan"
-            value={editableContent.improvements || ''}
-            onChange={(e) => handleContentChange('improvements', e.target.value)}
-            fullWidth
-            variant="outlined"
-            multiline
-            rows={3}
-          />
-
-          {/* Discussions */}
-          <TextField
-            label="Cadangan Perunding"
-            value={editableContent.discussions || ''}
-            onChange={(e) => handleContentChange('discussions', e.target.value)}
-            fullWidth
-            variant="outlined"
-            multiline
-            rows={3}
-          />
-        </Stack>
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+        <ReportEditor
+          reportId={typeof reportId === 'number' ? reportId : Number(reportId) || 0}
+          initialContent={editorInitialContent}
+          onSave={(content) => {
+            console.log('💾 Editor saved:', content);
+            setEditableContent({
+              ...editableContent,
+              ...content,
+            });
+            // Refresh preview to show updates if needed, or just acknowledge save
+            handleRefresh();
+          }}
+          readOnly={false}
+          showVersionControls={false}
+          autoSaveInterval={60000}
+        />
       </Box>
     );
   };
+
 
   const renderPreviewContent = () => {
     // If in edit mode, show editable content
