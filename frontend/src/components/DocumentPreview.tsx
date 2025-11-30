@@ -839,49 +839,8 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     switch (previewType) {
       case 'data':
         console.log('📝 Rendering data preview for:', previewData);
-        console.log('📝 Title:', previewData?.title);
-        console.log('📝 Description:', previewData?.description);
-        console.log('📝 Files:', previewData?.files);
-        console.log('📝 Has files:', previewData?.files && Object.keys(previewData.files).length > 0);
-
-        return (
-          <Box sx={{ p: 3, width: '100%', height: '100%', overflow: 'auto', bgcolor: 'background.paper' }}>
-            <Typography variant="h6" gutterBottom>
-              {previewData?.title || 'Report Preview'}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
-              {previewData?.description || 'Generated report details'}
-            </Typography>
-
-            {previewData?.files && Object.keys(previewData.files).length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Available Files:
-                </Typography>
-                {Object.entries(previewData.files).map(([type, fileInfo]: [string, any]) => {
-                  const fileType = type.toLowerCase() as 'pdf' | 'docx' | 'excel';
-                  const FileIcon = fileType === 'pdf' ? PdfIcon : fileType === 'docx' ? DocxIcon : ExcelIcon;
-                  const iconColor = fileType === 'pdf' ? 'error' : fileType === 'docx' ? 'primary' : 'success';
-
-                  return (
-                    <Paper key={type} variant="outlined" sx={{ p: 2, mb: 1 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FileIcon fontSize="medium" color={iconColor} />
-                          <Box>
-                            <Typography variant="body2" fontWeight="medium">
-                              {type.toUpperCase()} File
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Size: {fileInfo.size ? `${Math.round(fileInfo.size / 1024)} KB` : 'Unknown'}
-                            </Typography>
-                            <Typography variant="caption" color={fileInfo.exists ? 'success.main' : 'error.main'} sx={{ ml: 1 }}>
-                              {fileInfo.exists ? '✓ Available' : '✗ Missing'}
-                            </Typography>
-                          </Box>
-                        </Box>
-                        {fileInfo.exists && onDownload && (
-         //</Box> Transform data for display
+        
+        // Transform data for display
         const displayContent = transformDataToEditorContent(previewData);
         
         return (
