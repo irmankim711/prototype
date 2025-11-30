@@ -118,11 +118,11 @@ class DocxPreviewService:
         
         # Process each paragraph
         for paragraph in doc.paragraphs:
-            html_parts.append(self._convert_paragraph_to_html(paragraph))
+            html_parts.append(self._convert_paragraph_to_html(paragraph, images))
         
         # Process tables
         for table in doc.tables:
-            html_parts.append(self._convert_table_to_html(table))
+            html_parts.append(self._convert_table_to_html(table, images))
         
         html_parts.extend([
             '</div>',
@@ -132,9 +132,12 @@ class DocxPreviewService:
         
         return '\n'.join(html_parts)
     
-    def _convert_paragraph_to_html(self, paragraph) -> str:
+    def _convert_paragraph_to_html(self, paragraph, images: Dict[str, str] = None) -> str:
         """Convert a paragraph to HTML"""
-        if not paragraph.text.strip():
+        if images is None:
+            images = {}
+            
+        if not paragraph.text.strip() and not paragraph.runs:
             return '<br>'
         
         # Determine paragraph style
@@ -189,7 +192,7 @@ class DocxPreviewService:
         
         return f'<p class="{style_class}">{html_content}</p>'
     
-    def _convert_table_to_html(self, table) -> str:
+    def _convert_table_to_html(self, table, images: Dict[str, str] = None) -> str:
         """Convert a table to HTML"""
         html_parts = ['<table class="docx-table">']
         
@@ -198,8 +201,17 @@ class DocxPreviewService:
             
             for cell in row.cells:
                 tag = 'th' if i == 0 else 'td'  # First row as header
-                cell_text = self._escape_html(cell.text)
-                html_parts.append(f'<{tag} class="table-cell">{cell_text}</{tag}>')
+                
+                # Convert cell content (paragraphs)
+                cell_content = []
+                for paragraph in cell.paragraphs:
+                    # Skip empty paragraphs in cells to avoid excessive whitespace, 
+                    # unless it's the only thing in the cell
+                    if paragraph.text.strip() or len(cell.paragraphs) == 1:
+                        cell_content.append(self._convert_paragraph_to_html(paragraph, images))
+                
+                cell_html = ''.join(cell_content) if cell_content else '&nbsp;'
+                html_parts.append(f'<{tag} class="table-cell">{cell_html}</{tag}>')
             
             html_parts.append('</tr>')
         
