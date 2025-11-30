@@ -263,7 +263,12 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           let contentToEdit: any = {};
           const pData = data.preview_data;
           
-          if (pData) {
+          // Check if we already have full HTML content
+          // Note: fullHtmlContent might be set asynchronously, so we also need a useEffect
+          if (fullHtmlContent) {
+             console.log('📝 Using full HTML content for auto-edit');
+             contentToEdit = { content: fullHtmlContent };
+          } else if (pData) {
             if (pData.metadata) {
               contentToEdit = { ...pData.metadata };
             } else if (pData.data_source) {
@@ -409,6 +414,14 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       setFullHtmlContent(null);
     }
   }, [open, reportId]);
+
+  // Update editable content when full HTML content becomes available
+  useEffect(() => {
+    if (fullHtmlContent && isEditMode) {
+      console.log('📝 Full HTML content arrived, updating editor');
+      setEditableContent({ content: fullHtmlContent });
+    }
+  }, [fullHtmlContent, isEditMode]);
 
   const handleZoomIn = () => {
     const newZoom = Math.min(zoom + 25, 200);
@@ -853,7 +866,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             console.log('💾 Inline Editor saved:', content);
             // Update local state
             setEditableContent((prev: any) => {
-              if (typeof prev === 'object') {
+              if (typeof prev === 'object') {``
                 return { ...prev, content: content };
               }
               return { content: content };
