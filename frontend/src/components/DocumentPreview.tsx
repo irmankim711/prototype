@@ -630,8 +630,67 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       }
     };
 
+    // Handle NextGen Builder Elements (Drag and Drop)
+    if (data.elements && Array.isArray(data.elements)) {
+      data.elements.forEach((element: any) => {
+        switch (element.type) {
+          case 'text':
+          case 'paragraph':
+          case 'heading':
+            if (element.content) {
+              htmlContent += `<div class="element-text">${element.content}</div>`;
+            }
+            break;
+          case 'table':
+            if (element.data && Array.isArray(element.data)) {
+               htmlContent += '<h3>Table Data</h3>';
+               htmlContent += '<div style="overflow-x: auto; margin-bottom: 10px;">';
+               htmlContent += '<table border="1" style="width:100%; border-collapse: collapse;">';
+               // Try to get headers from first row
+               const headers = element.data.length > 0 ? Object.keys(element.data[0]) : [];
+               if (headers.length > 0) {
+                 htmlContent += '<thead><tr>';
+                 headers.forEach(h => htmlContent += `<th style="padding: 5px; background: #f0f0f0;">${h}</th>`);
+                 htmlContent += '</tr></thead><tbody>';
+                 element.data.forEach((row: any) => {
+                   htmlContent += '<tr>';
+                   headers.forEach(h => htmlContent += `<td style="padding: 5px;">${row[h]}</td>`);
+                   htmlContent += '</tr>';
+                 });
+                 htmlContent += '</tbody>';
+               }
+               htmlContent += '</table></div>';
+            }
+            break;
+          case 'chart':
+          case 'bar_chart':
+          case 'line_chart':
+          case 'pie_chart':
+            htmlContent += `<div style="padding: 10px; background: #f9f9f9; border: 1px dashed #ccc; margin: 10px 0;">
+              <strong>[Chart: ${element.title || element.type}]</strong><br/>
+              <em>Charts are rendered visually in the dashboard but shown as data here.</em>
+            </div>`;
+            break;
+          case 'image':
+            if (element.content) { // Assuming content is base64 or url
+               htmlContent += `<img src="${element.content}" style="max-width: 100%; height: auto; margin: 10px 0;" />`;
+            }
+            break;
+          default:
+            // Generic fallback for other elements
+            if (element.content) {
+               htmlContent += `<div>${element.content}</div>`;
+            }
+            break;
+        }
+      });
+      
+      // If we found elements, we might not need to look for other fields, but let's keep them just in case
+      if (htmlContent) htmlContent += '<hr/>';
+    }
+
     // Known fields mapping for specific order/formatting
-    const knownFields = ['title', 'location', 'tarikh', 'time', 'organizer', 'anjuran', 'objectives', 'course', 'content', 'evaluation', 'improvements', 'discussions', 'records', 'fields'];
+    const knownFields = ['title', 'location', 'tarikh', 'time', 'organizer', 'anjuran', 'objectives', 'course', 'content', 'evaluation', 'improvements', 'discussions', 'records', 'fields', 'elements', 'layout'];
 
     // Build HTML content from known fields first
     if (data.location) htmlContent += `<p><strong>Location:</strong> ${data.location}</p>`;
