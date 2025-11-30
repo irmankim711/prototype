@@ -183,6 +183,16 @@ class DocxPreviewService:
             style_class = 'title'
         elif 'Subtitle' in paragraph.style.name:
             style_class = 'subtitle'
+            
+        # Determine alignment
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        align_style = ''
+        if paragraph.alignment == WD_ALIGN_PARAGRAPH.CENTER:
+            align_style = 'text-align: center;'
+        elif paragraph.alignment == WD_ALIGN_PARAGRAPH.RIGHT:
+            align_style = 'text-align: right;'
+        elif paragraph.alignment == WD_ALIGN_PARAGRAPH.JUSTIFY:
+            align_style = 'text-align: justify;'
         
         # Process runs for formatting and images
         html_content = ''
@@ -221,7 +231,7 @@ class DocxPreviewService:
             except Exception as e:
                 logger.warning(f"Failed to render image in paragraph: {e}")
         
-        return f'<p class="{style_class}">{html_content}</p>'
+        return f'<p class="{style_class}" style="{align_style}">{html_content}</p>'
     
     def _convert_table_to_html(self, table, images: Dict[str, str] = None) -> str:
         """Convert a table to HTML"""
@@ -231,7 +241,7 @@ class DocxPreviewService:
             html_parts.append('<tr>')
             
             for cell in row.cells:
-                tag = 'th' if i == 0 else 'td'  # First row as header
+                tag = 'td' # Default to td, let styles handle headers if needed
                 
                 # Convert cell content (paragraphs)
                 cell_content = []
@@ -261,99 +271,106 @@ class DocxPreviewService:
         """Get CSS styles for the preview"""
         return """
             body {
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                background-color: #f5f5f5;
+                font-family: 'Times New Roman', Times, serif;
+                line-height: 1.5;
+                color: #000;
+                background-color: #525659;
                 margin: 0;
                 padding: 20px;
             }
             
             .docx-preview-container {
-                max-width: 800px;
+                width: 210mm;
+                min-height: 297mm;
                 margin: 0 auto;
                 background: white;
-                padding: 40px;
-                box-shadow: 0 0 20px rgba(0,0,0,0.1);
-                border-radius: 8px;
+                padding: 25mm 25mm;
+                box-shadow: 0 0 10px rgba(0,0,0,0.5);
+                box-sizing: border-box;
             }
             
             .title {
-                font-size: 2em;
+                font-size: 24pt;
                 font-weight: bold;
                 text-align: center;
-                margin-bottom: 1em;
-                color: #2c3e50;
-                border-bottom: 3px solid #3498db;
-                padding-bottom: 10px;
+                margin-bottom: 12pt;
+                color: #000;
             }
             
             .subtitle {
-                font-size: 1.3em;
-                font-weight: 600;
+                font-size: 18pt;
+                font-weight: bold;
                 text-align: center;
-                margin-bottom: 1.5em;
-                color: #7f8c8d;
+                margin-bottom: 12pt;
+                color: #444;
             }
             
             .heading-1 {
-                font-size: 1.8em;
+                font-size: 16pt;
+                font-weight: bold;
                 color: #2c3e50;
-                margin-top: 1.5em;
-                margin-bottom: 0.8em;
-                border-bottom: 2px solid #ecf0f1;
-                padding-bottom: 5px;
+                margin-top: 18pt;
+                margin-bottom: 12pt;
             }
             
             .heading-2 {
-                font-size: 1.5em;
+                font-size: 14pt;
+                font-weight: bold;
                 color: #34495e;
-                margin-top: 1.3em;
-                margin-bottom: 0.7em;
+                margin-top: 14pt;
+                margin-bottom: 10pt;
             }
             
             .heading-3 {
-                font-size: 1.3em;
+                font-size: 12pt;
+                font-weight: bold;
                 color: #34495e;
-                margin-top: 1.1em;
-                margin-bottom: 0.6em;
+                margin-top: 12pt;
+                margin-bottom: 6pt;
             }
             
             .paragraph {
-                margin-bottom: 1em;
-                text-align: justify;
+                margin-bottom: 10pt;
+                font-size: 11pt;
             }
             
             .docx-table {
                 width: 100%;
                 border-collapse: collapse;
-                margin: 1.5em 0;
-                background: white;
+                margin: 12pt 0;
+                border: 1px solid black;
             }
             
             .table-cell {
-                border: 1px solid #ddd;
-                padding: 12px;
-                text-align: left;
+                border: 1px solid black;
+                padding: 5pt;
+                vertical-align: top;
             }
             
-            .docx-table th {
-                background-color: #f8f9fa;
-                font-weight: 600;
-                color: #2c3e50;
+            strong { font-weight: bold; }
+            em { font-style: italic; }
+            
+            @media print {
+                body {
+                    background: white;
+                    padding: 0;
+                }
+                
+                .docx-preview-container {
+                    box-shadow: none;
+                    padding: 0;
+                    margin: 0;
+                    width: 100%;
+                }
             }
             
-            .docx-table tr:nth-child(even) {
-                background-color: #f8f9fa;
+            @media (max-width: 800px) {
+                .docx-preview-container {
+                    width: 100%;
+                    padding: 15px;
+                }
             }
-            
-            strong {
-                color: #2c3e50;
-            }
-            
-            em {
-                color: #7f8c8d;
-            }
+        """
             
             @media print {
                 body {

@@ -858,7 +858,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     }
 
     return (
-      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper', overflow: 'auto' }}>
         <InlineReportEditor
           reportId={typeof reportId === 'number' ? reportId : Number(reportId) || 0}
           reportContent={editorContentString}
@@ -949,7 +949,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             : transformDataToEditorContent(previewData);
         
         return (
-          <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+          <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper', overflow: 'auto' }}>
             <InlineReportEditor
               reportId={typeof reportId === 'number' ? reportId : Number(reportId) || 0}
               reportContent={displayContent.content}
