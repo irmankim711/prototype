@@ -467,7 +467,11 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       // Try to extract editable content from preview data
       let contentToEdit: any = {};
       
-      if (previewData) {
+      // Prefer full HTML content if available (WYSIWYG editing)
+      if (fullHtmlContent) {
+        console.log('📝 Using full HTML content for editing');
+        contentToEdit = { content: fullHtmlContent };
+      } else if (previewData) {
         // Try to get data from metadata or data_source
         if (previewData.metadata) {
           contentToEdit = { ...previewData.metadata };
