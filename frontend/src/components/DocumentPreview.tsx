@@ -866,7 +866,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             console.log('💾 Inline Editor saved:', content);
             // Update local state
             setEditableContent((prev: any) => {
-              if (typeof prev === 'object') {``
+              if (typeof prev === 'object') {
                 return { ...prev, content: content };
               }
               return { content: content };
