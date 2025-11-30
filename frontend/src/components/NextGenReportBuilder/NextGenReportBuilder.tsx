@@ -4,7 +4,7 @@
  * Focus: User-Centered Design, Visual Hierarchy, Interaction Affordances
  */
 
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -15,14 +15,8 @@ import {
   Toolbar,
   IconButton,
   Chip,
-  Badge,
-  Tooltip,
-  Zoom,
   Fab,
   Divider,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   alpha,
   Menu as MuiMenu,
   MenuItem,
@@ -33,8 +27,16 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogActions,
+  CircularProgress,
+  Tooltip,
 } from "@mui/material";
 import {
+  Search,
+  FilterList,
+  Sort,
+  ViewModule,
+  ViewList,
   DragIndicator,
   BarChart as BarChart3,
   TrendingUp as LineChart,
@@ -70,7 +72,10 @@ import {
   Refresh,
   Error as ErrorIcon,
   FileUpload,
+  HelpOutline,
+  Info,
 } from "@mui/icons-material";
+import { Toaster, toast } from 'react-hot-toast';
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import type { DropResult } from "@hello-pangea/dnd";
 import { useTheme } from "@mui/material/styles";
@@ -101,6 +106,12 @@ const DESIGN_TOKENS = {
       50: "#f9fafb",
     },
     white: "#ffffff",
+    gradients: {
+      primary: "linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)",
+      success: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+      warning: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
+      error: "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)",
+    }
   },
   typography: {
     sizes: {
@@ -147,7 +158,7 @@ interface DataField {
 
 interface ReportElement {
   id: string;
-  type: "chart" | "table" | "text" | "image" | "heading" | "divider";
+  type: "chart" | "table" | "text" | "image" | "heading" | "divider" | "line_chart" | "pie_chart";
   title: string;
   config: any;
   position: { x: number; y: number };
@@ -429,6 +440,57 @@ const AISuggestionsPanel: React.FC<{
   );
 };
 
+// Help Dialog Component
+const HelpDialog: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <HelpOutline color="primary" />
+        <Typography variant="h6">How to Use Report Builder</Typography>
+        <IconButton onClick={onClose} sx={{ ml: 'auto' }}>
+          <Close />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={3}>
+          <Box>
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              1. Import Data
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Start by uploading an Excel file or connecting to a data source. Drag and drop your file into the "Excel" tab on the left panel.
+            </Typography>
+            
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              2. Build Your Report
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Drag components (Charts, Tables, Text) from the "Components" tab onto the canvas. Use the "Data" tab to drag fields into your charts.
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              3. Customize & Analyze
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Click on any element to configure it in the right panel. Use AI Suggestions to get automated insights from your data.
+            </Typography>
+            
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              4. Export
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Once finished, click "Export" to download your report in PDF, Excel, or Word format.
+            </Typography>
+          </Box>
+        </Box>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+
+
 // Props interface for the main component
 interface NextGenReportBuilderProps {
   dataSources?: any[];
@@ -442,7 +504,7 @@ interface NextGenReportBuilderProps {
   onGetAISuggestions?: () => Promise<SmartSuggestion[]>;
   onSaveReport?: (reportConfig: any) => Promise<any>;
   onExportReport?: (format: 'pdf' | 'excel' | 'powerpoint' | 'html', reportId?: string | number) => Promise<string | number | null>;
-  onGenerateReportFromExcel?: (excelFilePath: string, templateId: string, reportTitle: string) => Promise<any>;
+  onGenerateReportFromExcel?: (excelFilePath: string, templateId: string, reportTitle: string, chartsToEmbed?: any[], imagesToEmbed?: any[]) => Promise<any>;
   currentReport?: any;
   isLoading?: boolean;
 }
@@ -466,6 +528,11 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  
+  // Toast configuration
+  useEffect(() => {
+    toast.dismiss(); // Clear existing toasts on mount
+  }, []);
   
   // Core State Management
   const [reportTitle, setReportTitle] = useState("Quarterly Performance Analysis");
@@ -503,6 +570,9 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [currentGeneratedReport, setCurrentGeneratedReport] = useState<any>(null);
+  
+  // Help Dialog State
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // Edit State (removed - now handled inline in DocumentPreview)
   // const [showEditor, setShowEditor] = useState(false);
@@ -714,8 +784,11 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
       };
 
       await onSaveReport(reportConfig);
+      toast.success('Report saved successfully!');
     } catch (error: any) {
-      setDataError(error.message || 'Error saving report:');
+      const errorMessage = error.message || 'Error saving report';
+      setDataError(errorMessage);
+      toast.error(errorMessage);
     }
   };
 
@@ -843,7 +916,15 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
     
+    const { destination, draggableId } = result;
+
     // Handle field to chart area drag and drop
+    if (destination.droppableId === 'x-axis' || destination.droppableId === 'y-axis') {
+      const field = dataFields.find(f => f.id === draggableId);
+      if (field) {
+        handleFieldDrop(field, destination.droppableId);
+      }
+    }
   };
 
   const handleFieldDrop = (field: DataField, dropZoneType: string) => {
@@ -1210,14 +1291,31 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
                   Drag fields to chart areas to create visualizations
                 </Typography>
                 <Box display="flex" flexDirection="column" gap={1}>
-                  {displayDataFields.map((field) => (
-                    <DataFieldComponent
-                      key={field.id}
-                      field={field}
-                      isDragging={draggedField?.id === field.id}
-                      onDragStart={() => setDraggedField(field)}
-                    />
-                  ))}
+                  <Droppable droppableId="fields-list" isDropDisabled={true}>
+                    {(provided) => (
+                      <div ref={provided.innerRef} {...provided.droppableProps}>
+                        {displayDataFields.map((field, index) => (
+                          <Draggable key={field.id} draggableId={field.id} index={index}>
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                                style={{ ...provided.draggableProps.style, marginBottom: 8 }}
+                              >
+                                <DataFieldComponent
+                                  field={field}
+                                  isDragging={snapshot.isDragging}
+                                  onDragStart={() => setDraggedField(field)}
+                                />
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
                 </Box>
               </>
             )}
@@ -1523,6 +1621,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
 
   return (
     <Box sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>
+      <Toaster position="top-right" />
       {/* Global Loading Indicator */}
       {(isLoadingData || isLoadingTemplates || isLoadingAISuggestions) && (
         <Box
@@ -1591,6 +1690,22 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
             <Divider orientation="vertical" flexItem />
 
             {/* Action Buttons */}
+            <Tooltip title="Real-time Preview">
+              <IconButton 
+                onClick={() => setShowPreview(!showPreview)}
+                color={showPreview ? "primary" : "default"}
+                size="small"
+              >
+                <Slideshow />
+              </IconButton>
+            </Tooltip>
+            
+            <Tooltip title="Help & Guide">
+              <IconButton onClick={() => setHelpOpen(true)} size="small">
+                <HelpOutline />
+              </IconButton>
+            </Tooltip>
+
             <Button
               variant={isPreviewMode ? "contained" : "outlined"}
               startIcon={isPreviewMode ? <VisibilityOff /> : <Visibility />}
@@ -1893,24 +2008,48 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
 
                     {/* Drop Zones for Chart Configuration */}
                     <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2}>
-                      <DropZone
-                        label="X-Axis"
-                        accepts={["dimension"]}
-                        icon={<ArrowRight />}
-                        placeholder="Drag dimension here"
-                        isValidDrop={true}
-                        isHovering={false}
-                        onDrop={(field) => handleFieldDrop(field, "x-axis")}
-                      />
-                      <DropZone
-                        label="Y-Axis"
-                        accepts={["measure"]}
-                        icon={<ArrowUp />}
-                        placeholder="Drag measure here"
-                        isValidDrop={true}
-                        isHovering={false}
-                        onDrop={(field) => handleFieldDrop(field, "y-axis")}
-                      />
+                      <Droppable droppableId="x-axis">
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.droppableProps}
+                            style={{ height: '100%' }}
+                          >
+                            <DropZone
+                              label="X-Axis"
+                              accepts={["dimension"]}
+                              icon={<ArrowRight />}
+                              placeholder="Drag dimension here"
+                              isValidDrop={true}
+                              isHovering={snapshot.isDraggingOver}
+                              onDrop={(field) => handleFieldDrop(field, "x-axis")}
+                              currentField={currentChartConfig?.xAxis?.field ? dataFields.find(f => f.id === currentChartConfig.xAxis?.field) : undefined}
+                            />
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
+                      <Droppable droppableId="y-axis">
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.droppableProps}
+                            style={{ height: '100%' }}
+                          >
+                            <DropZone
+                              label="Y-Axis"
+                              accepts={["measure"]}
+                              icon={<ArrowUp />}
+                              placeholder="Drag measure here"
+                              isValidDrop={true}
+                              isHovering={snapshot.isDraggingOver}
+                              onDrop={(field) => handleFieldDrop(field, "y-axis")}
+                              currentField={currentChartConfig?.yAxis?.field ? dataFields.find(f => f.id === currentChartConfig.yAxis?.field) : undefined}
+                            />
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
                     </Box>
                   </>
                 )}
@@ -2013,18 +2152,45 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
         </Fab>
       )}
       
-      {/* Document Preview Modal */}
-      {showPreview && (previewReportId !== null && previewReportId !== undefined) && (
-        <DocumentPreview
-          open={showPreview}
-          onClose={handleClosePreview}
-          reportId={previewReportId}
-          title={`Preview: ${reportTitle || 'Generated Report'}`}
-          onDownload={handleDownloadFromPreview}
-          onEdit={handleEditFromPreview}
-          fallbackDownloadUrl={currentGeneratedReport?.download_url || currentGeneratedReport?.downloadUrl || currentGeneratedReport?.fileUrl || null}
-        />
-      )}
+      {/* Real-time Preview Drawer */}
+      <Drawer
+        variant="persistent"
+        anchor="right"
+        open={showPreview}
+        onClose={() => setShowPreview(false)}
+        sx={{
+          width: showPreview ? '50vw' : 0,
+          flexShrink: 0,
+          '& .MuiDrawer-paper': {
+            width: '50vw',
+            borderLeft: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            top: DESIGN_TOKENS.layout.headerHeight,
+            height: `calc(100vh - ${DESIGN_TOKENS.layout.headerHeight}px)`,
+            boxShadow: '-4px 0 20px rgba(0,0,0,0.05)',
+            zIndex: 1200, // Higher than right panel
+          },
+        }}
+      >
+        {(previewReportId !== null && previewReportId !== undefined) ? (
+          <DocumentPreview
+            open={showPreview}
+            onClose={() => setShowPreview(false)}
+            reportId={previewReportId}
+            title={`Preview: ${reportTitle || 'Generated Report'}`}
+            onDownload={handleDownloadFromPreview}
+            onEdit={handleEditFromPreview}
+            fallbackDownloadUrl={currentGeneratedReport?.download_url || currentGeneratedReport?.downloadUrl || currentGeneratedReport?.fileUrl || null}
+            variant="pane"
+          />
+        ) : (
+          <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100%" p={3}>
+            <CircularProgress size={40} sx={{ mb: 2 }} />
+            <Typography variant="body1" color="text.secondary">
+              Initializing preview...
+            </Typography>
+          </Box>
+        )}
+      </Drawer>
       
       {/* User Feedback Alerts */}
       {isGeneratingReport && (
@@ -2131,6 +2297,8 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
           </Typography>
         </Box>
       )}
+      {/* Help Dialog */}
+      <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
     </Box>
   );
 };

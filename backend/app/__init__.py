@@ -55,8 +55,23 @@ def create_app(config=None):
          max_age=3600)  # Cache preflight requests for 1 hour
 
     # Load configuration
+    # Load configuration
     if config:
-        app.config.from_mapping(config)
+        if isinstance(config, str):
+            # Map string names to config objects
+            config_map = {
+                'development': 'app.config.DevelopmentConfig',
+                'testing': 'app.config.TestingConfig',
+                'production': 'app.config.ProductionConfig'
+            }
+            config_name = config.lower()
+            if config_name in config_map:
+                app.config.from_object(config_map[config_name])
+            else:
+                app.logger.warning(f"Unknown config name: {config}, using default")
+                app.config.from_object('app.config.DevelopmentConfig')
+        else:
+            app.config.from_mapping(config)
     else:
         # Default configuration
         app.config.from_object('app.config.DevelopmentConfig')

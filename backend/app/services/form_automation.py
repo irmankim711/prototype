@@ -656,8 +656,13 @@ class FormAutomationService:
             
             # Render with context
             context = optimization_result['enhanced_context']
+            logger.info(f"Rendering template with context type: {type(context)}")
+            if not isinstance(context, dict):
+                logger.error(f"Context is not a dict: {context}")
+                context = dict(context)
+                
             template = Template(template_content)
-            rendered_content = template.render(context)
+            rendered_content = template.render(**context)
             
             # Save rendered report
             with open(output_path, 'w', encoding='utf-8') as f:

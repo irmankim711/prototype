@@ -55,7 +55,10 @@ interface DocumentPreviewProps {
   // Used when preview endpoint returns 404 but we still have a file URL
   fallbackDownloadUrl?: string | null;
   // Report object to check available file types
+  // Report object to check available file types
   report?: any;
+  // Display variant
+  variant?: 'dialog' | 'pane';
 }
 
 interface PreviewResponse {
@@ -75,6 +78,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   onDownload,
   fallbackDownloadUrl = null,
   report = null,
+  variant = 'dialog',
 }) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<'html' | 'pdf' | 'image' | 'data'>('html');
@@ -880,196 +884,144 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     }
   };
 
+  const content = (
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+      {/* Toolbar */}
+      <Toolbar
+        variant="dense"
+        sx={{
+          borderBottom: 1,
+          borderColor: 'divider',
+          bgcolor: 'grey.50',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Box display="flex" alignItems="center" gap={1}>
+          <Typography variant="subtitle1" component="div" noWrap sx={{ maxWidth: 300 }}>
+            {title}
+          </Typography>
+          {previewType === 'html' && (
+            <Box display="flex" alignItems="center" bgcolor="white" borderRadius={1} border={1} borderColor="divider" ml={2}>
+              <IconButton size="small" onClick={handleZoomOut} disabled={zoom <= 50}>
+                <ZoomOutIcon fontSize="small" />
+              </IconButton>
+              <Typography variant="caption" sx={{ minWidth: 40, textAlign: 'center' }}>
+                {zoom}%
+              </Typography>
+              <IconButton size="small" onClick={handleZoomIn} disabled={zoom >= 200}>
+                <ZoomInIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          )}
+        </Box>
+
+        <Box display="flex" alignItems="center" gap={1}>
+          {/* Edit Toggle */}
+          <Tooltip title={isEditMode ? "Cancel Editing" : "Edit Report"}>
+            <IconButton 
+              size="small" 
+              onClick={isEditMode ? handleCancelEdit : handleEditToggle}
+              color={isEditMode ? "primary" : "default"}
+            >
+              {isEditMode ? <CancelIcon /> : <EditIcon />}
+            </IconButton>
+          </Tooltip>
+
+          {/* Save Changes (only in edit mode) */}
+          {isEditMode && (
+            <Tooltip title="Save Changes">
+              <IconButton 
+                size="small" 
+                onClick={handleSaveChanges}
+                color="primary"
+              >
+                <SaveIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          <Tooltip title="Refresh">
+            <IconButton size="small" onClick={handleRefresh}>
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+          
+          <Tooltip title="Toggle Fullscreen">
+            <IconButton size="small" onClick={handleFullscreen}>
+              <FullscreenIcon />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Download">
+            <IconButton size="small" onClick={handleDownloadMenuOpen}>
+              <DownloadIcon />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Print">
+            <IconButton size="small" onClick={handlePrint}>
+              <PrintIcon />
+            </IconButton>
+          </Tooltip>
+
+          {variant === 'dialog' && (
+            <IconButton edge="end" color="inherit" onClick={onClose} aria-label="close">
+              <CloseIcon />
+            </IconButton>
+          )}
+        </Box>
+      </Toolbar>
+
+      {/* Main Content */}
+      <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative' }} ref={containerRef}>
+        {renderPreviewContent()}
+      </Box>
+
+      {/* Download Menu */}
+      <Menu
+        anchorEl={downloadMenuAnchor}
+        open={Boolean(downloadMenuAnchor)}
+        onClose={handleDownloadMenuClose}
+      >
+        {getAvailableFileTypes().map((type) => (
+          <MenuItem key={type} onClick={() => handleDownloadFile(type)}>
+            <ListItemIcon>
+              {type === 'pdf' ? <PdfIcon fontSize="small" /> : 
+               type === 'docx' ? <DocxIcon fontSize="small" /> : 
+               <ExcelIcon fontSize="small" />}
+            </ListItemIcon>
+            <ListItemText>Download as {type.toUpperCase()}</ListItemText>
+          </MenuItem>
+        ))}
+        {getAvailableFileTypes().length === 0 && (
+          <MenuItem disabled>
+            <ListItemText>No files available</ListItemText>
+          </MenuItem>
+        )}
+      </Menu>
+    </Box>
+  );
+
+  if (variant === 'pane') {
+    return (
+      <Paper elevation={3} sx={{ height: '100%', overflow: 'hidden' }}>
+        {content}
+      </Paper>
+    );
+  }
+
   return (
     <Dialog
-      open={open}
-      onClose={onClose}
+      fullScreen={isFullscreen}
       maxWidth="lg"
       fullWidth
+      open={open}
+      onClose={onClose}
       PaperProps={{
-        sx: {
-          height: '90vh',
-          maxHeight: '90vh',
-        },
-      }}
-      // Fix ARIA accessibility issues
-      aria-labelledby="document-preview-title"
-      aria-describedby="document-preview-content"
-      // Remove conflicting aria-hidden attributes
-      BackdropProps={{
-        sx: { backgroundColor: 'rgba(0, 0, 0, 0.5)' },
+        sx: { height: isFullscreen ? '100%' : '90vh' }
       }}
     >
-      <DialogTitle
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          pb: 1,
-          flexGrow: 1
-        }}
-        id="document-preview-title"
-      >
-        {title}
-        <IconButton 
-          onClick={onClose} 
-          size="small"
-          aria-label="Close document preview"
-        >
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-
-      {/* Toolbar */}
-      <Paper sx={{ borderRadius: 0, borderBottom: 1, borderColor: 'divider' }}>
-        <Toolbar variant="dense">
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexGrow: 1 }}>
-            {previewType === 'html' && (
-              <>
-                <Tooltip title="Zoom Out">
-                  <IconButton size="small" onClick={handleZoomOut} disabled={zoom <= 50}>
-                    <ZoomOutIcon />
-                  </IconButton>
-                </Tooltip>
-                <Typography variant="body2" sx={{ minWidth: 60, textAlign: 'center' }}>
-                  {zoom}%
-                </Typography>
-                <Tooltip title="Zoom In">
-                  <IconButton size="small" onClick={handleZoomIn} disabled={zoom >= 200}>
-                    <ZoomInIcon />
-                  </IconButton>
-                </Tooltip>
-              </>
-            )}
-            
-            <Tooltip title="Print">
-              <IconButton size="small" onClick={handlePrint}>
-                <PrintIcon />
-              </IconButton>
-            </Tooltip>
-            
-            <Tooltip title="Refresh">
-              <IconButton size="small" onClick={handleRefresh}>
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
-            
-            <Tooltip title="Fullscreen">
-              <IconButton size="small" onClick={handleFullscreen}>
-                <FullscreenIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            {isEditMode ? (
-              <>
-                <Button
-                  variant="contained"
-                  size="small"
-                  color="primary"
-                  startIcon={<SaveIcon />}
-                  onClick={handleSaveChanges}
-                >
-                  Save
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<CancelIcon />}
-                  onClick={handleCancelEdit}
-                >
-                  Cancel
-                </Button>
-              </>
-            ) : (
-              <>
-                {onEdit && (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<EditIcon />}
-                    onClick={handleEditToggle}
-                  >
-                    Edit
-                  </Button>
-                )}
-
-                {onDownload && (() => {
-                  const availableTypes = getAvailableFileTypes();
-                  return availableTypes.length > 0 ? (
-                    <>
-                      <Button
-                        variant="contained"
-                        size="small"
-                        color="primary"
-                        startIcon={<DownloadIcon />}
-                        onClick={handleDownloadMenuOpen}
-                        aria-controls={downloadMenuAnchor ? 'download-menu' : undefined}
-                        aria-haspopup="true"
-                        aria-expanded={downloadMenuAnchor ? 'true' : undefined}
-                      >
-                        Download
-                      </Button>
-                      <Menu
-                        id="download-menu"
-                        anchorEl={downloadMenuAnchor}
-                        open={Boolean(downloadMenuAnchor)}
-                        onClose={handleDownloadMenuClose}
-                        MenuListProps={{
-                          'aria-labelledby': 'download-button',
-                        }}
-                      >
-                        {availableTypes.includes('pdf') && (
-                          <MenuItem onClick={() => handleDownloadFile('pdf')}>
-                            <ListItemIcon>
-                              <PdfIcon fontSize="small" color="error" />
-                            </ListItemIcon>
-                            <ListItemText>Download PDF</ListItemText>
-                          </MenuItem>
-                        )}
-                        {availableTypes.includes('docx') && (
-                          <MenuItem onClick={() => handleDownloadFile('docx')}>
-                            <ListItemIcon>
-                              <DocxIcon fontSize="small" color="primary" />
-                            </ListItemIcon>
-                            <ListItemText>Download DOCX</ListItemText>
-                          </MenuItem>
-                        )}
-                        {availableTypes.includes('excel') && (
-                          <MenuItem onClick={() => handleDownloadFile('excel')}>
-                            <ListItemIcon>
-                              <ExcelIcon fontSize="small" color="success" />
-                            </ListItemIcon>
-                            <ListItemText>Download Excel</ListItemText>
-                          </MenuItem>
-                        )}
-                      </Menu>
-                    </>
-                  ) : null;
-                })()}
-              </>
-            )}
-          </Box>
-        </Toolbar>
-      </Paper>
-
-      {/* Preview Content */}
-      <DialogContent
-        ref={containerRef}
-        sx={{
-          p: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'auto',  // Changed from 'hidden' to 'auto' to allow scrolling
-          flexGrow: 1,
-          minHeight: 0,  // Fix for flex container scrolling
-        }}
-        id="document-preview-content"
-        aria-describedby="document-preview-content"
-      >
-        {renderPreviewContent()}
-      </DialogContent>
+      {content}
     </Dialog>
   );
 };

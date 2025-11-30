@@ -1,0 +1,15 @@
+WARNING:root:Google Sheets integration not available. Install gspread and google-auth packages for full functionality.
+🚀 Starting Reproduction Script
+Traceback (most recent call last):
+  File "C:\Users\IRMAN\OneDrive\Desktop\prototype\backend\reproduce_issue.py", line 93, in <module>
+    reproduce()
+    ~~~~~~~~~^^
+  File "C:\Users\IRMAN\OneDrive\Desktop\prototype\backend\reproduce_issue.py", line 59, in reproduce
+    app = create_app('testing')
+  File "C:\Users\IRMAN\OneDrive\Desktop\prototype\backend\app\__init__.py", line 59, in create_app
+    app.config.from_mapping(config)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "C:\Users\IRMAN\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\flask\config.py", line 316, in from_mapping
+    mappings.update(mapping)
+    ~~~~~~~~~~~~~~~^^^^^^^^^
+ValueError: dictionary update sequence element #0 has length 1; 2 is required
