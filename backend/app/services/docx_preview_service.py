@@ -150,9 +150,10 @@ class DocxPreviewService:
         elif 'Subtitle' in paragraph.style.name:
             style_class = 'subtitle'
         
-        # Process runs for formatting
+        # Process runs for formatting and images
         html_content = ''
         for run in paragraph.runs:
+            # Handle text
             text = self._escape_html(run.text)
             
             # Apply formatting
@@ -164,6 +165,27 @@ class DocxPreviewService:
                 text = f'<u>{text}</u>'
             
             html_content += text
+            
+            # Handle images (drawing/blip)
+            try:
+                # Check for drawing elements in the run's XML
+                drawings = run.element.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}drawing')
+                for drawing in drawings:
+                    # Find blip element to get embed ID
+                    blips = drawing.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}blip')
+                    for blip in blips:
+                        embed_id = blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                        if embed_id:
+                            # Get image part from relationship
+                            image_part = paragraph.part.rels[embed_id].target_part
+                            image_name = os.path.basename(image_part.partname)
+                            
+                            # Look up base64 data
+                            if image_name in images:
+                                img_src = images[image_name]
+                                html_content += f'<br><img src="{img_src}" style="max-width: 100%; height: auto; margin: 10px 0;" /><br>'
+            except Exception as e:
+                logger.warning(f"Failed to render image in paragraph: {e}")
         
         return f'<p class="{style_class}">{html_content}</p>'
     
