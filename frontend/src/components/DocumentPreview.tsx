@@ -622,19 +622,112 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       }
     };
 
-    // Build HTML content from fields
+    // Known fields mapping for specific order/formatting
+    const knownFields = ['title', 'location', 'tarikh', 'time', 'organizer', 'anjuran', 'objectives', 'course', 'content', 'evaluation', 'improvements', 'discussions', 'records', 'fields'];
+
+    // Build HTML content from known fields first
     if (data.location) htmlContent += `<p><strong>Location:</strong> ${data.location}</p>`;
     if (data.tarikh) htmlContent += `<p><strong>Tarikh:</strong> ${data.tarikh}</p>`;
     if (data.time) htmlContent += `<p><strong>Masa:</strong> ${data.time}</p>`;
     if (data.organizer || data.anjuran) htmlContent += `<p><strong>Anjuran:</strong> ${data.organizer || data.anjuran}</p>`;
     
-    htmlContent += '<hr/>';
+    if (htmlContent) htmlContent += '<hr/>';
     
     addSection('Objektif Kursus', data.objectives);
     addSection('Kandungan Kursus', data.course || data.content);
     addSection('Penilaian Program', data.evaluation);
     addSection('Cadangan Penambahbaikan', data.improvements);
     addSection('Cadangan Perunding', data.discussions);
+
+    // Handle Data Records (e.g. from Excel)
+    if (data.records && Array.isArray(data.records) && data.records.length > 0) {
+      htmlContent += '<h2>Data Records</h2>';
+      htmlContent += '<div style="overflow-x: auto;">';
+      htmlContent += '<table border="1" style="width:100%; border-collapse: collapse; margin-top: 10px;">';
+      
+      // Header
+      const headers = Object.keys(data.records[0] || {});
+      htmlContent += '<thead><tr>';
+      headers.forEach(h => htmlContent += `<th style="padding: 8px; background: #f0f0f0; text-align: left;">${h}</th>`);
+      htmlContent += '</tr></thead>';
+      
+      // Body
+      htmlContent += '<tbody>';
+      data.records.slice(0, 50).forEach((row: any) => { // Limit to 50 rows for performance
+        htmlContent += '<tr>';
+        headers.forEach(h => htmlContent += `<td style="padding: 8px;">${row[h]}</td>`);
+        htmlContent += '</tr>';
+      });
+      htmlContent += '</tbody></table>';
+      htmlContent += '</div>';
+      
+      if (data.records.length > 50) {
+        htmlContent += `<p><em>...and ${data.records.length - 50} more records</em></p>`;
+      }
+    }
+
+    // Handle any other generic fields not explicitly mapped
+    const otherKeys = Object.keys(data).filter(key => 
+      !knownFields.includes(key) && 
+      key !== 'id' && 
+      key !== 'metadata' &&
+      key !== 'generated_data' && // Avoid duplication if flattened
+      key !== 'data_source'
+    );
+    
+    if (otherKeys.length > 0) {
+      htmlContent += '<hr/><h3>Other Details</h3>';
+      otherKeys.forEach(key => {
+        const value = data[key];
+        // Format key to Title Case
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        
+        if (Array.isArray(value)) {
+          // Handle Arrays
+          htmlContent += `<p><strong>${label}:</strong> (${value.length} items)</p>`;
+          if (value.length > 0) {
+            // Check if it's an array of objects (table) or primitives (list)
+            if (typeof value[0] === 'object' && value[0] !== null) {
+              // Render as table
+              htmlContent += '<div style="overflow-x: auto; margin-bottom: 10px;">';
+              htmlContent += '<table border="1" style="width:100%; border-collapse: collapse;">';
+              const headers = Object.keys(value[0]);
+              htmlContent += '<thead><tr>';
+              headers.forEach(h => htmlContent += `<th style="padding: 5px; background: #f0f0f0;">${h}</th>`);
+              htmlContent += '</tr></thead><tbody>';
+              value.slice(0, 20).forEach((row: any) => {
+                htmlContent += '<tr>';
+                headers.forEach(h => {
+                  const cellVal = typeof row[h] === 'object' ? JSON.stringify(row[h]) : row[h];
+                  htmlContent += `<td style="padding: 5px;">${cellVal}</td>`;
+                });
+                htmlContent += '</tr>';
+              });
+              htmlContent += '</tbody></table>';
+              if (value.length > 20) htmlContent += `<p><em>...and ${value.length - 20} more items</em></p>`;
+              htmlContent += '</div>';
+            } else {
+              // Render as list
+              htmlContent += '<ul>';
+              value.forEach((item: any) => htmlContent += `<li>${item}</li>`);
+              htmlContent += '</ul>';
+            }
+          }
+        } else if (typeof value === 'object' && value !== null) {
+          // Handle Objects
+          htmlContent += `<p><strong>${label}:</strong></p>`;
+          htmlContent += `<pre style="background: #f5f5f5; padding: 10px; border-radius: 4px;">${JSON.stringify(value, null, 2)}</pre>`;
+        } else {
+          // Handle Primitives
+          htmlContent += `<p><strong>${label}:</strong> ${value}</p>`;
+        }
+      });
+    }
+
+    // If htmlContent is still empty, just dump the JSON
+    if (!htmlContent) {
+       htmlContent = `<h3>Raw Data</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+    }
 
     return {
       title: data.title || 'Untitled Report',
