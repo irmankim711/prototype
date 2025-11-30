@@ -116,13 +116,44 @@ class DocxPreviewService:
             '<div class="docx-preview-container">',
         ]
         
-        # Process each paragraph
-        for paragraph in doc.paragraphs:
-            html_parts.append(self._convert_paragraph_to_html(paragraph, images))
+        # Process document elements in order
+        from docx.text.paragraph import Paragraph
+        from docx.table import Table
         
-        # Process tables
-        for table in doc.tables:
-            html_parts.append(self._convert_table_to_html(table, images))
+        try:
+            for element in doc.element.body.iterchildren():
+                try:
+                    if element.tag.endswith('p'):
+                        # It's a paragraph
+                        paragraph = Paragraph(element, doc)
+                        html_parts.append(self._convert_paragraph_to_html(paragraph, images))
+                    elif element.tag.endswith('tbl'):
+                        # It's a table
+                        table = Table(element, doc)
+                        html_parts.append(self._convert_table_to_html(table, images))
+                    elif element.tag.endswith('sdt'):
+                        # Structured Document Tag (Content Control)
+                        # Try to extract content from sdtContent
+                        sdt_content = element.find('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}sdtContent')
+                        if sdt_content is not None:
+                            for child in sdt_content.iterchildren():
+                                if child.tag.endswith('p'):
+                                    paragraph = Paragraph(child, doc)
+                                    html_parts.append(self._convert_paragraph_to_html(paragraph, images))
+                                elif child.tag.endswith('tbl'):
+                                    table = Table(child, doc)
+                                    html_parts.append(self._convert_table_to_html(table, images))
+                except Exception as elem_error:
+                    logger.warning(f"Failed to process document element {element.tag}: {elem_error}")
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"Error processing document body: {e}")
+            # Fallback to legacy method if body iteration fails
+            for paragraph in doc.paragraphs:
+                html_parts.append(self._convert_paragraph_to_html(paragraph, images))
+            for table in doc.tables:
+                html_parts.append(self._convert_table_to_html(table, images))
         
         html_parts.extend([
             '</div>',
