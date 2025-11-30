@@ -881,35 +881,19 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                           </Box>
                         </Box>
                         {fileInfo.exists && onDownload && (
-                          <Button
-                            size="small"
-                            variant="contained"
-                            color={iconColor}
-                            startIcon={<DownloadIcon />}
-                            onClick={() => onDownload(fileType)}
-                          >
-                            Download
-                          </Button>
-                        )}
-                      </Box>
-                    </Paper>
-                  );
-                })}
-              </Box>
-            )}
-            
-            {previewData?.metadata && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Report Metadata:
-                </Typography>
-                <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
-                  <pre style={{ margin: 0, fontSize: '12px', whiteSpace: 'pre-wrap' }}>
-                    {JSON.stringify(previewData.metadata, null, 2)}
-                  </pre>
-                </Paper>
-              </Box>
-            )}
+         //</Box> Transform data for display
+        const displayContent = transformDataToEditorContent(previewData);
+        
+        return (
+          <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+            <InlineReportEditor
+              reportId={typeof reportId === 'number' ? reportId : Number(reportId) || 0}
+              reportContent={displayContent.content}
+              onSave={() => {}} // No-op in read-only
+              readOnly={true}
+              showAITools={false}
+              autoSave={false}
+            />
           </Box>
         );
       case 'html':
