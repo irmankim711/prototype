@@ -84,6 +84,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editableContent, setEditableContent] = useState<any>(null);
+  const [fullHtmlContent, setFullHtmlContent] = useState<string | null>(null);
   const [downloadMenuAnchor, setDownloadMenuAnchor] = useState<null | HTMLElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -376,6 +377,20 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       const loadPreview = () => {
         console.log('📡 Triggering preview mutation for report ID:', reportId);
         previewMutation.mutate(reportId);
+
+        // Fetch full HTML content for better preview/editing
+        if (typeof reportId === 'number' || (typeof reportId === 'string' && !reportId.startsWith('file:'))) {
+           axiosInstance.get(`/api/excel-to-pdf/preview-content/${reportId}`)
+             .then(response => {
+                 // Check if response is HTML
+                 const contentType = response.headers['content-type'];
+                 if (contentType && contentType.includes('text/html')) {
+                     console.log('📄 Fetched full HTML content for preview');
+                     setFullHtmlContent(response.data);
+                 }
+             })
+             .catch(err => console.log('HTML preview content not available:', err));
+        }
       };
       
       // Use setTimeout to ensure state is ready
@@ -387,7 +402,11 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       setPreviewData(null);
       setError(null);
       setIsEditMode(false);
+      setPreviewData(null);
+      setError(null);
+      setIsEditMode(false);
       setEditableContent(null);
+      setFullHtmlContent(null);
     }
   }, [open, reportId]);
 
@@ -907,8 +926,10 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       case 'data':
         console.log('📝 Rendering data preview for:', previewData);
         
-        // Transform data for display
-        const displayContent = transformDataToEditorContent(previewData);
+        // Transform data for display, preferring full HTML if available
+        const displayContent = fullHtmlContent 
+            ? { content: fullHtmlContent } 
+            : transformDataToEditorContent(previewData);
         
         return (
           <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
