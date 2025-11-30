@@ -127,11 +127,12 @@ Sample Data: {json.dumps(data_sample, indent=2, default=str)}
 
 Provide a JSON response with:
 1. "column_types": Map each column to its type (text, number, date, currency, percentage, etc.)
-2. "recommended_charts": List of chart types that would best visualize this data (bar, line, pie, scatter)
-3. "key_metrics": List of important metrics to highlight (sum, average, count, etc.)
-4. "conditional_formatting": Suggestions for conditional formatting rules
-5. "formulas": Recommended calculated columns or summary formulas
-6. "insights": 3-5 key insights about the data
+2. "friendly_headers": Map each original column name to a professional, human-readable header name (e.g., "created_at" -> "Submission Date").
+3. "recommended_charts": List of chart types that would best visualize this data (bar, line, pie, scatter, column, area).
+4. "key_metrics": List of important metrics to highlight (sum, average, count, min, max).
+5. "conditional_formatting": Suggestions for conditional formatting rules.
+6. "formulas": Recommended calculated columns or summary formulas.
+7. "insights": 3-5 key insights about the data.
 
 Return ONLY valid JSON, no additional text."""
 
@@ -241,9 +242,13 @@ Return ONLY valid JSON, no additional text."""
         # Headers (row 5)
         header_row = 5
         column_types = analysis.get('column_types', {})
+        friendly_headers = analysis.get('friendly_headers', {})
 
         for col_idx, column in enumerate(df.columns, 1):
-            cell = ws.cell(header_row, col_idx, str(column))
+            # Use friendly header if available, otherwise capitalize original
+            header_text = friendly_headers.get(column, str(column).replace('_', ' ').title())
+            
+            cell = ws.cell(header_row, col_idx, header_text)
             cell.font = Font(bold=True, color="FFFFFF", size=11)
             cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
             cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
@@ -354,10 +359,13 @@ Return ONLY valid JSON, no additional text."""
 
         chart_row = 3
 
-        for chart_type in recommended_charts[:3]:  # Limit to 3 charts
+        for chart_type in recommended_charts[:self.config.get('generation', {}).get('max_charts', 5)]:
             try:
                 if chart_type == 'bar' and len(df.select_dtypes(include=['number']).columns) > 0:
                     self._add_bar_chart(ws, df, chart_row)
+                    chart_row += 20
+                elif chart_type == 'column' and len(df.select_dtypes(include=['number']).columns) > 0:
+                    self._add_column_chart(ws, df, chart_row)
                     chart_row += 20
                 elif chart_type == 'line' and len(df.select_dtypes(include=['number']).columns) > 0:
                     self._add_line_chart(ws, df, chart_row)
@@ -365,8 +373,80 @@ Return ONLY valid JSON, no additional text."""
                 elif chart_type == 'pie':
                     self._add_pie_chart(ws, df, chart_row)
                     chart_row += 20
+                elif chart_type == 'scatter' and len(df.select_dtypes(include=['number']).columns) >= 2:
+                    self._add_scatter_chart(ws, df, chart_row)
+                    chart_row += 20
+                elif chart_type == 'area' and len(df.select_dtypes(include=['number']).columns) > 0:
+                    self._add_area_chart(ws, df, chart_row)
+                    chart_row += 20
             except Exception as e:
                 logger.warning(f"Could not create {chart_type} chart: {str(e)}")
+
+    def _add_column_chart(self, ws, df: pd.DataFrame, start_row: int):
+        """Add a column chart"""
+        try:
+            chart = BarChart()
+            chart.type = "col"
+            chart.title = "Data Distribution (Column Chart)"
+            chart.style = 10
+            chart.height = 10
+            chart.width = 20
+
+            num_col = df.select_dtypes(include=['number']).columns[0]
+            col_idx = df.columns.get_loc(num_col) + 1
+
+            data = Reference(ws, min_col=col_idx, min_row=5, max_row=min(15, len(df)+5))
+            chart.add_data(data, titles_from_data=False)
+
+            ws.add_chart(chart, f"A{start_row}")
+        except Exception as e:
+            logger.warning(f"Could not add column chart: {str(e)}")
+
+    def _add_area_chart(self, ws, df: pd.DataFrame, start_row: int):
+        """Add an area chart"""
+        try:
+            from openpyxl.chart import AreaChart
+            chart = AreaChart()
+            chart.title = "Trend Analysis (Area Chart)"
+            chart.style = 13
+            chart.height = 10
+            chart.width = 20
+
+            num_col = df.select_dtypes(include=['number']).columns[0]
+            col_idx = df.columns.get_loc(num_col) + 1
+
+            data = Reference(ws, min_col=col_idx, min_row=5, max_row=min(15, len(df)+5))
+            chart.add_data(data, titles_from_data=False)
+
+            ws.add_chart(chart, f"A{start_row}")
+        except Exception as e:
+            logger.warning(f"Could not add area chart: {str(e)}")
+
+    def _add_scatter_chart(self, ws, df: pd.DataFrame, start_row: int):
+        """Add a scatter chart"""
+        try:
+            chart = ScatterChart()
+            chart.title = "Correlation Analysis (Scatter Chart)"
+            chart.style = 13
+            chart.height = 10
+            chart.width = 20
+
+            num_cols = df.select_dtypes(include=['number']).columns
+            if len(num_cols) < 2:
+                return
+
+            x_col_idx = df.columns.get_loc(num_cols[0]) + 1
+            y_col_idx = df.columns.get_loc(num_cols[1]) + 1
+
+            x_values = Reference(ws, min_col=x_col_idx, min_row=6, max_row=min(15, len(df)+5))
+            y_values = Reference(ws, min_col=y_col_idx, min_row=6, max_row=min(15, len(df)+5))
+            
+            series = openpyxl.chart.Series(y_values, x_values, title_from_data=False)
+            chart.series.append(series)
+
+            ws.add_chart(chart, f"A{start_row}")
+        except Exception as e:
+            logger.warning(f"Could not add scatter chart: {str(e)}")
 
     def _create_pivot_sheet(self, wb: Workbook, data: List[Dict], analysis: Dict):
         """Create pivot analysis sheet"""

@@ -36,5 +36,16 @@
   "type_detection": {
     "date_indicators": ["/", "-", ":", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"],
     "currency_indicators": ["$", "€", "£", "usd", "myr", "rm"]
+  },
+  "generation": {
+    "default_charts": ["bar", "pie"],
+    "max_charts": 5,
+    "include_summary": true,
+    "include_pivot": false,
+    "ai_prompt_settings": {
+      "model": "claude-3-5-sonnet-20240620",
+      "max_tokens": 4000,
+      "temperature": 0.2
+    }
   }
 }
