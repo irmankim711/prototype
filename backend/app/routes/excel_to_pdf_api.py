@@ -250,22 +250,66 @@ def get_conversion_status():
             'message': str(e)
         }), 500
 
-@excel_to_pdf_bp.route('/preview-content/<int:report_id>', methods=['GET'])
+@excel_to_pdf_bp.route('/preview-content/<report_id>', methods=['GET'])
 def get_preview_content(report_id):
     """
     Get the HTML content for preview (embedded mode)
+    Supports both SQL (int) and Firestore (string) IDs
     """
     try:
         from ..models import Report
         from flask import Response
+        import tempfile
+        
+        report = None
+        file_path = None
+        temp_file_obj = None
+        
+        # 1. Try to find report in SQL (if ID is numeric)
+        if str(report_id).isdigit():
+            report = Report.query.filter_by(id=int(report_id)).first()
+            if report and report.file_path:
+                file_path = report.file_path
+        
+        # 2. If not found in SQL, try Firestore
+        if not report:
+            try:
+                from ..services.firestore_report_service import firestore_report_service
+                from ..services.firebase_storage_service import firebase_storage_service
+                
+                firestore_report = firestore_report_service.get_report(str(report_id))
+                
+                if firestore_report:
+                    # Found in Firestore, check for storage path
+                    storage_path = firestore_report.get('storagePath')
+                    if storage_path:
+                        # Download to temp file
+                        suffix = os.path.splitext(storage_path)[1] if '.' in storage_path else '.docx'
+                        temp_file_obj = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+                        temp_file_path = temp_file_obj.name
+                        temp_file_obj.close()
+                        
+                        if firebase_storage_service.download_file(storage_path, temp_file_path):
+                            file_path = temp_file_path
+                            # Create a mock report object for compatibility
+                            class MockReport:
+                                def __init__(self, data, path):
+                                    self.title = data.get('title', 'Report')
+                                    self.file_format = data.get('reportType', 'docx')
+                                    self.file_path = path
+                            
+                            report = MockReport(firestore_report, file_path)
+                            logger.info(f"✅ Downloaded Firestore report to temp file: {file_path}")
+                        else:
+                            logger.error(f"❌ Failed to download file from storage: {storage_path}")
+            except Exception as e:
+                logger.warning(f"Firestore lookup failed: {e}")
 
-        # Get the report (temporarily without user filtering for testing)
-        report = Report.query.filter_by(id=report_id).first()
         if not report:
             return jsonify({'error': 'Report not found'}), 404
 
-        # Handle missing file path - try to find TeX file by report title/date
-        if not report.file_path:
+        # Handle missing file path - try to find TeX file by report title/date (Legacy fallback)
+        if not file_path:
             # Try to find a matching TeX file for this report
             static_dir = os.path.join(os.getcwd(), 'static', 'generated')
             potential_files = []
@@ -279,29 +323,28 @@ def get_preview_content(report_id):
             if potential_files:
                 # Use the most recent matching file
                 potential_files.sort(reverse=True)  # Sort by name (includes date)
-                report.file_path = os.path.join(static_dir, potential_files[0])
-                logger.info(f"Found matching TeX file for report {report.id}: {potential_files[0]}")
+                file_path = os.path.join(static_dir, potential_files[0])
+                report.file_path = file_path
+                logger.info(f"Found matching TeX file for report {report_id}: {potential_files[0]}")
             else:
                 return jsonify({
                     'error': 'Report file path is empty and no matching TeX files found',
-                    'report_id': report.id,
-                    'title': report.title,
-                    'file_format': report.file_format
+                    'report_id': report_id
                 }), 404
 
         # Check if file exists
-        if not os.path.exists(report.file_path):
+        if not os.path.exists(file_path):
             return jsonify({'error': 'Report file not found'}), 404
 
         # Check actual file extension to determine real format
-        file_extension = os.path.splitext(report.file_path)[1].lower() if report.file_path else ''
+        file_extension = os.path.splitext(file_path)[1].lower() if file_path else ''
 
         # Generate HTML preview for different file types
         if file_extension == '.tex':
             # Handle TeX files - convert to HTML
             try:
                 # Read the TeX content
-                with open(report.file_path, 'r', encoding='utf-8') as f:
+                with open(file_path, 'r', encoding='utf-8') as f:
                     tex_content = f.read()
 
                 # Convert TeX to formatted HTML (same as preview endpoint)
@@ -359,6 +402,13 @@ def get_preview_content(report_id):
     </div>
 </body>
 </html>"""
+                
+                # Cleanup temp file if it was created
+                if temp_file_obj:
+                    try:
+                        os.unlink(file_path)
+                    except:
+                        pass
 
                 return Response(html_content, mimetype='text/html')
 
@@ -368,16 +418,32 @@ def get_preview_content(report_id):
 
         elif report.file_format == 'docx' or file_extension == '.docx':
             try:
-                _, html_content = docx_preview_service.convert_docx_to_html(report.file_path)
+                _, html_content = docx_preview_service.convert_docx_to_html(file_path)
+                
+                # Cleanup temp file if it was created
+                if temp_file_obj:
+                    try:
+                        os.unlink(file_path)
+                    except:
+                        pass
+                        
                 return Response(html_content, mimetype='text/html')
             except Exception as e:
                 logger.warning(f"Failed to generate DOCX preview with docx_preview_service: {str(e)}")
                 # Fallback to ConvertAPI for preview
                 try:
-                    success, message, html_path = convertapi_service.convert_docx_to_html_preview(report.file_path)
+                    success, message, html_path = convertapi_service.convert_docx_to_html_preview(file_path)
                     if success and html_path and os.path.exists(html_path):
                         with open(html_path, 'r', encoding='utf-8') as f:
                             html_content = f.read()
+                        
+                        # Cleanup temp file if it was created
+                        if temp_file_obj:
+                            try:
+                                os.unlink(file_path)
+                            except:
+                                pass
+                                
                         return Response(html_content, mimetype='text/html')
                     else:
                         logger.error(f"ConvertAPI preview failed: {message}")
