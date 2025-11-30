@@ -612,7 +612,15 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   };
 
   // Transform flat data to editor content
-  const transformDataToEditorContent = (data: any) => {
+  const transformDataToEditorContent = (inputData: any) => {
+    // Extract the actual data object, handling different nesting levels
+    let data = inputData;
+    if (inputData?.preview?.metadata) {
+      data = { ...inputData.preview.metadata, ...inputData.preview };
+    } else if (inputData?.metadata) {
+      data = { ...inputData.metadata, ...inputData };
+    }
+
     let htmlContent = '';
     
     // Helper to add section
