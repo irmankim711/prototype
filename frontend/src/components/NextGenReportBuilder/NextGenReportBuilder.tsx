@@ -2227,36 +2227,7 @@ const NextGenReportBuilder: React.FC<NextGenReportBuilderProps> = ({
       {/* Report editing is now handled inline within DocumentPreview */}
 
       {/* Excel Upload Status */}
-      {excelDataSource && (
-        <Box
-          sx={{
-            position: 'fixed',
-            top: 80,
-            right: 10,
-            backgroundColor: 'rgba(46, 125, 50, 0.9)',
-            color: 'white',
-            p: 1.5,
-            borderRadius: 1,
-            fontSize: '0.875rem',
-            zIndex: 9999,
-            maxWidth: 280,
-            boxShadow: 2,
-          }}
-        >
-          <Typography variant="body2" component="div" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-            ✅ Excel File Ready
-          </Typography>
-          <Typography variant="caption" component="div">
-            File: {excelDataSource.name}
-          </Typography>
-          <Typography variant="caption" component="div">
-            Records: {excelDataSource.recordCount || 0}
-          </Typography>
-          <Typography variant="caption" component="div">
-            Fields: {excelDataSource.fields?.length || 0}
-          </Typography>
-        </Box>
-      )}
+
 
       {/* Debug Info - Remove in production */}
       {process.env.NODE_ENV === 'development' && (

@@ -7,8 +7,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Dialog,
-  DialogTitle,
-  DialogContent,
   Button,
   IconButton,
   Typography,
@@ -18,8 +16,6 @@ import {
   Tooltip,
   Paper,
   LinearProgress,
-  TextField,
-  Stack,
   Menu,
   MenuItem,
   ListItemIcon,
@@ -40,7 +36,7 @@ import {
   Description as DocxIcon,
   TableChart as ExcelIcon,
 } from '@mui/icons-material';
-import ReportEditor, { type EditorState } from './ReportEditing/ReportEditor';
+import InlineReportEditor from './NextGenReportBuilder/InlineReportEditor';
 import { useMutation } from '@tanstack/react-query';
 import axios from 'axios';
 import axiosInstance from '../services/axiosInstance';
@@ -493,7 +489,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     setIsEditMode(!isEditMode);
   };
 
-  const handleSaveChanges = async () => {
+  const handleSaveChanges = async (contentToSave?: string) => {
     if (!editableContent || !reportId) {
       console.error('❌ Cannot save: missing content or report ID');
       return;
@@ -505,13 +501,22 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       
       setIsEditMode(false);
       
+      // Use passed content or fallback to state
+      const finalContent = contentToSave || (typeof editableContent === 'string' ? editableContent : editableContent?.content);
+      
       // Try to update report via NextGen API first
       try {
         const updateResponse = await axiosInstance.put(`/api/v1/nextgen/reports/${reportId}`, {
-          title: editableContent.title || previewData?.title,
-          description: editableContent.description || previewData?.description,
-          generated_data: editableContent,
-          data_source: editableContent
+          title: previewData?.title || 'Untitled Report',
+          description: previewData?.description,
+          generated_data: {
+            ...((typeof editableContent === 'object' ? editableContent : {})),
+            content: finalContent // Ensure content is updated
+          },
+          data_source: {
+            ...((typeof editableContent === 'object' ? editableContent : {})),
+            content: finalContent
+          }
         });
         
         console.log('✅ Report updated successfully:', updateResponse.data);
@@ -568,12 +573,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     setEditableContent(null);
   };
 
-  const handleContentChange = (field: string, value: string) => {
-    setEditableContent((prev: any) => ({
-      ...prev,
-      [field]: value
-    }));
-  };
+
 
   const handleDownloadMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setDownloadMenuAnchor(event.currentTarget);
@@ -643,32 +643,46 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     };
   };
 
-  // Render inline editable content using ReportEditor
+  // Render inline editable content using InlineReportEditor
   const renderEditableContent = () => {
     if (!editableContent) return null;
 
-    // Transform content for the editor if it hasn't been transformed yet
-    const editorInitialContent = editableContent.content && typeof editableContent.content === 'string' && editableContent.content.includes('<') 
-      ? editableContent 
-      : transformDataToEditorContent(editableContent);
+    // Prepare content string for the editor
+    let editorContentString = '';
+    
+    if (typeof editableContent === 'string') {
+      editorContentString = editableContent;
+    } else if (editableContent.content && typeof editableContent.content === 'string') {
+      // If it's already an object with content property (from transformDataToEditorContent)
+      editorContentString = editableContent.content;
+    } else {
+      // Transform data object to HTML string
+      const transformed = transformDataToEditorContent(editableContent);
+      editorContentString = transformed.content;
+    }
 
     return (
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
-        <ReportEditor
+        <InlineReportEditor
           reportId={typeof reportId === 'number' ? reportId : Number(reportId) || 0}
-          initialContent={editorInitialContent}
+          reportContent={editorContentString}
           onSave={(content) => {
-            console.log('💾 Editor saved:', content);
-            setEditableContent({
-              ...editableContent,
-              ...content,
+            console.log('💾 Inline Editor saved:', content);
+            // Update local state
+            setEditableContent((prev: any) => {
+              if (typeof prev === 'object') {
+                return { ...prev, content: content };
+              }
+              return { content: content };
             });
-            // Refresh preview to show updates if needed, or just acknowledge save
-            handleRefresh();
+            
+            // Trigger save to backend
+            handleSaveChanges(content);
           }}
+          onCancel={() => setIsEditMode(false)}
           readOnly={false}
-          showVersionControls={false}
-          autoSaveInterval={60000}
+          showAITools={true}
+          autoSave={true}
         />
       </Box>
     );
@@ -932,7 +946,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             <Tooltip title="Save Changes">
               <IconButton 
                 size="small" 
-                onClick={handleSaveChanges}
+                onClick={() => handleSaveChanges()}
                 color="primary"
               >
                 <SaveIcon />
