@@ -4941,67 +4941,66 @@ def preview_report(report_id):
             'metadata': {}
         }
 
-        # Check for DOCX file and extract HTML content
+        # Check for file and setup preview data
         if report.file_path and os.path.exists(report.file_path):
-            logger.info(f"📄 DOCX file found for report {report_id}, extracting HTML content...")
+            file_info = {
+                'path': report.file_path,
+                'size': report.file_size,
+                'download_url': report.download_url,
+                'exists': True
+            }
             
-            try:
-                from app.services.docx_preview_service import docx_preview_service
+            # Determine format
+            is_docx = report.file_format == 'docx' or report.file_path.endswith('.docx')
+            is_pdf = report.file_format == 'pdf' or report.file_path.endswith('.pdf')
+            is_excel = report.file_format == 'excel' or report.file_path.endswith('.xlsx')
+            
+            if is_docx:
+                logger.info(f"📄 DOCX file found for report {report_id}, extracting HTML content...")
+                try:
+                    from app.services.docx_preview_service import docx_preview_service
+                    
+                    # Convert DOCX to HTML (using ConvertAPI for high fidelity)
+                    html_file_path, html_content = docx_preview_service.convert_docx_to_html_convertapi(
+                        report.file_path
+                    )
+                    
+                    logger.info(f"✅ Successfully converted DOCX to HTML ({len(html_content)} characters)")
+                    
+                    # Add HTML content to preview data
+                    preview_data['html_content'] = html_content
+                    preview_data['preview_type'] = 'html'
+                    
+                    # Also include file info
+                    file_info['has_html_preview'] = True
+                    preview_data['files']['docx'] = file_info
+                    
+                except Exception as html_error:
+                    logger.error(f"❌ Failed to convert DOCX to HTML: {html_error}", exc_info=True)
+                    # Still include file info even if conversion failed
+                    file_info['has_html_preview'] = False
+                    preview_data['files']['docx'] = file_info
+            
+            elif is_pdf:
+                preview_data['files']['pdf'] = file_info
                 
-                # Convert DOCX to HTML (using ConvertAPI for high fidelity)
-                html_file_path, html_content = docx_preview_service.convert_docx_to_html_convertapi(
-                    report.file_path
-                )
-                
-                logger.info(f"✅ Successfully converted DOCX to HTML ({len(html_content)} characters)")
-                
-                # Add HTML content to preview data
-                preview_data['html_content'] = html_content
-                preview_data['preview_type'] = 'html'
-                
-                # Also include file info
-                preview_data['files']['docx'] = {
-                    'path': report.docx_file_path,
-                    'size': report.docx_file_size,
-                    'download_url': report.docx_download_url,
-                    'exists': True,
-                    'has_html_preview': True
+            elif is_excel:
+                preview_data['files']['excel'] = file_info
+        else:
+            # File doesn't exist on disk, but we might have a record of it
+            if report.file_path:
+                file_info = {
+                    'path': report.file_path,
+                    'size': report.file_size,
+                    'download_url': report.download_url,
+                    'exists': False
                 }
-                
-            except Exception as html_error:
-                logger.error(f"❌ Failed to convert DOCX to HTML: {html_error}", exc_info=True)
-                # Still include file info even if conversion failed
-                preview_data['files']['docx'] = {
-                    'path': report.docx_file_path,
-                    'size': report.docx_file_size,
-                    'download_url': report.docx_download_url,
-                    'exists': True,
-                    'has_html_preview': False
-                }
-        elif report.docx_file_path:
-            preview_data['files']['docx'] = {
-                'path': report.docx_file_path,
-                'size': report.docx_file_size,
-                'download_url': report.docx_download_url,
-                'exists': False
-            }
-
-        # Check for PDF file
-        if report.pdf_file_path:
-            preview_data['files']['pdf'] = {
-                'path': report.pdf_file_path,
-                'size': report.pdf_file_size,
-                'download_url': report.pdf_download_url,
-                'exists': os.path.exists(report.pdf_file_path) if report.pdf_file_path else False
-            }
-
-        if report.excel_file_path:
-            preview_data['files']['excel'] = {
-                'path': report.excel_file_path,
-                'size': report.excel_file_size,
-                'download_url': report.excel_download_url,
-                'exists': os.path.exists(report.excel_file_path) if report.excel_file_path else False
-            }
+                if report.file_format == 'docx':
+                    preview_data['files']['docx'] = file_info
+                elif report.file_format == 'pdf':
+                    preview_data['files']['pdf'] = file_info
+                elif report.file_format == 'excel':
+                    preview_data['files']['excel'] = file_info
 
         # Add metadata
         if hasattr(report, 'generated_data') and report.generated_data:
@@ -5252,59 +5251,53 @@ def download_report_pdf(report_id):
                 logger.info(f"✅ Access granted for user {user_id} to download report")
 
         # Check if PDF file exists
-        if not report.pdf_file_path or not os.path.exists(report.pdf_file_path):
-            # If PDF doesn't exist but DOCX does, try to convert using ConvertAPI
-            if report.docx_file_path and os.path.exists(report.docx_file_path):
-                logger.info(f"📄 PDF not found, converting from DOCX using ConvertAPI: {report.docx_file_path}")
-                try:
-                    import convertapi
-                    # Configure ConvertAPI if not already configured
-                    if not convertapi.api_secret:
-                         convertapi.api_secret = os.environ.get('CONVERT_API_SECRET', 'rd78ghGq31u8k5zm2hY22ACRtnkqje8g')
+        pdf_path = report.file_path if (report.file_format == 'pdf' or (report.file_path and report.file_path.endswith('.pdf'))) else None
+        
+        # If PDF doesn't exist but DOCX does, try to convert on the fly
+        docx_path = report.file_path if (report.file_format == 'docx' or (report.file_path and report.file_path.endswith('.docx'))) else None
+
+        if not pdf_path and docx_path and os.path.exists(docx_path):
+            logger.info(f"🔄 PDF not found, attempting to convert from DOCX: {docx_path}")
+            try:
+                from app.services.docx_preview_service import docx_preview_service
+                
+                # Convert DOCX to PDF (using ConvertAPI for high fidelity)
+                pdf_path_generated = docx_preview_service.convert_docx_to_pdf(docx_path)
+                
+                if pdf_path_generated and os.path.exists(pdf_path_generated):
+                    pdf_path = pdf_path_generated
                     
-                    # Convert DOCX to PDF
-                    pdf_filename = Path(report.docx_file_path).stem + ".pdf"
-                    pdf_path = str(Path(report.docx_file_path).parent / pdf_filename)
-                    
-                    logger.info(f"Converting to PDF: {pdf_path}")
-                    
-                    result = convertapi.convert('pdf', {
-                        'File': report.docx_file_path
-                    }, from_format='docx')
-                    
-                    result.file.save(pdf_path)
-                    
-                    # Update report with new PDF path
-                    report.pdf_file_path = pdf_path
-                    report.pdf_file_size = os.path.getsize(pdf_path)
-                    report.pdf_download_url = f"/static/reports/{pdf_filename}" # Approximate URL
+                    # Update report record
+                    report.file_path = pdf_path
+                    report.file_format = 'pdf'
+                    report.file_size = os.path.getsize(pdf_path)
                     db.session.commit()
                     
                     logger.info(f"✅ Successfully converted DOCX to PDF via ConvertAPI")
                     
-                except Exception as pdf_error:
-                    logger.error(f"❌ Failed to convert DOCX to PDF: {pdf_error}")
-                    # Fall through to standard error handling
+            except Exception as pdf_error:
+                logger.error(f"❌ Failed to convert DOCX to PDF: {pdf_error}")
+                # Fall through to standard error handling
             
-        if not report.pdf_file_path:
+        if not pdf_path:
             logger.warning(f"❌ PDF file path not set for report {report_id}")
             return jsonify({
                 'error': 'PDF file not available',
                 'code': 'NOT_FOUND'
             }), 404
         
-        if not os.path.exists(report.pdf_file_path):
-            logger.warning(f"❌ PDF file does not exist: {report.pdf_file_path}")
+        if not os.path.exists(pdf_path):
+            logger.warning(f"❌ PDF file does not exist: {pdf_path}")
             return jsonify({
                 'error': 'PDF file not found on disk',
                 'code': 'NOT_FOUND',
-                'path': report.pdf_file_path
+                'path': pdf_path
             }), 404
 
-        logger.info(f"✅ Sending PDF file: {report.pdf_file_path}")
+        logger.info(f"✅ Sending PDF file: {pdf_path}")
         # Send the file
         return send_file(
-            report.pdf_file_path,
+            pdf_path,
             mimetype='application/pdf',
             as_attachment=False,  # Display in browser
             download_name=f"{report.title}.pdf"
@@ -5441,25 +5434,27 @@ def download_report_docx(report_id):
                 logger.info(f"✅ Access granted for user {user_id}")
 
         # Check if DOCX file exists
-        if not report.docx_file_path:
+        docx_path = report.file_path if (report.file_format == 'docx' or (report.file_path and report.file_path.endswith('.docx'))) else None
+
+        if not docx_path:
             logger.warning(f"❌ DOCX file path not set for report {report_id}")
             return jsonify({
                 'error': 'DOCX file not available',
                 'code': 'NOT_FOUND'
             }), 404
         
-        if not os.path.exists(report.docx_file_path):
-            logger.warning(f"❌ DOCX file does not exist: {report.docx_file_path}")
+        if not os.path.exists(docx_path):
+            logger.warning(f"❌ DOCX file does not exist: {docx_path}")
             return jsonify({
                 'error': 'DOCX file not found on disk',
                 'code': 'NOT_FOUND',
-                'path': report.docx_file_path
+                'path': docx_path
             }), 404
 
-        logger.info(f"✅ Sending DOCX file: {report.docx_file_path}")
+        logger.info(f"✅ Sending DOCX file: {docx_path}")
         # Send the file
         return send_file(
-            report.docx_file_path,
+            docx_path,
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             as_attachment=True,  # Download file
             download_name=f"{report.title}.docx"
@@ -5523,25 +5518,27 @@ def download_report_excel(report_id):
                 logger.info(f"✅ Access granted for user {user_id}")
 
         # Check if Excel file exists
-        if not report.excel_file_path:
+        excel_path = report.file_path if (report.file_format == 'excel' or (report.file_path and report.file_path.endswith('.xlsx'))) else None
+
+        if not excel_path:
             logger.warning(f"❌ Excel file path not set for report {report_id}")
             return jsonify({
                 'error': 'Excel file not available',
                 'code': 'NOT_FOUND'
             }), 404
         
-        if not os.path.exists(report.excel_file_path):
-            logger.warning(f"❌ Excel file does not exist: {report.excel_file_path}")
+        if not os.path.exists(excel_path):
+            logger.warning(f"❌ Excel file does not exist: {excel_path}")
             return jsonify({
                 'error': 'Excel file not found on disk',
                 'code': 'NOT_FOUND',
-                'path': report.excel_file_path
+                'path': excel_path
             }), 404
 
-        logger.info(f"✅ Sending Excel file: {report.excel_file_path}")
+        logger.info(f"✅ Sending Excel file: {excel_path}")
         # Send the file
         return send_file(
-            report.excel_file_path,
+            excel_path,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             as_attachment=True,  # Download file
             download_name=f"{report.title}.xlsx"
