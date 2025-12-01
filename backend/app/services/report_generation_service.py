@@ -23,6 +23,7 @@ from app.models import User, ParsedExcelFile, ExcelTable, Report, Program, Repor
 from app.services.excel_data_extractor import excel_data_extractor
 from app.services.template_data_mapper import template_data_mapper
 from app.services.chart_generator_service import chart_generator_service
+from app.services.firestore_report_service import firestore_report_service
 from app.utils.railway_paths import get_reports_dir, get_templates_dir, validate_excel_path
 
 logger = logging.getLogger(__name__)
@@ -108,24 +109,61 @@ class ReportGenerationService:
             output_path = render_result['output_path']
             output_filename = render_result['output_filename']
             
-            # 5. Save/Update Database Record
-            report_record = self._save_report_record(
-                user_id,
-                report_title,
-                template_id,
-                template_db_record,
-                output_path,
-                output_filename,
-                data_context,
-                existing_report_id
-            )
-            
+            # Save report record
+            # 1. Try SQL Save (Legacy/Backup)
+            report_record = None
+            try:
+                report_record = self._save_report_record(
+                    user_id=user_id,
+                    report_title=report_title, # Use report_title from args
+                    template_id=template_id,
+                    template_db_record=template_db_record, # Use template_db_record
+                    output_path=output_path,
+                    output_filename=output_filename,
+                    data_context=data_context,
+                    existing_report_id=existing_report_id
+                )
+            except Exception as e:
+                self.logger.warning(f"🆔 [{request_id}] SQL save failed (ignoring as we use Firestore): {e}")
+                db.session.rollback()
+                report_record = None
+
+            # 2. Save to Firestore (Primary)
+            firestore_report_id = None
+            try:
+                # Create metadata
+                firestore_report_id = firestore_report_service.create_report(
+                    user_id=str(user_id), # Firestore uses string IDs usually
+                    title=report_title, # Use report_title from args
+                    description="Generated via NextGen Builder",
+                    report_type='docx',
+                    template_id=str(template_id),
+                    data_source={'type': 'excel', 'original_file': str(actual_excel_path)}, # Use actual_excel_path
+                    generation_config={'include_charts': True}
+                )
+                
+                if firestore_report_id:
+                    self.logger.info(f"🆔 [{request_id}] Created Firestore report: {firestore_report_id}")
+                    
+                    # Upload file
+                    download_url = firestore_report_service.save_report_file(
+                        report_id=firestore_report_id,
+                        file_path=str(output_path),
+                        file_format='docx'
+                    )
+                    
+                    if download_url:
+                        self.logger.info(f"🆔 [{request_id}] Uploaded to Firebase Storage: {download_url}")
+            except Exception as e:
+                self.logger.error(f"🆔 [{request_id}] Firestore save failed: {e}", exc_info=True)
+
             elapsed = time.time() - start_time
             self.logger.info(f"🆔 [{request_id}] Report generation completed in {elapsed:.2f}s")
             
             return {
                 'success': True,
-                'report_id': report_record.id,
+                'report_id': report_record.id if report_record else firestore_report_id, # Return SQL ID if available, else Firestore ID
+                'firestore_report_id': firestore_report_id, # Explicitly return Firestore ID
                 'output_path': str(output_path),
                 'report_path': str(output_path),
                 'output_filename': output_filename,
