@@ -251,7 +251,7 @@ def get_preview_content(current_user, report_id):
         
         # Convert DOCX to HTML and get content
         if report.format == 'docx':
-            _, html_content = docx_preview_service.convert_docx_to_html(report.file_path)
+            _, html_content = docx_preview_service.convert_docx_to_html_convertapi(report.file_path)
             
             # Return HTML content directly
             from flask import Response

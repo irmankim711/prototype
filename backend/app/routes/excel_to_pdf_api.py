@@ -152,28 +152,14 @@ def preview_generated_report(report_id):
             # Generate HTML preview for DOCX files
             if docx_preview_service:
                 try:
-                    html_file_path, html_content = docx_preview_service.convert_docx_to_html(report.file_path)
+                    # Use ConvertAPI via the service (handles fallback internally)
+                    html_file_path, html_content = docx_preview_service.convert_docx_to_html_convertapi(report.file_path)
                     preview_url = f"/static/previews/{os.path.basename(html_file_path)}"
                     preview_type = 'html'
+                    logger.info(f"Generated DOCX preview: {preview_url}")
                 except Exception as e:
-                    logger.warning(f"Failed to generate DOCX preview with docx_preview_service: {str(e)}")
-                    # Fallback to ConvertAPI for preview
-                    if convertapi_service:
-                        try:
-                            success, message, html_path = convertapi_service.convert_docx_to_html_preview(report.file_path)
-                            if success and html_path:
-                                preview_url = f"/static/previews/{os.path.basename(html_path)}"
-                                preview_type = 'html'
-                                logger.info(f"ConvertAPI preview generated successfully: {html_path}")
-                            else:
-                                logger.warning(f"ConvertAPI preview failed: {message}")
-                                preview_type = 'data'
-                        except Exception as convert_e:
-                            logger.error(f"ConvertAPI preview fallback failed: {str(convert_e)}")
-                            preview_type = 'data'
-                    else:
-                        logger.warning("convertapi_service not available")
-                        preview_type = 'data'
+                    logger.error(f"Failed to generate DOCX preview: {str(e)}")
+                    preview_type = 'data'
             else:
                 logger.warning("docx_preview_service not available, falling back to data preview")
                 preview_type = 'data'
@@ -418,7 +404,8 @@ def get_preview_content(report_id):
 
         elif report.file_format == 'docx' or file_extension == '.docx':
             try:
-                _, html_content = docx_preview_service.convert_docx_to_html(file_path)
+                # Use ConvertAPI via the service (handles fallback internally)
+                _, html_content = docx_preview_service.convert_docx_to_html_convertapi(file_path)
                 
                 # Cleanup temp file if it was created
                 if temp_file_obj:
@@ -429,28 +416,8 @@ def get_preview_content(report_id):
                         
                 return Response(html_content, mimetype='text/html')
             except Exception as e:
-                logger.warning(f"Failed to generate DOCX preview with docx_preview_service: {str(e)}")
-                # Fallback to ConvertAPI for preview
-                try:
-                    success, message, html_path = convertapi_service.convert_docx_to_html_preview(file_path)
-                    if success and html_path and os.path.exists(html_path):
-                        with open(html_path, 'r', encoding='utf-8') as f:
-                            html_content = f.read()
-                        
-                        # Cleanup temp file if it was created
-                        if temp_file_obj:
-                            try:
-                                os.unlink(file_path)
-                            except:
-                                pass
-                                
-                        return Response(html_content, mimetype='text/html')
-                    else:
-                        logger.error(f"ConvertAPI preview failed: {message}")
-                        return jsonify({'error': f'ConvertAPI preview failed: {message}'}), 500
-                except Exception as convert_e:
-                    logger.error(f"ConvertAPI preview fallback failed: {str(convert_e)}")
-                    return jsonify({'error': 'Failed to generate preview with both services'}), 500
+                logger.error(f"Failed to generate DOCX preview content: {str(e)}")
+                return jsonify({'error': 'Failed to generate preview content'}), 500
         else:
             return jsonify({
                 'error': f'Preview not available for {report.file_format} format'

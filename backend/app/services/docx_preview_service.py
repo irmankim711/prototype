@@ -616,8 +616,8 @@ class DocxPreviewService:
             URL for preview
         """
         try:
-            # Convert to HTML
-            html_file_path, _ = self.convert_docx_to_html(docx_path)
+            # Convert to HTML using ConvertAPI for high fidelity
+            html_file_path, _ = self.convert_docx_to_html_convertapi(docx_path)
             
             # Return relative URL
             filename = Path(html_file_path).name
