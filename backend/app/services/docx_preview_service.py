@@ -133,7 +133,6 @@ class DocxPreviewService:
                         html_parts.append(self._convert_table_to_html(table, images))
                     elif element.tag.endswith('sdt'):
                         # Structured Document Tag (Content Control)
-                        # Try to extract content from sdtContent
                         sdt_content = element.find('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}sdtContent')
                         if sdt_content is not None:
                             for child in sdt_content.iterchildren():
@@ -146,10 +145,15 @@ class DocxPreviewService:
                 except Exception as elem_error:
                     logger.warning(f"Failed to process document element {element.tag}: {elem_error}")
                     continue
+            
+            # Check if we actually extracted anything (length > 12 means we added something beyond the header)
+            if len(html_parts) <= 12:
+                raise Exception("No content extracted using sequential parsing")
                     
         except Exception as e:
-            logger.error(f"Error processing document body: {e}")
-            # Fallback to legacy method if body iteration fails
+            logger.warning(f"Sequential parsing failed or yielded no content: {e}. Falling back to legacy method.")
+            # Fallback to legacy method
+            # Note: This might lose order but ensures content is shown
             for paragraph in doc.paragraphs:
                 html_parts.append(self._convert_paragraph_to_html(paragraph, images))
             for table in doc.tables:

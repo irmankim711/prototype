@@ -6,11 +6,12 @@ import React from 'react';
 
 import { useState, useRef, useCallback, useEffect } from "react";
   
-import { Box, Paper, Typography, IconButton, Button, Tooltip, Chip, Divider, Menu, MenuItem, ListItemIcon, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, TextField, CircularProgress, Alert, Fade, Collapse, ButtonGroup } from "@mui/material";
+import { Box, Paper, Typography, IconButton, Button, Tooltip, Chip, Divider, CircularProgress, Alert, Collapse, ButtonGroup } from "@mui/material";
   
-import { Edit, Save, Cancel, FormatBold, FormatItalic, FormatUnderlined, FormatListBulleted, FormatListNumbered, SmartToy, AutoAwesome, Translate, Spellcheck, ExpandMore, ExpandLess, History, Undo, Redo } from "@mui/icons-material";
+import { Edit, Save, Cancel, FormatBold, FormatItalic, FormatUnderlined, FormatListBulleted, FormatListNumbered, SmartToy, AutoAwesome, Translate, Spellcheck, ExpandMore, ExpandLess } from "@mui/icons-material";
 
 import { debounce } from "lodash-es";
+import axiosInstance from '../../services/axiosInstance';
 
 interface InlineReportEditorProps {
   reportContent: string;
@@ -139,15 +140,24 @@ return;
 setAIError(null);
 
 try {
-      // Mock AI enhancement - in real implementation, call your AI service
-      const mockEnhancement: AIEnhancement = {
-        type,
-        original: selectedText,
-        enhanced: await mockAIEnhancement(selectedText, type),
-        confidence: 0.85 + Math.random() * 0.15,
-      };
+      // Call backend API for AI enhancement
+      const response = await axiosInstance.post('/nextgen/ai/enhance', {
+        text: selectedText,
+        type: type
+      });
 
-setAIEnhancements(prev => [mockEnhancement, ...prev.slice(0, 4)]);
+      if (response.data.success) {
+        const enhancement: AIEnhancement = {
+          type,
+          original: selectedText,
+          enhanced: response.data.enhanced_text,
+          confidence: 0.95, // High confidence for real AI
+        };
+
+        setAIEnhancements(prev => [enhancement, ...prev.slice(0, 4)]);
+      } else {
+        throw new Error(response.data.error || 'AI enhancement failed');
+      }
     } catch (error) {
       setAIError('AI enhancement failed. Please try again.');
       
@@ -157,34 +167,7 @@ console.error('AI enhancement error:', error);
     }
   };
 
-  // Mock AI enhancement function
-  const mockAIEnhancement = async (text: string, type: AIEnhancement['type']): Promise<string> => {
-    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
-
-    switch (type) {
-      case 'improve':
-        return `Enhanced: ${text} with improved clarity and flow.`;
-      
-case 'formal':
-        return `Formal version: ${text.replace(/\b(good|bad|big|small)\b/g, match => {
-          const formal = { good: 'excellent', bad: 'inadequate', big: 'substantial', small: 'minimal' };
-          
-return formal[match as keyof typeof formal] || match;
-        })}`;
-      
-case 'summary':
-        return `Summary: ${text.split(' ').slice(0, Math.max(3, Math.floor(text.split(' ').length / 3))).join(' ')}...`;
-      
-case 'expand':
-        return `${text} This provides additional context and detailed explanation to enhance understanding.`;
-      
-case 'translate':
-        return `Translated: ${text} (simulated translation)`;
-      
-default:
-        return text;
-    }
-  };
+  // Mock AI enhancement function - REMOVED
 
   // Apply AI enhancement
   const applyEnhancement = (enhancement: AIEnhancement) => {
@@ -487,20 +470,51 @@ return (
             onMouseUp={handleTextSelection}
             onKeyUp={handleTextSelection}
             sx={{
-              p: 3,
-              minHeight: 400,
+              p: '25mm',
+              minHeight: '297mm',
+              width: '210mm',
+              margin: '0 auto',
+              bgcolor: 'white',
+              boxShadow: '0 0 10px rgba(0,0,0,0.1)',
               outline: 'none',
+              fontFamily: "'Times New Roman', Times, serif",
+              lineHeight: 1.5,
+              color: '#000',
               '&:focus': {
-                bgcolor: 'action.hover',
+                boxShadow: '0 0 10px rgba(52, 152, 219, 0.5)',
               },
-              '& p': { margin: '8px 0' },
-              '& h1, & h2, & h3': { margin: '16px 0 8px 0' },
-              '& ul, & ol': { margin: '8px 0', paddingLeft: '24px' },
+              '& p': { margin: '10pt 0', fontSize: '11pt', textAlign: 'justify' },
+              '& h1': { fontSize: '24pt', fontWeight: 'bold', textAlign: 'center', margin: '0 0 12pt 0', borderBottom: '3px solid #3498db', paddingBottom: '10px' },
+              '& h2': { fontSize: '18pt', fontWeight: 'bold', textAlign: 'center', margin: '0 0 12pt 0', color: '#444' },
+              '& h3': { fontSize: '16pt', fontWeight: 'bold', color: '#2c3e50', margin: '18pt 0 12pt 0', borderBottom: '2px solid #ecf0f1', paddingBottom: '5px' },
+              '& table': { width: '100%', borderCollapse: 'collapse', margin: '12pt 0', border: '1px solid black' },
+              '& td, & th': { border: '1px solid black', padding: '5pt', verticalAlign: 'top' },
+              '& img': { maxWidth: '100%', height: 'auto' }
             }}
             dangerouslySetInnerHTML={{ __html: content }}
+            // Key fix: Only update innerHTML if content changed externally (not by user typing)
+            // This prevents cursor jumping. We use a key to force re-mount if reportId changes
+            key={reportId} 
           />
         ) : (
-          <Box sx={{ p: 3 }}>
+          <Box sx={{ 
+            p: '25mm', 
+            minHeight: '297mm', 
+            width: '210mm', 
+            margin: '0 auto',
+            bgcolor: 'white',
+            boxShadow: '0 0 10px rgba(0,0,0,0.1)',
+            fontFamily: "'Times New Roman', Times, serif",
+            lineHeight: 1.5,
+            color: '#000',
+            '& p': { margin: '10pt 0', fontSize: '11pt', textAlign: 'justify' },
+            '& h1': { fontSize: '24pt', fontWeight: 'bold', textAlign: 'center', margin: '0 0 12pt 0', borderBottom: '3px solid #3498db', paddingBottom: '10px' },
+            '& h2': { fontSize: '18pt', fontWeight: 'bold', textAlign: 'center', margin: '0 0 12pt 0', color: '#444' },
+            '& h3': { fontSize: '16pt', fontWeight: 'bold', color: '#2c3e50', margin: '18pt 0 12pt 0', borderBottom: '2px solid #ecf0f1', paddingBottom: '5px' },
+            '& table': { width: '100%', borderCollapse: 'collapse', margin: '12pt 0', border: '1px solid black' },
+            '& td, & th': { border: '1px solid black', padding: '5pt', verticalAlign: 'top' },
+            '& img': { maxWidth: '100%', height: 'auto' }
+          }}>
             <div dangerouslySetInnerHTML={{ __html: content }} />
           </Box>
         )}

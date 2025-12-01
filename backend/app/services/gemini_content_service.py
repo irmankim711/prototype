@@ -114,6 +114,54 @@ class GeminiContentService:
             logger.error(f"Error generating chart suggestions: {str(e)}")
             return self._get_fallback_charts()
 
+    def enhance_text(self, text: str, enhancement_type: str) -> str:
+        """
+        Enhance text using Gemini AI
+        
+        Args:
+            text: Text to enhance
+            enhancement_type: Type of enhancement (improve, formal, summary, expand, translate)
+            
+        Returns:
+            Enhanced text
+        """
+        if not self.is_available():
+            return f"[AI Unavailable] {text}"
+            
+        try:
+            prompt = self._build_enhancement_prompt(text, enhancement_type)
+            response = self.model.generate_content(prompt) # type: ignore
+            
+            if response and response.text:
+                return response.text.strip()
+            else:
+                return text
+                
+        except Exception as e:
+            logger.error(f"Error enhancing text: {str(e)}")
+            return text
+
+    def _build_enhancement_prompt(self, text: str, enhancement_type: str) -> str:
+        """Build prompt for text enhancement"""
+        prompts = {
+            "improve": "Improve the clarity, flow, and professionalism of the following text. Keep the meaning unchanged but make it read better:",
+            "formal": "Rewrite the following text to be more formal and professional suitable for a business report:",
+            "summary": "Summarize the following text concisely, capturing the key points:",
+            "expand": "Expand on the following text, adding relevant context and detail to make it more comprehensive:",
+            "translate": "Translate the following text to English (if not already) or refine the English translation to be native-level professional:",
+        }
+        
+        instruction = prompts.get(enhancement_type, prompts["improve"])
+        
+        return f"""
+        {instruction}
+        
+        Input Text:
+        "{text}"
+        
+        Provide ONLY the enhanced text in your response, without quotes or prefixes.
+        """
+
     def optimize_template_content(self, template_content: str, excel_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Optimize template content based on Excel data structure

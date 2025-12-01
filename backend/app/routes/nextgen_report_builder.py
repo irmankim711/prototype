@@ -31,6 +31,7 @@ from app.services.excel_parser import ExcelParserService
 from app.services.template_optimizer import TemplateOptimizerService
 from app.services.ai_report_service import AIReportService
 from app.services.excel_data_extractor import excel_data_extractor
+from app.services.gemini_content_service import gemini_content_service
 import re
 
 logger = logging.getLogger(__name__)
@@ -5948,5 +5949,36 @@ def get_ai_status():
         logger.error(f"Error checking AI status: {str(e)}")
         return jsonify({
             'error': 'Failed to check AI status',
+            'details': str(e)
+        }), 500
+
+@nextgen_bp.route('/ai/enhance', methods=['POST'])
+@cross_origin(supports_credentials=True)
+@firebase_auth_required
+def enhance_text_with_ai():
+    """
+    Enhance text using Gemini AI
+    """
+    try:
+        data = request.get_json()
+        text = data.get('text')
+        enhancement_type = data.get('type', 'improve')
+        
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+            
+        enhanced_text = gemini_content_service.enhance_text(text, enhancement_type)
+        
+        return jsonify({
+            'success': True,
+            'enhanced_text': enhanced_text,
+            'original_text': text,
+            'type': enhancement_type
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error enhancing text: {str(e)}")
+        return jsonify({
+            'error': 'Failed to enhance text',
             'details': str(e)
         }), 500
