@@ -257,6 +257,25 @@ class ReportGenerationService:
         # This logic mimics the existing logic in nextgen_report_builder
         # For brevity, I'll simplify slightly but keep core lookup logic
         
+        # 0. Try Firestore lookup (Priority)
+        try:
+            from app.services.firestore_template_service import firestore_template_service
+            firestore_template = firestore_template_service.get_template_by_id(str(template_id))
+            
+            if firestore_template:
+                self.logger.info(f"🆔 [{request_id}] Found Firestore template: {template_id}")
+                
+                # Try to get file path
+                file_path = firestore_template_service.get_template_file_path(str(template_id))
+                if file_path:
+                    p = Path(file_path)
+                    if p.exists():
+                        return p, firestore_template
+                
+                self.logger.warning(f"🆔 [{request_id}] Firestore template found but file path invalid: {file_path}")
+        except Exception as e:
+            self.logger.warning(f"🆔 [{request_id}] Firestore template lookup failed: {e}")
+
         # 1. Try DB lookup
         template_db_record = None
         try:
@@ -268,6 +287,7 @@ class ReportGenerationService:
             if not template_db_record:
                 template_db_record = ReportTemplate.query.filter_by(name=str(template_id)).first()
         except Exception as e:
+            db.session.rollback()
             self.logger.warning(f"🆔 [{request_id}] DB template lookup failed: {e}")
 
         # 2. Filesystem lookup
