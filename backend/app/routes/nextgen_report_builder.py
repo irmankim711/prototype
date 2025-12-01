@@ -4704,7 +4704,26 @@ def preview_report(report_id):
                              logger.info(f"✅ Downloaded Firestore report to temp file: {docx_path}")
                          else:
                              logger.warning(f"Failed to download file from storage: {docx_path}")
-                             docx_path = None
+                             # Fallback to downloadUrl
+                             download_url = firestore_report.get('downloadUrl')
+                             if download_url:
+                                 try:
+                                     import requests
+                                     logger.info(f"🔄 Attempting download via URL...")
+                                     response = requests.get(download_url)
+                                     if response.status_code == 200:
+                                         with open(temp_file_path, 'wb') as f:
+                                             f.write(response.content)
+                                         docx_path = temp_file_path
+                                         logger.info(f"✅ Downloaded Firestore report via URL: {docx_path}")
+                                     else:
+                                         logger.warning(f"Failed to download from URL: {response.status_code}")
+                                         docx_path = None
+                                 except Exception as e:
+                                     logger.warning(f"Error downloading from URL: {e}")
+                                     docx_path = None
+                             else:
+                                 docx_path = None
                      except Exception as e:
                          logger.warning(f"Error downloading from storage: {e}")
                          docx_path = None
@@ -4941,7 +4960,26 @@ def preview_report_content(report_id):
                          logger.info(f"✅ Downloaded Firestore report to temp file: {docx_path}")
                      else:
                          logger.warning(f"Failed to download file from storage: {docx_path}")
-                         docx_path = None
+                         # Fallback to downloadUrl
+                         download_url = firestore_report.get('downloadUrl')
+                         if download_url:
+                             try:
+                                 import requests
+                                 logger.info(f"🔄 Attempting download via URL...")
+                                 response = requests.get(download_url)
+                                 if response.status_code == 200:
+                                     with open(temp_file_path, 'wb') as f:
+                                         f.write(response.content)
+                                     docx_path = temp_file_path
+                                     logger.info(f"✅ Downloaded Firestore report via URL: {docx_path}")
+                                 else:
+                                     logger.warning(f"Failed to download from URL: {response.status_code}")
+                                     docx_path = None
+                             except Exception as e:
+                                 logger.warning(f"Error downloading from URL: {e}")
+                                 docx_path = None
+                         else:
+                             docx_path = None
                  except Exception as e:
                      logger.warning(f"Error downloading from storage: {e}")
                      docx_path = None
