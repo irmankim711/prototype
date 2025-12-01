@@ -19,7 +19,7 @@ from docx import Document
 from docx.shared import Inches
 
 from app import db
-from app.models import User, ParsedExcelFile, ExcelTable, GeneratedReport, Program, ReportTemplate
+from app.models import User, ParsedExcelFile, ExcelTable, Report, Program, ReportTemplate
 from app.services.excel_data_extractor import excel_data_extractor
 from app.services.template_data_mapper import template_data_mapper
 from app.services.chart_generator_service import chart_generator_service
@@ -249,6 +249,8 @@ class ReportGenerationService:
             self.logger.error(f"🆔 [{request_id}] Data loading failed: {e}", exc_info=True)
             return {'success': False, 'error': f'Data loading failed: {str(e)}'}
 
+        return template_file, template_db_record
+
     def _get_template(self, request_id: str, template_id: str, user_id: int) -> Tuple[Optional[Path], Any]:
         """Retrieve template file and DB record"""
         # This logic mimics the existing logic in nextgen_report_builder
@@ -279,17 +281,32 @@ class ReportGenerationService:
         
         # Fallback to searching directory
         if not template_file:
-            # Try exact match
-            p = templates_dir / str(template_id)
-            if p.exists():
-                template_file = p
-            else:
-                # Try extensions
-                for ext in ['.docx', '.jinja', '.html']:
-                    p = templates_dir / f"{template_id}{ext}"
-                    if p.exists():
-                        template_file = p
-                        break
+            # TEMPLATE MAPPINGS (Fix for missing DB templates)
+            TEMPLATE_MAPPINGS = {
+                'uwais_global_solution': 'report_template_copy.docx',
+                'puncak_alam_fu': '04- LAPORAN FU _ PUNCAK ALAM_final.docx'
+            }
+            
+            # Check mapping first
+            mapped_name = TEMPLATE_MAPPINGS.get(str(template_id))
+            if mapped_name:
+                p = templates_dir / mapped_name
+                if p.exists():
+                    self.logger.info(f"🆔 [{request_id}] Found template via mapping: {template_id} -> {mapped_name}")
+                    template_file = p
+
+            # Try exact match if no mapping found or mapping file missing
+            if not template_file:
+                p = templates_dir / str(template_id)
+                if p.exists():
+                    template_file = p
+                else:
+                    # Try extensions
+                    for ext in ['.docx', '.jinja', '.html']:
+                        p = templates_dir / f"{template_id}{ext}"
+                        if p.exists():
+                            template_file = p
+                            break
         
         return template_file, template_db_record
 
@@ -452,7 +469,7 @@ class ReportGenerationService:
 
     def _save_report_record(self, user_id: int, title: str, template_id: str, 
                            template_record: Any, output_path: Path, output_filename: str,
-                           data_context: Dict, existing_report_id: int = None) -> GeneratedReport:
+                           data_context: Dict, existing_report_id: int = None) -> Report:
         """Save or update the report record in the database"""
         
         # Get default program if needed
@@ -469,29 +486,43 @@ class ReportGenerationService:
         }
         
         if existing_report_id:
-            report = GeneratedReport.query.get(existing_report_id)
+            report = Report.query.get(existing_report_id)
             if report:
-                report.report_name = title
+                report.title = title
                 report.file_path = str(output_path)
                 report.file_size = output_path.stat().st_size
-                report.updated_at = datetime.utcnow()
+                # report.updated_at = datetime.utcnow() # Report model doesn't have updated_at
+                report.generated_at = datetime.utcnow()
                 report.data_source = data_source
                 # Don't change template_id or program_id usually
                 db.session.commit()
                 return report
         
         # Create new
-        report = GeneratedReport(
-            user_id=user_id,
+        # Handle template_id conversion
+        db_template_id = None
+        if template_record and hasattr(template_record, 'id'):
+            # If template_record.id is string (UUID) but Report.template_id is Integer, we might have an issue.
+            # Report.template_id is Integer. ReportTemplate.id is String.
+            # We'll try to use it if it's an int, otherwise leave None or try conversion
+            try:
+                db_template_id = int(template_record.id)
+            except (ValueError, TypeError):
+                # If template ID is string (e.g. 'uwais_global_solution'), we can't store it in Integer column
+                # We might need to store it in generation_config or just skip it
+                pass
+
+        report = Report(
+            created_by=str(user_id), # Report uses string created_by
             program_id=program_id,
-            template_id=template_record.id if template_record and hasattr(template_record, 'id') else None,
-            report_name=title,
+            template_id=db_template_id,
+            title=title,
             file_path=str(output_path),
             file_size=output_path.stat().st_size,
-            status='completed',
+            generation_status='completed',
             data_source=data_source,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            generated_at=datetime.utcnow()
         )
         db.session.add(report)
         db.session.commit()
