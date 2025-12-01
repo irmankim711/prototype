@@ -4675,6 +4675,9 @@ def preview_report(report_id):
             # Try to generate HTML preview from DOCX if available
             html_content = None
             docx_path = None
+            temp_file_obj = None
+            
+            # Determine DOCX path
             files = firestore_report.get('files', {})
             if files and files.get('docx') and files.get('docx').get('path'):
                 docx_path = files.get('docx').get('path')
@@ -4684,18 +4687,42 @@ def preview_report(report_id):
                  docx_path = firestore_report.get('storagePath')
 
             if docx_path:
-                 # Note: Firestore files are in Firebase Storage, not local. 
-                 # We might need to download them first or use a signed URL if ConvertAPI supports it.
-                 # For now, we'll skip HTML generation for Firestore if not local, 
-                 # unless we implement a download mechanism.
-                 # But if it IS local (dev env), we can try.
-                 if os.path.exists(docx_path):
+                 # Check if file is local or needs download
+                 if not os.path.exists(docx_path):
+                     # Likely in Firebase Storage, try to download
+                     try:
+                         from app.services.firebase_storage_service import firebase_storage_service
+                         import tempfile
+                         
+                         suffix = os.path.splitext(docx_path)[1] if '.' in docx_path else '.docx'
+                         temp_file_obj = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+                         temp_file_path = temp_file_obj.name
+                         temp_file_obj.close()
+                         
+                         if firebase_storage_service.download_file(docx_path, temp_file_path):
+                             docx_path = temp_file_path
+                             logger.info(f"✅ Downloaded Firestore report to temp file: {docx_path}")
+                         else:
+                             logger.warning(f"Failed to download file from storage: {docx_path}")
+                             docx_path = None
+                     except Exception as e:
+                         logger.warning(f"Error downloading from storage: {e}")
+                         docx_path = None
+
+                 if docx_path and os.path.exists(docx_path):
                      try:
                         from app.services.docx_preview_service import docx_preview_service
                         _, html_content = docx_preview_service.convert_docx_to_html_convertapi(docx_path)
                         logger.info(f"✅ Generated HTML preview for Firestore report {report_id}")
                      except Exception as e:
                         logger.warning(f"Failed to generate HTML for Firestore report: {e}")
+                     finally:
+                        # Cleanup temp file if we created one
+                        if temp_file_obj and os.path.exists(temp_file_obj.name):
+                            try:
+                                os.unlink(temp_file_obj.name)
+                            except:
+                                pass
 
             preview_data = firestore_report.copy()
             if html_content:
@@ -4894,6 +4921,30 @@ def preview_report_content(report_id):
                 docx_path = files.get('docx').get('path')
             elif firestore_report.get('docx_file_path'):
                 docx_path = firestore_report.get('docx_file_path')
+            elif firestore_report.get('storagePath') and firestore_report.get('storagePath').endswith('.docx'):
+                 docx_path = firestore_report.get('storagePath')
+                 
+            # Check if file is local or needs download
+            if docx_path and not os.path.exists(docx_path):
+                 # Likely in Firebase Storage, try to download
+                 try:
+                     from app.services.firebase_storage_service import firebase_storage_service
+                     import tempfile
+                     
+                     suffix = os.path.splitext(docx_path)[1] if '.' in docx_path else '.docx'
+                     temp_file_obj = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+                     temp_file_path = temp_file_obj.name
+                     temp_file_obj.close()
+                     
+                     if firebase_storage_service.download_file(docx_path, temp_file_path):
+                         docx_path = temp_file_path
+                         logger.info(f"✅ Downloaded Firestore report to temp file: {docx_path}")
+                     else:
+                         logger.warning(f"Failed to download file from storage: {docx_path}")
+                         docx_path = None
+                 except Exception as e:
+                     logger.warning(f"Error downloading from storage: {e}")
+                     docx_path = None
                 
         else:
             # Fallback to PostgreSQL
@@ -4929,23 +4980,31 @@ def preview_report_content(report_id):
         # Try to convert DOCX to HTML
         if docx_path and os.path.exists(docx_path):
             try:
-                from app.services.docx_preview_service import docx_preview_service
-                from flask import Response
-                
-                # Convert DOCX to HTML (using ConvertAPI for high fidelity)
-                _, html_content = docx_preview_service.convert_docx_to_html_convertapi(docx_path)
-                
-                logger.info(f"✅ Returning HTML content ({len(html_content)} characters)")
-                
-                # Return raw HTML for iframe rendering
-                return Response(html_content, mimetype='text/html')
-                
-            except Exception as e:
-                logger.error(f"❌ Failed to convert DOCX to HTML: {e}", exc_info=True)
-                return jsonify({
-                    'error': 'Failed to generate HTML preview',
-                    'details': str(e)
-                }), 500
+                try:
+                    from app.services.docx_preview_service import docx_preview_service
+                    from flask import Response
+                    
+                    # Convert DOCX to HTML (using ConvertAPI for high fidelity)
+                    _, html_content = docx_preview_service.convert_docx_to_html_convertapi(docx_path)
+                    
+                    logger.info(f"✅ Returning HTML content ({len(html_content)} characters)")
+                    
+                    # Return raw HTML for iframe rendering
+                    return Response(html_content, mimetype='text/html')
+                    
+                except Exception as e:
+                    logger.error(f"❌ Failed to convert DOCX to HTML: {e}", exc_info=True)
+                    return jsonify({
+                        'error': 'Failed to generate HTML preview',
+                        'details': str(e)
+                    }), 500
+            finally:
+                # Cleanup temp file if we created one
+                if 'temp_file_obj' in locals() and temp_file_obj and os.path.exists(temp_file_obj.name):
+                    try:
+                        os.unlink(temp_file_obj.name)
+                    except:
+                        pass
         else:
             return jsonify({
                 'error': 'DOCX file not available for preview',
