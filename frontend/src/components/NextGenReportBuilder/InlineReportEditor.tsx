@@ -79,20 +79,22 @@ const [aiError, setAIError] = useState<string | null>(null);
 const selectionRef = useRef<{ start: number; 
 end: number }>({ start: 0, end: 0 });
 
+  const lastHtmlRef = useRef(reportContent);
+
   // Auto-save functionality
   const debouncedAutoSave = useCallback(
     debounce(async (contentToSave: string) => {
       if (!autoSave || !hasUnsavedChanges || readOnly) return;
 
-setIsAutoSaving(true);
+      setIsAutoSaving(true);
       
-try {
+      try {
         // In a real implementation, this would call the API
         await new Promise(resolve => setTimeout(resolve, 1000));
         
-setLastSaved(new Date());
+        setLastSaved(new Date());
         
-setHasUnsavedChanges(false);
+        setHasUnsavedChanges(false);
       } catch (error) {
         console.error('Auto-save failed:', error);
       } finally {
@@ -103,22 +105,45 @@ setHasUnsavedChanges(false);
   );
 
   // Handle content changes
-  const handleContentChange = useCallback((newContent: string) => {
+  const handleContentChange = useCallback((newContent: string, source: 'user' | 'code' = 'code') => {
+    if (source === 'user') {
+      lastHtmlRef.current = newContent;
+    }
     setContent(newContent);
     
-setHasUnsavedChanges(true);
+    setHasUnsavedChanges(true);
     
-debouncedAutoSave(newContent);
+    debouncedAutoSave(newContent);
   }, [debouncedAutoSave]);
+
+  // Sync DOM with content state when content changes externally (not from user typing)
+  useEffect(() => {
+    if (isEditing && editorRef.current) {
+      // If content doesn't match our last known HTML, it means it changed externally
+      // (e.g. AI enhancement, or initial load)
+      if (content !== lastHtmlRef.current) {
+        editorRef.current.innerHTML = content;
+        lastHtmlRef.current = content;
+      }
+    }
+  }, [content, isEditing]);
+
+  // Initial load of content into editor when entering edit mode
+  useEffect(() => {
+    if (isEditing && editorRef.current) {
+      editorRef.current.innerHTML = content;
+      lastHtmlRef.current = content;
+    }
+  }, [isEditing, reportId]);
 
   // Handle text selection
   const handleTextSelection = useCallback(() => {
     const selection = window.getSelection();
     
-if (selection && selection.toString().trim()) {
+    if (selection && selection.toString().trim()) {
       setSelectedText(selection.toString().trim());
       
-selectionRef.current = {
+      selectionRef.current = {
         start: selection.anchorOffset,
         end: selection.focusOffset,
       };
@@ -132,14 +157,14 @@ selectionRef.current = {
     if (!selectedText.trim()) {
       setAIError('Please select text to enhance');
       
-return;
+      return;
     }
 
     setIsProcessingAI(true);
     
-setAIError(null);
+    setAIError(null);
 
-try {
+    try {
       // Call backend API for AI enhancement
       const response = await axiosInstance.post('/nextgen/ai/enhance', {
         text: selectedText,
@@ -161,7 +186,7 @@ try {
     } catch (error) {
       setAIError('AI enhancement failed. Please try again.');
       
-console.error('AI enhancement error:', error);
+      console.error('AI enhancement error:', error);
     } finally {
       setIsProcessingAI(false);
     }
@@ -173,19 +198,19 @@ console.error('AI enhancement error:', error);
   const applyEnhancement = (enhancement: AIEnhancement) => {
     const newContent = content.replace(enhancement.original, enhancement.enhanced);
     
-handleContentChange(newContent);
+    handleContentChange(newContent, 'code');
     
-setSelectedText('');
+    setSelectedText('');
     
-setAIEnhancements(prev => prev.filter(e => e !== enhancement));
+    setAIEnhancements(prev => prev.filter(e => e !== enhancement));
   };
 
   // Format text
   const formatText = (command: string) => {
     document.execCommand(command, false);
     
-if (editorRef.current) {
-      handleContentChange(editorRef.current.innerHTML);
+    if (editorRef.current) {
+      handleContentChange(editorRef.current.innerHTML, 'user');
     }
   };
 
@@ -193,15 +218,15 @@ if (editorRef.current) {
   const handleSave = async () => {
     setIsSaving(true);
     
-try {
+    try {
       await new Promise(resolve => setTimeout(resolve, 500)); // Simulate save
       onSave(content);
       
-setHasUnsavedChanges(false);
+      setHasUnsavedChanges(false);
       
-setLastSaved(new Date());
+      setLastSaved(new Date());
       
-setIsEditing(false);
+      setIsEditing(false);
     } catch (error) {
       console.error('Save failed:', error);
     } finally {
@@ -212,16 +237,17 @@ setIsEditing(false);
   // Cancel editing
   const handleCancel = () => {
     setContent(reportContent);
+    lastHtmlRef.current = reportContent; // Reset ref
     
-setHasUnsavedChanges(false);
+    setHasUnsavedChanges(false);
     
-setIsEditing(false);
+    setIsEditing(false);
     
-setSelectedText('');
+    setSelectedText('');
     
-setAIEnhancements([]);
+    setAIEnhancements([]);
     
-onCancel?.();
+    onCancel?.();
   };
 
   // Cleanup
@@ -466,7 +492,7 @@ return (
             ref={editorRef}
             contentEditable
             suppressContentEditableWarning
-            onInput={(e: any) => handleContentChange(e.currentTarget.innerHTML)}
+            onInput={(e: any) => handleContentChange(e.currentTarget.innerHTML, 'user')}
             onMouseUp={handleTextSelection}
             onKeyUp={handleTextSelection}
             sx={{
@@ -491,9 +517,7 @@ return (
               '& td, & th': { border: '1px solid black', padding: '5pt', verticalAlign: 'top' },
               '& img': { maxWidth: '100%', height: 'auto' }
             }}
-            dangerouslySetInnerHTML={{ __html: content }}
-            // Key fix: Only update innerHTML if content changed externally (not by user typing)
-            // This prevents cursor jumping. We use a key to force re-mount if reportId changes
+            // Removed dangerouslySetInnerHTML to prevent cursor jumping
             key={reportId} 
           />
         ) : (
