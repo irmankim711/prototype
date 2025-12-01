@@ -4377,6 +4377,39 @@ def update_report(report_id):
             if not hasattr(report, 'generated_data') or report.generated_data is None:
                 report.generated_data = {}
             report.generated_data['layout'] = data['layout']
+            
+        # Handle HTML content update (from inline editor)
+        if 'content' in data and report.docx_file_path:
+            html_content = data['content']
+            logger.info(f"📝 Received HTML content update for report {report_id}")
+            
+            try:
+                from app.services.docx_preview_service import docx_preview_service
+                
+                # Convert HTML back to DOCX using ConvertAPI
+                # We overwrite the existing DOCX file
+                docx_preview_service.convert_html_to_docx_convertapi(
+                    html_content, 
+                    report.docx_file_path
+                )
+                
+                # Update file size
+                report.docx_file_size = os.path.getsize(report.docx_file_path)
+                logger.info(f"✅ Successfully updated DOCX file from HTML content")
+                
+                # Also invalidate PDF if it exists since DOCX changed
+                if report.pdf_file_path and os.path.exists(report.pdf_file_path):
+                    try:
+                        os.remove(report.pdf_file_path)
+                        report.pdf_file_path = None
+                        report.pdf_download_url = None
+                        logger.info("Removed outdated PDF file")
+                    except Exception as e:
+                        logger.warning(f"Failed to remove outdated PDF: {e}")
+                
+            except Exception as conv_error:
+                logger.error(f"❌ Failed to convert updated HTML to DOCX: {conv_error}")
+                # Don't fail the whole request, but log error
         
         report.updated_at = datetime.utcnow()
         
@@ -4695,8 +4728,8 @@ def preview_report(report_id):
             try:
                 from app.services.docx_preview_service import docx_preview_service
                 
-                # Convert DOCX to HTML
-                html_file_path, html_content = docx_preview_service.convert_docx_to_html(
+                # Convert DOCX to HTML (using ConvertAPI for high fidelity)
+                html_file_path, html_content = docx_preview_service.convert_docx_to_html_convertapi(
                     report.docx_file_path
                 )
                 
@@ -4817,8 +4850,8 @@ def preview_report_content(report_id):
                 from app.services.docx_preview_service import docx_preview_service
                 from flask import Response
                 
-                # Convert DOCX to HTML
-                _, html_content = docx_preview_service.convert_docx_to_html(report.docx_file_path)
+                # Convert DOCX to HTML (using ConvertAPI for high fidelity)
+                _, html_content = docx_preview_service.convert_docx_to_html_convertapi(report.docx_file_path)
                 
                 logger.info(f"✅ Returning HTML content ({len(html_content)} characters)")
                 
@@ -4902,6 +4935,40 @@ def download_report_pdf(report_id):
                 logger.info(f"✅ Access granted for user {user_id} to download report")
 
         # Check if PDF file exists
+        if not report.pdf_file_path or not os.path.exists(report.pdf_file_path):
+            # If PDF doesn't exist but DOCX does, try to convert using ConvertAPI
+            if report.docx_file_path and os.path.exists(report.docx_file_path):
+                logger.info(f"📄 PDF not found, converting from DOCX using ConvertAPI: {report.docx_file_path}")
+                try:
+                    import convertapi
+                    # Configure ConvertAPI if not already configured
+                    if not convertapi.api_secret:
+                         convertapi.api_secret = os.environ.get('CONVERT_API_SECRET', 'rd78ghGq31u8k5zm2hY22ACRtnkqje8g')
+                    
+                    # Convert DOCX to PDF
+                    pdf_filename = Path(report.docx_file_path).stem + ".pdf"
+                    pdf_path = str(Path(report.docx_file_path).parent / pdf_filename)
+                    
+                    logger.info(f"Converting to PDF: {pdf_path}")
+                    
+                    result = convertapi.convert('pdf', {
+                        'File': report.docx_file_path
+                    }, from_format='docx')
+                    
+                    result.file.save(pdf_path)
+                    
+                    # Update report with new PDF path
+                    report.pdf_file_path = pdf_path
+                    report.pdf_file_size = os.path.getsize(pdf_path)
+                    report.pdf_download_url = f"/static/reports/{pdf_filename}" # Approximate URL
+                    db.session.commit()
+                    
+                    logger.info(f"✅ Successfully converted DOCX to PDF via ConvertAPI")
+                    
+                except Exception as pdf_error:
+                    logger.error(f"❌ Failed to convert DOCX to PDF: {pdf_error}")
+                    # Fall through to standard error handling
+            
         if not report.pdf_file_path:
             logger.warning(f"❌ PDF file path not set for report {report_id}")
             return jsonify({

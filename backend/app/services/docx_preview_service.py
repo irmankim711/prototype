@@ -3,8 +3,8 @@ DOCX Preview Service
 Converts DOCX files to HTML for in-browser preview
 """
 
-import os
 import logging
+import os
 import tempfile
 from pathlib import Path
 from typing import Tuple, Optional, Dict, Any
@@ -14,6 +14,7 @@ import base64
 from io import BytesIO
 import zipfile
 import xml.etree.ElementTree as ET
+import convertapi
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +24,121 @@ class DocxPreviewService:
     def __init__(self, output_dir: str = None):
         self.output_dir = output_dir or os.path.join(os.getcwd(), 'static', 'previews')
         self.ensure_directories()
+        
+        # Configure ConvertAPI
+        # Try to get from env, otherwise use provided key
+        self.convert_api_secret = os.environ.get('CONVERT_API_SECRET', 'rd78ghGq31u8k5zm2hY22ACRtnkqje8g')
+        convertapi.api_secret = self.convert_api_secret
     
     def ensure_directories(self):
         """Ensure required directories exist"""
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
-    
+        
+    def convert_docx_to_html_convertapi(self, docx_path: str, output_filename: str = None) -> Tuple[str, str]:
+        """
+        Convert DOCX to HTML using ConvertAPI for high fidelity
+        
+        Args:
+            docx_path: Path to DOCX file
+            output_filename: Optional output filename
+            
+        Returns:
+            Tuple of (html_file_path, html_content)
+        """
+        try:
+            if not os.path.exists(docx_path):
+                raise FileNotFoundError(f"DOCX file not found: {docx_path}")
+                
+            logger.info(f"Converting DOCX to HTML using ConvertAPI: {docx_path}")
+            
+            # Generate output filename if not provided
+            if not output_filename:
+                base_name = Path(docx_path).stem
+                output_filename = f"{base_name}_preview_hq.html"
+            
+            html_file_path = os.path.join(self.output_dir, output_filename)
+            
+            # Use ConvertAPI to convert
+            result = convertapi.convert('html', {
+                'File': docx_path,
+                'Responsive': 'true',
+                'EmbedImages': 'true',
+                'EmbedFonts': 'true'
+            }, from_format='docx')
+            
+            # Save the result
+            result.save_files(self.output_dir)
+            
+            # ConvertAPI might save with a different name, so we need to find it
+            # Or we can read the content directly from the result
+            # The save_files method saves to the directory. Let's try to save to specific file if possible
+            # But simpler is to just read the content and write it ourselves to control the filename
+            
+            # Get the content from the first file in result
+            # ConvertAPI returns a list of files (usually just one for HTML unless split)
+            # For HTML conversion, it might produce multiple files if images aren't embedded, 
+            # but we requested EmbedImages=true
+            
+            # Let's save it to our target path
+            result.file.save(html_file_path)
+            
+            # Read the content
+            with open(html_file_path, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+                
+            logger.info(f"Successfully converted DOCX to HTML via ConvertAPI: {html_file_path}")
+            return html_file_path, html_content
+            
+        except Exception as e:
+            logger.error(f"ConvertAPI conversion failed: {str(e)}")
+            logger.info("Falling back to local conversion...")
+            return self.convert_docx_to_html(docx_path, output_filename)
+
+    def convert_html_to_docx_convertapi(self, html_content: str, output_docx_path: str) -> str:
+        """
+        Convert HTML content back to DOCX using ConvertAPI
+        
+        Args:
+            html_content: HTML string to convert
+            output_docx_path: Path to save the resulting DOCX
+            
+        Returns:
+            Path to the saved DOCX file
+        """
+        try:
+            logger.info(f"Converting HTML to DOCX using ConvertAPI")
+            
+            # Create a temporary HTML file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_html:
+                temp_html.write(html_content)
+                temp_html_path = temp_html.name
+                
+            try:
+                # Use ConvertAPI to convert
+                result = convertapi.convert('docx', {
+                    'File': temp_html_path,
+                    'PageSize': 'a4',
+                    'MarginTop': '20',
+                    'MarginBottom': '20',
+                    'MarginLeft': '20',
+                    'MarginRight': '20'
+                }, from_format='html')
+                
+                # Save the result
+                result.file.save(output_docx_path)
+                
+                logger.info(f"Successfully converted HTML to DOCX: {output_docx_path}")
+                return output_docx_path
+                
+            finally:
+                # Clean up temp file
+                if os.path.exists(temp_html_path):
+                    os.unlink(temp_html_path)
+                    
+        except Exception as e:
+            logger.error(f"ConvertAPI HTML->DOCX conversion failed: {str(e)}")
+            raise
+
     def convert_docx_to_html(self, docx_path: str, output_filename: str = None) -> Tuple[str, str]:
         """
         Convert DOCX to HTML for browser preview
