@@ -68,6 +68,27 @@ class TemplateDataMapper:
             self.logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return self._create_fallback_data(raw_data)
 
+    def _get_value_fuzzy(self, record: Dict[str, Any], target_keys: List[str]) -> Any:
+        """
+        Retrieve value from record using fuzzy key matching.
+        Ignores case, spaces, and underscores.
+        """
+        # Normalize target keys
+        normalized_targets = {k.lower().replace(' ', '').replace('_', '') for k in target_keys}
+        
+        # Check exact matches first (fast path)
+        for key in target_keys:
+            if key in record and record[key]:
+                return record[key]
+                
+        # Check fuzzy matches
+        for key, value in record.items():
+            normalized_key = key.lower().replace(' ', '').replace('_', '')
+            if normalized_key in normalized_targets and value:
+                return value
+                
+        return None
+
     def _map_data_for_temp2(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         """Map data specifically for Temp2.tex template"""
         try:
@@ -280,38 +301,15 @@ class TemplateDataMapper:
                              'Hadir')
 
             # Extract test scores
-            try:
-                markah_pre = str(record.get('MARKAH_PRE') or
-                               record.get('pre_test_score') or
-                               record.get('pre_mark') or
-                               record.get('pre_test') or
-                               record.get('Pre_Test') or
-                               record.get('MARKAH_PRA') or
-                               record.get('markah_pra') or
-                               record.get('MARKAH PRA') or
-                               record.get('markah pra') or
-                               record.get('PRA_UJIAN') or
-                               record.get('pra_ujian') or
-                               record.get('PRA UJIAN') or
-                               record.get('pra ujian') or
-                               '')
-                markah_post = str(record.get('MARKAH_POST') or
-                                record.get('post_test_score') or
-                                record.get('post_mark') or
-                                record.get('post_test') or
-                                record.get('Post_Test') or
-                                record.get('MARKAH_PASCA') or
-                                record.get('markah_pasca') or
-                                record.get('MARKAH PASCA') or
-                                record.get('markah pasca') or
-                                record.get('PASCA_UJIAN') or
-                                record.get('pasca_ujian') or
-                                record.get('PASCA UJIAN') or
-                                record.get('pasca ujian') or
-                                '')
-            except (ValueError, TypeError):
-                markah_pre = ''
-                markah_post = ''
+            markah_pre = str(self._get_value_fuzzy(record, [
+                'MARKAH_PRE', 'pre_test_score', 'pre_mark', 'pre_test', 'Pre_Test',
+                'MARKAH_PRA', 'markah_pra', 'PRA_UJIAN', 'pra_ujian'
+            ]) or '')
+            
+            markah_post = str(self._get_value_fuzzy(record, [
+                'MARKAH_POST', 'post_test_score', 'post_mark', 'post_test', 'Post_Test',
+                'MARKAH_PASCA', 'markah_pasca', 'PASCA_UJIAN', 'pasca_ujian'
+            ]) or '')
 
             # Extract other fields
             nama_pre = record.get('NAMA PRE') or nama
