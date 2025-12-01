@@ -571,7 +571,7 @@ class DocxPreviewService:
                     padding: 15px;
                 }
             }
-        """
+
             
             @media print {
                 body {
