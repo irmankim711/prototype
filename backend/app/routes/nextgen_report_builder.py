@@ -4688,15 +4688,52 @@ def preview_report(report_id):
             'metadata': {}
         }
 
-        # Add file information
-        if report.docx_file_path:
+        # Check for DOCX file and extract HTML content
+        if report.docx_file_path and os.path.exists(report.docx_file_path):
+            logger.info(f"📄 DOCX file found for report {report_id}, extracting HTML content...")
+            
+            try:
+                from app.services.docx_preview_service import docx_preview_service
+                
+                # Convert DOCX to HTML
+                html_file_path, html_content = docx_preview_service.convert_docx_to_html(
+                    report.docx_file_path
+                )
+                
+                logger.info(f"✅ Successfully converted DOCX to HTML ({len(html_content)} characters)")
+                
+                # Add HTML content to preview data
+                preview_data['html_content'] = html_content
+                preview_data['preview_type'] = 'html'
+                
+                # Also include file info
+                preview_data['files']['docx'] = {
+                    'path': report.docx_file_path,
+                    'size': report.docx_file_size,
+                    'download_url': report.docx_download_url,
+                    'exists': True,
+                    'has_html_preview': True
+                }
+                
+            except Exception as html_error:
+                logger.error(f"❌ Failed to convert DOCX to HTML: {html_error}", exc_info=True)
+                # Still include file info even if conversion failed
+                preview_data['files']['docx'] = {
+                    'path': report.docx_file_path,
+                    'size': report.docx_file_size,
+                    'download_url': report.docx_download_url,
+                    'exists': True,
+                    'has_html_preview': False
+                }
+        elif report.docx_file_path:
             preview_data['files']['docx'] = {
                 'path': report.docx_file_path,
                 'size': report.docx_file_size,
                 'download_url': report.docx_download_url,
-                'exists': os.path.exists(report.docx_file_path) if report.docx_file_path else False
+                'exists': False
             }
 
+        # Check for PDF file
         if report.pdf_file_path:
             preview_data['files']['pdf'] = {
                 'path': report.pdf_file_path,
@@ -4716,6 +4753,10 @@ def preview_report(report_id):
         # Add metadata
         if hasattr(report, 'generated_data') and report.generated_data:
             preview_data['metadata'] = report.generated_data
+        
+        # Add data_source if available
+        if hasattr(report, 'data_source') and report.data_source:
+            preview_data['data_source'] = report.data_source
 
         # Return with top-level fields for frontend compatibility
         return jsonify({
@@ -4727,6 +4768,7 @@ def preview_report(report_id):
             'title': report.title,
             'preview': preview_data,
             'preview_data': preview_data,
+            'preview_type': preview_data.get('preview_type', 'data'),
             'source': 'postgresql',
             'message': 'Report preview retrieved successfully'
         }), 200
@@ -4738,6 +4780,67 @@ def preview_report(report_id):
         return jsonify({
             'success': False,
             'error': 'Failed to preview report',
+            'details': str(e)
+        }), 500
+
+@nextgen_bp.route('/reports/<int:report_id>/preview-content', methods=['GET'])
+@cross_origin(supports_credentials=True)
+@firebase_auth_required
+def preview_report_content(report_id):
+    """Get raw HTML content for report preview/editing"""
+    try:
+        user_id = get_current_user_id()
+        logger.info(f"📄 Preview content requested for report {report_id} by user {user_id}")
+
+        # Get the report
+        report = Report.query.filter_by(id=report_id).first()
+        if not report:
+            return jsonify({
+                'error': 'Report not found',
+                'code': 'NOT_FOUND'
+            }), 404
+
+        # Check access
+        user = User.query.get(user_id)
+        is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
+        report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+
+        if str(report_owner) != str(user_id) and not is_admin:
+            return jsonify({
+                'error': 'Access denied',
+                'code': 'INSUFFICIENT_PERMISSIONS'
+            }), 403
+
+        # Try to convert DOCX to HTML
+        if report.docx_file_path and os.path.exists(report.docx_file_path):
+            try:
+                from app.services.docx_preview_service import docx_preview_service
+                from flask import Response
+                
+                # Convert DOCX to HTML
+                _, html_content = docx_preview_service.convert_docx_to_html(report.docx_file_path)
+                
+                logger.info(f"✅ Returning HTML content ({len(html_content)} characters)")
+                
+                # Return raw HTML for iframe rendering
+                return Response(html_content, mimetype='text/html')
+                
+            except Exception as e:
+                logger.error(f"❌ Failed to convert DOCX to HTML: {e}", exc_info=True)
+                return jsonify({
+                    'error': 'Failed to generate HTML preview',
+                    'details': str(e)
+                }), 500
+        else:
+            return jsonify({
+                'error': 'DOCX file not available for preview',
+                'code': 'NOT_FOUND'
+            }), 404
+
+    except Exception as e:
+        logger.error(f"Error getting preview content for report {report_id}: {str(e)}")
+        return jsonify({
+            'error': 'Failed to get preview content',
             'details': str(e)
         }), 500
 

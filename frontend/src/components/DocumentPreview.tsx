@@ -62,6 +62,7 @@ interface PreviewResponse {
   preview_url?: string;
   preview_type?: 'html' | 'pdf' | 'image' | 'data';
   preview_data?: any;
+  preview?: any;  // Added for compatibility with backend response
   error?: string;
 }
 
@@ -240,6 +241,14 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       }
 
       if (data.success) {
+        // Extract HTML content from preview_data if available
+        const htmlContent = data.preview_data?.html_content || data.preview?.html_content;
+        
+        if (htmlContent) {
+          console.log('📄 Found HTML content in preview data:', htmlContent.length, 'characters');
+          setFullHtmlContent(htmlContent);
+        }
+        
         if (data.preview_url) {
           // Handle preview URL first (PDF/DOCX files)
           console.log('📄 Setting preview URL:', data.preview_url);
@@ -253,7 +262,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           console.log('📊 Preview data files:', data.preview_data?.files);
           console.log('📊 Preview data metadata:', data.preview_data?.metadata);
           setPreviewData(data.preview_data);
-          setPreviewType('data');
+          setPreviewType(data.preview_type || 'data');
 
           // AUTO-ENABLE EDIT MODE for data previews
           console.log('📝 Auto-enabling edit mode for data preview');
@@ -263,11 +272,10 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           let contentToEdit: any = {};
           const pData = data.preview_data;
           
-          // Check if we already have full HTML content
-          // Note: fullHtmlContent might be set asynchronously, so we also need a useEffect
-          if (fullHtmlContent) {
-             console.log('📝 Using full HTML content for auto-edit');
-             contentToEdit = { content: fullHtmlContent };
+          // Prefer HTML content if available
+          if (htmlContent) {
+             console.log('📝 Using HTML content for auto-edit');
+             contentToEdit = { content: htmlContent };
           } else if (pData) {
             if (pData.metadata) {
               contentToEdit = { ...pData.metadata };
