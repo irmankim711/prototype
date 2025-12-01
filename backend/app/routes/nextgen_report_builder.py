@@ -4886,6 +4886,20 @@ def preview_report(report_id):
             if html_content:
                 preview_data['html_content'] = html_content
                 preview_data['preview_type'] = 'html'
+            else:
+                # Fallback HTML if file is missing/generation failed
+                preview_data['html_content'] = """
+                <div style="text-align: center; padding: 50px; font-family: sans-serif; color: #666;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+                    <h2 style="color: #333;">Preview Unavailable</h2>
+                    <p>The report file could not be found or generated.</p>
+                    <p>This usually happens if the temporary files were cleared (e.g. after a server restart).</p>
+                    <div style="margin-top: 30px;">
+                        <p><strong>Please regenerate the report to view it.</strong></p>
+                    </div>
+                </div>
+                """
+                preview_data['preview_type'] = 'html'
 
             # Return Firestore report preview with top-level fields for frontend compatibility
             return jsonify({
@@ -5003,6 +5017,21 @@ def preview_report(report_id):
                     preview_data['files']['pdf'] = file_info
                 elif report.file_format == 'excel':
                     preview_data['files']['excel'] = file_info
+        
+        # Check if we have HTML content, if not add fallback
+        if 'html_content' not in preview_data:
+             preview_data['html_content'] = """
+                <div style="text-align: center; padding: 50px; font-family: sans-serif; color: #666;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+                    <h2 style="color: #333;">Preview Unavailable</h2>
+                    <p>The report file could not be found or generated.</p>
+                    <p>This usually happens if the temporary files were cleared (e.g. after a server restart).</p>
+                    <div style="margin-top: 30px;">
+                        <p><strong>Please regenerate the report to view it.</strong></p>
+                    </div>
+                </div>
+                """
+             preview_data['preview_type'] = 'html'
 
         # Add metadata
         if hasattr(report, 'generated_data') and report.generated_data:

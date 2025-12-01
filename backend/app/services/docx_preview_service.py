@@ -14,7 +14,8 @@ import base64
 from io import BytesIO
 import zipfile
 import xml.etree.ElementTree as ET
-import convertapi
+import xml.etree.ElementTree as ET
+# import convertapi - Imported lazily to allow fallback
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,14 @@ class DocxPreviewService:
         # Configure ConvertAPI
         # Try to get from env, otherwise use provided key
         self.convert_api_secret = os.environ.get('CONVERT_API_SECRET', 'rd78ghGq31u8k5zm2hY22ACRtnkqje8g')
-        convertapi.api_secret = self.convert_api_secret
+        # Configure ConvertAPI
+        # Try to get from env, otherwise use provided key
+        self.convert_api_secret = os.environ.get('CONVERT_API_SECRET', 'rd78ghGq31u8k5zm2hY22ACRtnkqje8g')
+        try:
+            import convertapi
+            convertapi.api_secret = self.convert_api_secret
+        except ImportError:
+            logger.warning("ConvertAPI module not found. High-fidelity previews will be disabled.")
     
     def ensure_directories(self):
         """Ensure required directories exist"""
@@ -59,6 +67,7 @@ class DocxPreviewService:
             html_file_path = os.path.join(self.output_dir, output_filename)
             
             # Use ConvertAPI to convert
+            import convertapi
             result = convertapi.convert('html', {
                 'File': docx_path,
                 'Responsive': 'true',
@@ -115,6 +124,7 @@ class DocxPreviewService:
                 
             try:
                 # Use ConvertAPI to convert
+                import convertapi
                 result = convertapi.convert('docx', {
                     'File': temp_html_path,
                     'PageSize': 'a4',
