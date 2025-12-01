@@ -4639,20 +4639,19 @@ def preview_report(report_id):
 
         # Try Firestore first (for string IDs like "AXH9JstFxnugebP8TSBy")
         from app.services.firestore_report_service import firestore_report_service
-        from flask import current_app
-        
-        print(f"🔍 [PRINT] Preview lookup for report_id: {report_id}")
-        current_app.logger.info(f"🔍 [LOGGER] Preview lookup for report_id: {report_id}")
         
         firestore_report = firestore_report_service.get_report(str(report_id))
-        
-        print(f"🔍 [PRINT] Firestore lookup result: {'Found' if firestore_report else 'Not Found'}")
-        current_app.logger.info(f"🔍 [LOGGER] Firestore lookup result: {'Found' if firestore_report else 'Not Found'}")
 
         if firestore_report:
             # Check access
-            user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
-            is_admin = user and user.role == UserRole.ADMIN
+            try:
+                user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+                is_admin = user and user.role == UserRole.ADMIN
+            except Exception as e:
+                logger.warning(f"Failed to check user role (DB error): {e}")
+                # Fallback: assume not admin, rely on ID match
+                user = None
+                is_admin = False
             
             # Firestore reports store userId in createdBy.userId
             report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
@@ -4873,8 +4872,13 @@ def preview_report_content(report_id):
         
         if firestore_report:
             # Check access for Firestore report
-            user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
-            is_admin = user and user.role == UserRole.ADMIN
+            try:
+                user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+                is_admin = user and user.role == UserRole.ADMIN
+            except Exception as e:
+                logger.warning(f"Failed to check user role (DB error): {e}")
+                user = None
+                is_admin = False
             report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
             
             if str(report_owner_id) != str(user_id) and not is_admin:
