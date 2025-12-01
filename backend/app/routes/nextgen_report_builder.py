@@ -4639,10 +4639,15 @@ def preview_report(report_id):
 
         # Try Firestore first (for string IDs like "AXH9JstFxnugebP8TSBy")
         from app.services.firestore_report_service import firestore_report_service
+        from flask import current_app
         
-        logger.info(f"🔍 Preview lookup for report_id: {report_id} (type: {type(report_id)})")
+        print(f"🔍 [PRINT] Preview lookup for report_id: {report_id}")
+        current_app.logger.info(f"🔍 [LOGGER] Preview lookup for report_id: {report_id}")
+        
         firestore_report = firestore_report_service.get_report(str(report_id))
-        logger.info(f"🔍 Firestore lookup result: {'Found' if firestore_report else 'Not Found'}")
+        
+        print(f"🔍 [PRINT] Firestore lookup result: {'Found' if firestore_report else 'Not Found'}")
+        current_app.logger.info(f"🔍 [LOGGER] Firestore lookup result: {'Found' if firestore_report else 'Not Found'}")
 
         if firestore_report:
             # Check access
@@ -4942,29 +4947,7 @@ def preview_report_content(report_id):
                 'error': 'DOCX file not available for preview',
                 'code': 'NOT_FOUND'
             }), 404
-            try:
-                from app.services.docx_preview_service import docx_preview_service
-                from flask import Response
-                
-                # Convert DOCX to HTML (using ConvertAPI for high fidelity)
-                _, html_content = docx_preview_service.convert_docx_to_html_convertapi(report.docx_file_path)
-                
-                logger.info(f"✅ Returning HTML content ({len(html_content)} characters)")
-                
-                # Return raw HTML for iframe rendering
-                return Response(html_content, mimetype='text/html')
-                
-            except Exception as e:
-                logger.error(f"❌ Failed to convert DOCX to HTML: {e}", exc_info=True)
-                return jsonify({
-                    'error': 'Failed to generate HTML preview',
-                    'details': str(e)
-                }), 500
-        else:
-            return jsonify({
-                'error': 'DOCX file not available for preview',
-                'code': 'NOT_FOUND'
-            }), 404
+
 
     except Exception as e:
         logger.error(f"Error getting preview content for report {report_id}: {str(e)}")
