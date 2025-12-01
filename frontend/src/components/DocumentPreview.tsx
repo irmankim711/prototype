@@ -887,6 +887,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           readOnly={false}
           showAITools={true}
           autoSave={true}
+          mode={fullHtmlContent ? 'fidelity' : 'simple'}
         />
       </Box>
     );
@@ -965,6 +966,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
               readOnly={true}
               showAITools={false}
               autoSave={false}
+              mode={fullHtmlContent ? 'fidelity' : 'simple'}
             />
           </Box>
         );

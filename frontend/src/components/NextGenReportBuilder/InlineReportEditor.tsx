@@ -29,6 +29,8 @@ showAITools?: boolean;
 autoSave?: boolean;
   
 autoSaveInterval?: number;
+  
+  mode?: 'simple' | 'fidelity';
 }
 
 interface AIEnhancement {
@@ -50,6 +52,7 @@ const InlineReportEditor: React.FC<InlineReportEditorProps> = ({
   showAITools = true,
   autoSave = true,
   autoSaveInterval = 30000,
+  mode,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   
@@ -256,6 +259,34 @@ end: number }>({ start: 0, end: 0 });
       debouncedAutoSave.cancel();
     };
   }, [debouncedAutoSave]);
+
+  const isFidelity = mode === 'fidelity';
+
+  const editorStyles = {
+    p: isFidelity ? 2 : '25mm', // Reduced padding for fidelity mode
+    minHeight: '297mm',
+    width: '210mm',
+    margin: '0 auto',
+    bgcolor: 'white',
+    boxShadow: '0 0 10px rgba(0,0,0,0.1)',
+    outline: 'none',
+    // Only apply default styles if NOT fidelity mode
+    ...(!isFidelity && {
+      fontFamily: "'Times New Roman', Times, serif",
+      lineHeight: 1.5,
+      color: '#000',
+      '&:focus': {
+        boxShadow: '0 0 10px rgba(52, 152, 219, 0.5)',
+      },
+      '& p': { margin: '10pt 0', fontSize: '11pt', textAlign: 'justify' },
+      '& h1': { fontSize: '24pt', fontWeight: 'bold', textAlign: 'center', margin: '0 0 12pt 0', borderBottom: '3px solid #3498db', paddingBottom: '10px' },
+      '& h2': { fontSize: '18pt', fontWeight: 'bold', textAlign: 'center', margin: '0 0 12pt 0', color: '#444' },
+      '& h3': { fontSize: '16pt', fontWeight: 'bold', color: '#2c3e50', margin: '18pt 0 12pt 0', borderBottom: '2px solid #ecf0f1', paddingBottom: '5px' },
+      '& table': { width: '100%', borderCollapse: 'collapse', margin: '12pt 0', border: '1px solid black' },
+      '& td, & th': { border: '1px solid black', padding: '5pt', verticalAlign: 'top' },
+      '& img': { maxWidth: '100%', height: 'auto' }
+    })
+  };
 
 return (
     <Box sx={{ position: 'relative' }}>
@@ -495,50 +526,12 @@ return (
             onInput={(e: any) => handleContentChange(e.currentTarget.innerHTML, 'user')}
             onMouseUp={handleTextSelection}
             onKeyUp={handleTextSelection}
-            sx={{
-              p: '25mm',
-              minHeight: '297mm',
-              width: '210mm',
-              margin: '0 auto',
-              bgcolor: 'white',
-              boxShadow: '0 0 10px rgba(0,0,0,0.1)',
-              outline: 'none',
-              fontFamily: "'Times New Roman', Times, serif",
-              lineHeight: 1.5,
-              color: '#000',
-              '&:focus': {
-                boxShadow: '0 0 10px rgba(52, 152, 219, 0.5)',
-              },
-              '& p': { margin: '10pt 0', fontSize: '11pt', textAlign: 'justify' },
-              '& h1': { fontSize: '24pt', fontWeight: 'bold', textAlign: 'center', margin: '0 0 12pt 0', borderBottom: '3px solid #3498db', paddingBottom: '10px' },
-              '& h2': { fontSize: '18pt', fontWeight: 'bold', textAlign: 'center', margin: '0 0 12pt 0', color: '#444' },
-              '& h3': { fontSize: '16pt', fontWeight: 'bold', color: '#2c3e50', margin: '18pt 0 12pt 0', borderBottom: '2px solid #ecf0f1', paddingBottom: '5px' },
-              '& table': { width: '100%', borderCollapse: 'collapse', margin: '12pt 0', border: '1px solid black' },
-              '& td, & th': { border: '1px solid black', padding: '5pt', verticalAlign: 'top' },
-              '& img': { maxWidth: '100%', height: 'auto' }
-            }}
+            sx={editorStyles}
             // Removed dangerouslySetInnerHTML to prevent cursor jumping
             key={reportId} 
           />
         ) : (
-          <Box sx={{ 
-            p: '25mm', 
-            minHeight: '297mm', 
-            width: '210mm', 
-            margin: '0 auto',
-            bgcolor: 'white',
-            boxShadow: '0 0 10px rgba(0,0,0,0.1)',
-            fontFamily: "'Times New Roman', Times, serif",
-            lineHeight: 1.5,
-            color: '#000',
-            '& p': { margin: '10pt 0', fontSize: '11pt', textAlign: 'justify' },
-            '& h1': { fontSize: '24pt', fontWeight: 'bold', textAlign: 'center', margin: '0 0 12pt 0', borderBottom: '3px solid #3498db', paddingBottom: '10px' },
-            '& h2': { fontSize: '18pt', fontWeight: 'bold', textAlign: 'center', margin: '0 0 12pt 0', color: '#444' },
-            '& h3': { fontSize: '16pt', fontWeight: 'bold', color: '#2c3e50', margin: '18pt 0 12pt 0', borderBottom: '2px solid #ecf0f1', paddingBottom: '5px' },
-            '& table': { width: '100%', borderCollapse: 'collapse', margin: '12pt 0', border: '1px solid black' },
-            '& td, & th': { border: '1px solid black', padding: '5pt', verticalAlign: 'top' },
-            '& img': { maxWidth: '100%', height: 'auto' }
-          }}>
+          <Box sx={editorStyles}>
             <div dangerouslySetInnerHTML={{ __html: content }} />
           </Box>
         )}
