@@ -135,6 +135,7 @@ class ReportGenerationService:
             
         except Exception as e:
             self.logger.error(f"🆔 [{request_id}] Report generation failed: {str(e)}", exc_info=True)
+            db.session.rollback()
             return {
                 'success': False,
                 'error': 'Report generation failed',
@@ -512,21 +513,26 @@ class ReportGenerationService:
                 # We might need to store it in generation_config or just skip it
                 pass
 
-        report = Report(
-            created_by=str(user_id), # Report uses string created_by
-            program_id=program_id,
-            template_id=db_template_id,
-            title=title,
-            file_path=str(output_path),
-            file_size=output_path.stat().st_size,
-            generation_status='completed',
-            data_source=data_source,
-            created_at=datetime.utcnow(),
-            generated_at=datetime.utcnow()
-        )
-        db.session.add(report)
-        db.session.commit()
-        return report
+        try:
+            report = Report(
+                created_by=str(user_id), # Report uses string created_by
+                program_id=program_id,
+                template_id=db_template_id,
+                title=title,
+                file_path=str(output_path),
+                file_size=output_path.stat().st_size,
+                generation_status='completed',
+                data_source=data_source,
+                created_at=datetime.utcnow(),
+                generated_at=datetime.utcnow()
+            )
+            db.session.add(report)
+            db.session.commit()
+            return report
+        except Exception as e:
+            db.session.rollback()
+            self.logger.error(f"Failed to save report record: {e}")
+            raise e
 
 # Global instance
 report_generation_service = ReportGenerationService()

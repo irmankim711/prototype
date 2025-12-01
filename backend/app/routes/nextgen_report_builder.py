@@ -1588,6 +1588,7 @@ def generate_report_from_excel():
         }), 200
 
     except Exception as e:
+        db.session.rollback()
         logger.error(f"Error in report generation endpoint: {str(e)}", exc_info=True)
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
@@ -1656,6 +1657,7 @@ def refresh_report_data(report_id):
         }), 200
         
     except Exception as e:
+        db.session.rollback()
         logger.error(f"Error refreshing report {report_id}: {str(e)}", exc_info=True)
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
@@ -5026,6 +5028,7 @@ def preview_report(report_id):
         }), 200
 
     except Exception as e:
+        db.session.rollback()
         logger.error(f"Error previewing report {report_id}: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
