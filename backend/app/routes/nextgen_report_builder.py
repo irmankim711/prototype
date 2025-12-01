@@ -4816,36 +4816,99 @@ def preview_report(report_id):
             'details': str(e)
         }), 500
 
-@nextgen_bp.route('/reports/<int:report_id>/preview-content', methods=['GET'])
+@nextgen_bp.route('/reports/<report_id>/preview-content', methods=['GET'])
 @cross_origin(supports_credentials=True)
 @firebase_auth_required
 def preview_report_content(report_id):
     """Get raw HTML content for report preview/editing"""
     try:
         user_id = get_current_user_id()
+        firebase_uid = get_firebase_uid()
         logger.info(f"📄 Preview content requested for report {report_id} by user {user_id}")
 
-        # Get the report
-        report = Report.query.filter_by(id=report_id).first()
-        if not report:
-            return jsonify({
-                'error': 'Report not found',
-                'code': 'NOT_FOUND'
-            }), 404
+        # Try Firestore first (for string IDs)
+        from app.services.firestore_report_service import firestore_report_service
+        firestore_report = firestore_report_service.get_report(str(report_id))
+        
+        report = None
+        docx_path = None
+        
+        if firestore_report:
+            # Check access for Firestore report
+            user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
+            is_admin = user and user.role == UserRole.ADMIN
+            report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
+            
+            if str(report_owner_id) != str(user_id) and not is_admin:
+                 return jsonify({
+                    'error': 'Access denied',
+                    'code': 'INSUFFICIENT_PERMISSIONS'
+                }), 403
+                
+            # Get DOCX path from Firestore report
+            # Firestore reports might store files differently, but usually have a 'files' object
+            files = firestore_report.get('files', {})
+            if files and files.get('docx') and files.get('docx').get('path'):
+                docx_path = files.get('docx').get('path')
+            elif firestore_report.get('docx_file_path'):
+                docx_path = firestore_report.get('docx_file_path')
+                
+        else:
+            # Fallback to PostgreSQL
+            try:
+                report_id_int = int(report_id)
+                report = Report.query.filter_by(id=report_id_int).first()
+            except (ValueError, TypeError):
+                # Not an integer ID and not found in Firestore
+                return jsonify({
+                    'error': 'Report not found',
+                    'code': 'NOT_FOUND'
+                }), 404
 
-        # Check access
-        user = User.query.get(user_id)
-        is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
-        report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+            if not report:
+                return jsonify({
+                    'error': 'Report not found',
+                    'code': 'NOT_FOUND'
+                }), 404
 
-        if str(report_owner) != str(user_id) and not is_admin:
-            return jsonify({
-                'error': 'Access denied',
-                'code': 'INSUFFICIENT_PERMISSIONS'
-            }), 403
+            # Check access for PostgreSQL report
+            user = User.query.get(user_id)
+            is_admin = user and (user.role == UserRole.ADMIN or str(user.role) == 'admin')
+            report_owner = report.created_by if hasattr(report, 'created_by') and report.created_by else report.user_id
+
+            if str(report_owner) != str(user_id) and not is_admin:
+                return jsonify({
+                    'error': 'Access denied',
+                    'code': 'INSUFFICIENT_PERMISSIONS'
+                }), 403
+                
+            docx_path = report.docx_file_path
 
         # Try to convert DOCX to HTML
-        if report.docx_file_path and os.path.exists(report.docx_file_path):
+        if docx_path and os.path.exists(docx_path):
+            try:
+                from app.services.docx_preview_service import docx_preview_service
+                from flask import Response
+                
+                # Convert DOCX to HTML (using ConvertAPI for high fidelity)
+                _, html_content = docx_preview_service.convert_docx_to_html_convertapi(docx_path)
+                
+                logger.info(f"✅ Returning HTML content ({len(html_content)} characters)")
+                
+                # Return raw HTML for iframe rendering
+                return Response(html_content, mimetype='text/html')
+                
+            except Exception as e:
+                logger.error(f"❌ Failed to convert DOCX to HTML: {e}", exc_info=True)
+                return jsonify({
+                    'error': 'Failed to generate HTML preview',
+                    'details': str(e)
+                }), 500
+        else:
+            return jsonify({
+                'error': 'DOCX file not available for preview',
+                'code': 'NOT_FOUND'
+            }), 404
             try:
                 from app.services.docx_preview_service import docx_preview_service
                 from flask import Response
