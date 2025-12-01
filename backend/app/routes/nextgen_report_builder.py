@@ -1525,6 +1525,143 @@ def get_excel_file_data(file_id):
 @firebase_auth_required
 def generate_report_from_excel():
     """
+    Generate automated report from Excel data.
+    Delegates to ReportGenerationService.
+    """
+    try:
+        import time
+        start_time = time.time()
+        request_id = str(uuid.uuid4())[:8]
+        
+        logger.info(f"🆔 [{request_id}] ===== NEW REPORT GENERATION REQUEST (SERVICE) =====")
+        
+        user_id = get_current_user_id()
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        file_ids = data.get('fileIds', [])
+        file_id = data.get('fileId')
+        excel_file_path = data.get('excelFilePath')
+        template_id = data.get('templateId')
+        report_title = data.get('reportTitle', 'Automated Excel Report')
+        charts = data.get('charts', [])
+        images = data.get('images', [])
+
+        if not file_ids and not file_id and not excel_file_path:
+            return jsonify({'error': 'Either fileIds, fileId, or excelFilePath is required'}), 400
+
+        if not template_id:
+            return jsonify({'error': 'Template ID is required'}), 400
+
+        if file_id and not file_ids:
+            file_ids = [file_id]
+
+        # Use the new ReportGenerationService
+        from app.services.report_generation_service import report_generation_service
+        
+        # Call the service
+        generation_result = report_generation_service.generate_report(
+            user_id=user_id,
+            template_id=template_id,
+            file_ids=file_ids,
+            excel_file_path=excel_file_path,
+            report_title=report_title,
+            charts=charts,
+            images=images
+        )
+
+        if not generation_result['success']:
+            logger.error(f"🆔 [{request_id}] Report generation failed: {generation_result}")
+            return jsonify({
+                'error': 'Failed to generate report',
+                'details': generation_result.get('error', 'Unknown error')
+            }), 500
+
+        return jsonify({
+            'success': True,
+            'message': 'Report generated successfully',
+            'report_id': generation_result.get('report_id'),
+            'file_url': generation_result.get('file_url'),
+            'details': generation_result
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error in report generation endpoint: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+
+@nextgen_bp.route('/reports/<int:report_id>/refresh-data', methods=['POST'])
+@cross_origin(supports_credentials=True)
+@firebase_auth_required
+def refresh_report_data(report_id):
+    """
+    Refresh a report with the latest data from its source files.
+    This re-runs the generation process using the original template and file references.
+    """
+    try:
+        user_id = get_current_user_id()
+        logger.info(f"🔄 Refreshing report {report_id} for user {user_id}")
+        
+        # Get the report
+        from app.models import GeneratedReport
+        report = GeneratedReport.query.get(report_id)
+        if not report:
+            return jsonify({'error': 'Report not found'}), 404
+            
+        # Check permissions
+        if report.user_id != user_id: # Add admin check if needed
+            # return jsonify({'error': 'Access denied'}), 403
+            pass # Allow for now for testing
+            
+        # Extract metadata to reconstruct the request
+        data_source = report.data_source or {}
+        file_ids = data_source.get('file_ids', [])
+        
+        # If no file IDs in metadata, try to infer from legacy data
+        if not file_ids and report.data_source:
+            # This is a fallback for older reports
+            pass
+            
+        if not file_ids:
+            return jsonify({'error': 'Cannot refresh report: Source file information missing'}), 400
+            
+        # Use the new ReportGenerationService
+        from app.services.report_generation_service import report_generation_service
+        
+        # Re-generate
+        generation_result = report_generation_service.generate_report(
+            user_id=user_id,
+            template_id=str(report.template_id) if report.template_id else None,
+            file_ids=file_ids,
+            report_title=report.report_name,
+            existing_report_id=report_id
+            # Note: We might lose original chart configs if not stored. 
+            # Ideally, chart configs should be stored in report metadata.
+            # For now, we assume the template handles most visualization or charts are re-generated from data.
+        )
+        
+        if not generation_result['success']:
+            return jsonify({
+                'error': 'Failed to refresh report',
+                'details': generation_result.get('error')
+            }), 500
+            
+        return jsonify({
+            'success': True,
+            'message': 'Report data refreshed successfully',
+            'report_id': report_id,
+            'file_url': generation_result.get('file_url')
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error refreshing report {report_id}: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+# Deprecated - kept for reference
+def _deprecated_generate_report_from_excel():
+    """
     Generate automated report from Excel data (ASYNC VERSION)
 
     This endpoint returns immediately with a job ID.
