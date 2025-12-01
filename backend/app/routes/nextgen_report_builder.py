@@ -4639,16 +4639,19 @@ def preview_report(report_id):
 
         # Try Firestore first (for string IDs like "AXH9JstFxnugebP8TSBy")
         from app.services.firestore_report_service import firestore_report_service
+        
+        logger.info(f"🔍 Preview lookup for report_id: {report_id} (type: {type(report_id)})")
         firestore_report = firestore_report_service.get_report(str(report_id))
+        logger.info(f"🔍 Firestore lookup result: {'Found' if firestore_report else 'Not Found'}")
 
         if firestore_report:
             # Check access
             user = User.get_by_firebase_uid(firebase_uid) if firebase_uid else None
             is_admin = user and user.role == UserRole.ADMIN
-
+            
             # Firestore reports store userId in createdBy.userId
             report_owner_id = firestore_report.get('createdBy', {}).get('userId') or firestore_report.get('userId')
-
+            
             if str(report_owner_id) != str(user_id) and not is_admin:
                 logger.warning(f"Access denied for user {user_id} attempting to preview Firestore report {report_id}")
                 return jsonify({
@@ -4665,6 +4668,36 @@ def preview_report(report_id):
                     'progress': firestore_report.get('generationProgress', 0)
                 }), 400
 
+            # Try to generate HTML preview from DOCX if available
+            html_content = None
+            docx_path = None
+            files = firestore_report.get('files', {})
+            if files and files.get('docx') and files.get('docx').get('path'):
+                docx_path = files.get('docx').get('path')
+            elif firestore_report.get('docx_file_path'): # Fallback
+                docx_path = firestore_report.get('docx_file_path')
+            elif firestore_report.get('storagePath') and firestore_report.get('storagePath').endswith('.docx'):
+                 docx_path = firestore_report.get('storagePath')
+
+            if docx_path:
+                 # Note: Firestore files are in Firebase Storage, not local. 
+                 # We might need to download them first or use a signed URL if ConvertAPI supports it.
+                 # For now, we'll skip HTML generation for Firestore if not local, 
+                 # unless we implement a download mechanism.
+                 # But if it IS local (dev env), we can try.
+                 if os.path.exists(docx_path):
+                     try:
+                        from app.services.docx_preview_service import docx_preview_service
+                        _, html_content = docx_preview_service.convert_docx_to_html_convertapi(docx_path)
+                        logger.info(f"✅ Generated HTML preview for Firestore report {report_id}")
+                     except Exception as e:
+                        logger.warning(f"Failed to generate HTML for Firestore report: {e}")
+
+            preview_data = firestore_report.copy()
+            if html_content:
+                preview_data['html_content'] = html_content
+                preview_data['preview_type'] = 'html'
+
             # Return Firestore report preview with top-level fields for frontend compatibility
             return jsonify({
                 'success': True,
@@ -4673,8 +4706,8 @@ def preview_report(report_id):
                 'reportType': firestore_report.get('reportType'),
                 'id': firestore_report.get('id'),
                 'title': firestore_report.get('title'),
-                'preview': firestore_report,
-                'preview_data': firestore_report,
+                'preview': preview_data,
+                'preview_data': preview_data,
                 'source': 'firestore'
             }), 200
 
