@@ -120,38 +120,19 @@ class DocxPreviewService:
         from docx.text.paragraph import Paragraph
         from docx.table import Table
         
+        # Process document elements recursively to handle nested structures (sdt, text boxes, etc.)
+        from docx.text.paragraph import Paragraph
+        from docx.table import Table
+        
         try:
-            for element in doc.element.body.iterchildren():
-                try:
-                    if element.tag.endswith('p'):
-                        # It's a paragraph
-                        paragraph = Paragraph(element, doc)
-                        html_parts.append(self._convert_paragraph_to_html(paragraph, images))
-                    elif element.tag.endswith('tbl'):
-                        # It's a table
-                        table = Table(element, doc)
-                        html_parts.append(self._convert_table_to_html(table, images))
-                    elif element.tag.endswith('sdt'):
-                        # Structured Document Tag (Content Control)
-                        sdt_content = element.find('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}sdtContent')
-                        if sdt_content is not None:
-                            for child in sdt_content.iterchildren():
-                                if child.tag.endswith('p'):
-                                    paragraph = Paragraph(child, doc)
-                                    html_parts.append(self._convert_paragraph_to_html(paragraph, images))
-                                elif child.tag.endswith('tbl'):
-                                    table = Table(child, doc)
-                                    html_parts.append(self._convert_table_to_html(table, images))
-                except Exception as elem_error:
-                    logger.warning(f"Failed to process document element {element.tag}: {elem_error}")
-                    continue
+            html_parts.extend(self._process_element_recursive(doc.element.body, doc, images))
             
             # Check if we actually extracted anything (length > 12 means we added something beyond the header)
             if len(html_parts) <= 12:
-                raise Exception("No content extracted using sequential parsing")
+                raise Exception("No content extracted using recursive parsing")
                     
         except Exception as e:
-            logger.warning(f"Sequential parsing failed or yielded no content: {e}. Falling back to legacy method.")
+            logger.warning(f"Recursive parsing failed or yielded no content: {e}. Falling back to legacy method.")
             # Fallback to legacy method
             # Note: This might lose order but ensures content is shown
             for paragraph in doc.paragraphs:
@@ -166,6 +147,42 @@ class DocxPreviewService:
         ])
         
         return '\n'.join(html_parts)
+
+    def _process_element_recursive(self, element, doc, images, depth=0):
+        """Recursively process XML elements to extract content"""
+        html_parts = []
+        
+        # Safety limit for recursion
+        if depth > 50:
+            return html_parts
+            
+        # Import wrappers here to avoid circular imports or scope issues
+        from docx.text.paragraph import Paragraph
+        from docx.table import Table
+        
+        try:
+            # Check if the current element is a paragraph or table
+            tag = element.tag
+            
+            if tag.endswith('}p'): # Paragraph
+                paragraph = Paragraph(element, doc)
+                html_parts.append(self._convert_paragraph_to_html(paragraph, images))
+                return html_parts
+                
+            if tag.endswith('}tbl'): # Table
+                table = Table(element, doc)
+                html_parts.append(self._convert_table_to_html(table, images))
+                return html_parts
+            
+            # If not a leaf node (p or tbl), recurse into children
+            # This handles body, sdt, sdtContent, txbxContent, smartTag, ins, etc. automatically
+            for child in element.iterchildren():
+                html_parts.extend(self._process_element_recursive(child, doc, images, depth + 1))
+                    
+        except Exception as e:
+            logger.warning(f"Error processing element {element.tag}: {e}")
+            
+        return html_parts
     
     def _convert_paragraph_to_html(self, paragraph, images: Dict[str, str] = None) -> str:
         """Convert a paragraph to HTML"""
