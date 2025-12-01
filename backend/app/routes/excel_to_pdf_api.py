@@ -404,6 +404,9 @@ def get_preview_content(report_id):
 
         elif report.file_format == 'docx' or file_extension == '.docx':
             try:
+                if not docx_preview_service:
+                    raise ImportError("docx_preview_service is not available")
+
                 # Use ConvertAPI via the service (handles fallback internally)
                 _, html_content = docx_preview_service.convert_docx_to_html_convertapi(file_path)
                 

@@ -4942,7 +4942,7 @@ def preview_report(report_id):
         }
 
         # Check for DOCX file and extract HTML content
-        if report.docx_file_path and os.path.exists(report.docx_file_path):
+        if report.file_path and os.path.exists(report.file_path):
             logger.info(f"📄 DOCX file found for report {report_id}, extracting HTML content...")
             
             try:
@@ -4950,7 +4950,7 @@ def preview_report(report_id):
                 
                 # Convert DOCX to HTML (using ConvertAPI for high fidelity)
                 html_file_path, html_content = docx_preview_service.convert_docx_to_html_convertapi(
-                    report.docx_file_path
+                    report.file_path
                 )
                 
                 logger.info(f"✅ Successfully converted DOCX to HTML ({len(html_content)} characters)")
