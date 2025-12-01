@@ -286,12 +286,28 @@ class TemplateDataMapper:
                                record.get('pre_mark') or
                                record.get('pre_test') or
                                record.get('Pre_Test') or
+                               record.get('MARKAH_PRA') or
+                               record.get('markah_pra') or
+                               record.get('MARKAH PRA') or
+                               record.get('markah pra') or
+                               record.get('PRA_UJIAN') or
+                               record.get('pra_ujian') or
+                               record.get('PRA UJIAN') or
+                               record.get('pra ujian') or
                                '')
                 markah_post = str(record.get('MARKAH_POST') or
                                 record.get('post_test_score') or
                                 record.get('post_mark') or
                                 record.get('post_test') or
                                 record.get('Post_Test') or
+                                record.get('MARKAH_PASCA') or
+                                record.get('markah_pasca') or
+                                record.get('MARKAH PASCA') or
+                                record.get('markah pasca') or
+                                record.get('PASCA_UJIAN') or
+                                record.get('pasca_ujian') or
+                                record.get('PASCA UJIAN') or
+                                record.get('pasca ujian') or
                                 '')
             except (ValueError, TypeError):
                 markah_pre = ''
