@@ -125,16 +125,29 @@ class DocxPreviewService:
         from docx.table import Table
         
         try:
+            # 1. Extract Headers
+            for section in doc.sections:
+                if section.header:
+                    html_parts.append('<div class="docx-header">')
+                    html_parts.extend(self._process_element_recursive(section.header._element, doc, images))
+                    html_parts.append('</div><hr class="header-separator">')
+                    # Only process first section's header for now to avoid duplicates in a single-page preview
+                    break 
+
+            # 2. Extract Body Content
             html_parts.extend(self._process_element_recursive(doc.element.body, doc, images))
             
-            # Check if we actually extracted anything (length > 12 means we added something beyond the header)
-            if len(html_parts) <= 12:
-                raise Exception("No content extracted using recursive parsing")
-                    
+            # 3. Extract Footers
+            for section in doc.sections:
+                if section.footer:
+                    html_parts.append('<hr class="footer-separator"><div class="docx-footer">')
+                    html_parts.extend(self._process_element_recursive(section.footer._element, doc, images))
+                    html_parts.append('</div>')
+                    break
+
         except Exception as e:
-            logger.warning(f"Recursive parsing failed or yielded no content: {e}. Falling back to legacy method.")
+            logger.warning(f"Recursive parsing failed: {e}. Falling back to legacy method.")
             # Fallback to legacy method
-            # Note: This might lose order but ensures content is shown
             for paragraph in doc.paragraphs:
                 html_parts.append(self._convert_paragraph_to_html(paragraph, images))
             for table in doc.tables:
