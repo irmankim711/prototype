@@ -153,6 +153,38 @@ class DocxPreviewService:
             for table in doc.tables:
                 html_parts.append(self._convert_table_to_html(table, images))
         
+        # FINAL SAFETY NET: If content is still very short (likely just headers/footers or empty),
+        # try to extract raw text from the entire XML tree.
+        current_content_length = len(''.join(html_parts))
+        if current_content_length < 500: # Arbitrary threshold
+            logger.warning("Content seems empty after structured parsing. Attempting raw text extraction.")
+            html_parts.append('<div class="raw-text-fallback" style="color: red; margin-top: 20px; border-top: 1px solid red; padding-top: 10px;">')
+            html_parts.append('<p><em><strong>Note:</strong> Structured formatting could not be fully preserved. Showing raw text content below:</em></p>')
+            
+            try:
+                # Iterate over all 't' (text) elements in the document body
+                body_xml = doc.element.body
+                raw_paragraphs = []
+                current_para = []
+                
+                # Simple iteration over all text nodes
+                for t in body_xml.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'):
+                    if t.text:
+                        current_para.append(self._escape_html(t.text))
+                        # If text ends with newline or is long, break (heuristic)
+                        if len(current_para) > 20: 
+                            raw_paragraphs.append('<p>' + ''.join(current_para) + '</p>')
+                            current_para = []
+                
+                if current_para:
+                    raw_paragraphs.append('<p>' + ''.join(current_para) + '</p>')
+                    
+                html_parts.extend(raw_paragraphs)
+            except Exception as raw_e:
+                logger.error(f"Raw text extraction failed: {raw_e}")
+            
+            html_parts.append('</div>')
+
         html_parts.extend([
             '</div>',
             '</body>',
@@ -198,18 +230,16 @@ class DocxPreviewService:
         return html_parts
     
     def _convert_paragraph_to_html(self, paragraph, images: Dict[str, str] = None) -> str:
-        """Convert a paragraph to HTML"""
+        """Convert a paragraph to HTML, handling runs and hyperlinks manually"""
         if images is None:
             images = {}
             
-        if not paragraph.text.strip() and not paragraph.runs:
-            return '<br>'
-        
         # Determine paragraph style
         style_class = 'paragraph'
         if paragraph.style.name.startswith('Heading'):
             level = paragraph.style.name.replace('Heading ', '')
             if level.isdigit() and 1 <= int(level) <= 6:
+                # For headings, we can usually trust paragraph.text, but let's be safe
                 return f'<h{level} class="heading-{level}">{self._escape_html(paragraph.text)}</h{level}>'
         
         # Handle different paragraph styles
@@ -228,42 +258,68 @@ class DocxPreviewService:
         elif paragraph.alignment == WD_ALIGN_PARAGRAPH.JUSTIFY:
             align_style = 'text-align: justify;'
         
-        # Process runs for formatting and images
+        # Process content by iterating over XML children to catch hyperlinks and fields
         html_content = ''
-        for run in paragraph.runs:
-            # Handle text
-            text = self._escape_html(run.text)
+        
+        # Helper to process a run element
+        def process_run_element(run_element):
+            text_content = ''
+            # Extract text from t tags
+            for t in run_element.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'):
+                if t.text:
+                    text_content += self._escape_html(t.text)
             
-            # Apply formatting
-            if run.bold:
-                text = f'<strong>{text}</strong>'
-            if run.italic:
-                text = f'<em>{text}</em>'
-            if run.underline:
-                text = f'<u>{text}</u>'
+            # Apply formatting based on rPr
+            rPr = run_element.find('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}rPr')
+            if rPr is not None:
+                if rPr.find('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}b') is not None:
+                    text_content = f'<strong>{text_content}</strong>'
+                if rPr.find('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}i') is not None:
+                    text_content = f'<em>{text_content}</em>'
+                if rPr.find('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}u') is not None:
+                    text_content = f'<u>{text_content}</u>'
             
-            html_content += text
-            
-            # Handle images (drawing/blip)
+            # Handle images
+            img_html = ''
             try:
-                # Check for drawing elements in the run's XML
-                drawings = run.element.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}drawing')
+                drawings = run_element.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}drawing')
                 for drawing in drawings:
-                    # Find blip element to get embed ID
                     blips = drawing.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}blip')
                     for blip in blips:
                         embed_id = blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
-                        if embed_id:
-                            # Get image part from relationship
+                        if embed_id and embed_id in paragraph.part.rels:
                             image_part = paragraph.part.rels[embed_id].target_part
                             image_name = os.path.basename(image_part.partname)
-                            
-                            # Look up base64 data
                             if image_name in images:
                                 img_src = images[image_name]
-                                html_content += f'<br><img src="{img_src}" style="max-width: 100%; height: auto; margin: 10px 0;" /><br>'
+                                img_html += f'<br><img src="{img_src}" style="max-width: 100%; height: auto; margin: 10px 0;" /><br>'
             except Exception as e:
-                logger.warning(f"Failed to render image in paragraph: {e}")
+                pass
+                
+            return text_content + img_html
+
+        # Iterate over children
+        for child in paragraph._element.iterchildren():
+            tag = child.tag
+            if tag.endswith('}r'): # Run
+                html_content += process_run_element(child)
+            elif tag.endswith('}hyperlink'): # Hyperlink
+                # Hyperlinks contain runs
+                for sub_child in child.iterchildren():
+                    if sub_child.tag.endswith('}r'):
+                        html_content += process_run_element(sub_child)
+            elif tag.endswith('}fldSimple'): # Simple Field
+                # Fields might contain runs
+                for sub_child in child.iterchildren():
+                    if sub_child.tag.endswith('}r'):
+                        html_content += process_run_element(sub_child)
+        
+        # Fallback: if manual parsing yielded nothing but paragraph.text exists, use that
+        if not html_content and paragraph.text.strip():
+            html_content = self._escape_html(paragraph.text)
+            
+        if not html_content:
+            return '<br>'
         
         return f'<p class="{style_class}" style="{align_style}">{html_content}</p>'
     
